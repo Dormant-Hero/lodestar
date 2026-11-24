@@ -9,5 +9,7 @@ Instead, open an [issue](https://github.com/Dormant-Hero/lodestar/issues):
   how you run Lodestar (AppImage or built from source). Screenshots help a lot.
 - **Have an idea?** Use the *Suggestion* template: what you'd like and why it would help you.
 
+Questions, chat and help: the [Lodestar Discord](https://discord.gg/sSJ3kuC7Uz).
+
 Themes are very welcome too, as their own thing: make one with the theme creator and share the `.zip` wherever you
 like (see [THEMES.md](THEMES.md)).
