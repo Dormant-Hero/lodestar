@@ -1,0 +1,7 @@
+target/
+dist/
+.claude/
+__pycache__/
+# Local working notes, not part of the project
+CLAUDE.md
+DESIGN.md

@@ -1,0 +1,34 @@
+[
+  {
+    "id": 1164,
+    "name": "Tomb Raider",
+    "summary": "Tomb Raider explores the intense origin story of Lara Croft and her ascent from a young woman to a hardened survivor.",
+    "first_release_date": 1362355200,
+    "aggregated_rating": 86.4,
+    "genres": [{"id": 31, "name": "Adventure"}, {"id": 5, "name": "Shooter"}],
+    "involved_companies": [
+      {"id": 1, "company": {"id": 37, "name": "Crystal Dynamics"}, "developer": true, "publisher": false},
+      {"id": 2, "company": {"id": 38, "name": "Square Enix"}, "developer": false, "publisher": true}
+    ],
+    "platforms": [{"id": 6, "name": "PC (Microsoft Windows)"}, {"id": 9, "name": "PlayStation 3"}, {"id": 12, "name": "Xbox 360"}]
+  },
+  {
+    "id": 912,
+    "name": "Tomb Raider",
+    "summary": "Lara Croft, an adventurer, sets out to find the pieces of an ancient artefact, the Scion of Atlantis.",
+    "first_release_date": 846633600,
+    "genres": [{"id": 8, "name": "Platform"}, {"id": 31, "name": "Adventure"}],
+    "involved_companies": [
+      {"id": 3, "company": {"id": 40, "name": "Core Design"}, "developer": true, "publisher": false},
+      {"id": 4, "company": {"id": 41, "name": "Eidos Interactive"}, "developer": false, "publisher": true}
+    ],
+    "platforms": [{"id": 7, "name": "PlayStation"}, {"id": 32, "name": "Sega Saturn"}, {"id": 13, "name": "DOS"}]
+  },
+  {
+    "id": 2001,
+    "name": "Tomb Raider: Anniversary",
+    "summary": "A re-imagining of the original Tomb Raider.",
+    "first_release_date": 1180656000,
+    "platforms": [{"id": 6, "name": "PC (Microsoft Windows)"}]
+  }
+]

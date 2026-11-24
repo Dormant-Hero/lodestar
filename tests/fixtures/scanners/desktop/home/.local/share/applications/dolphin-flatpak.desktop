@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Dolphin Emulator
+Exec=/usr/bin/flatpak run --branch=stable --arch=x86_64 org.DolphinEmu.dolphin-emu
+Categories=Game;

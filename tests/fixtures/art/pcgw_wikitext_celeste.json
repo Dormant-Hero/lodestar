@@ -1,0 +1,23 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "pages": [
+   {
+    "pageid": 61156,
+    "ns": 0,
+    "title": "Celeste",
+    "revisions": [
+     {
+      "slots": {
+       "main": {
+        "contentmodel": "wikitext",
+        "contentformat": "text/x-wiki",
+        "content": "{{Infobox game\n|cover        = Celeste cover.png\n|developers   = \n{{Infobox game/row/developer|Extremely OK Games}}\n{{Infobox game/row/porter|Ethan Lee|Linux}}\n|publishers   = \n|engines      = \n{{Infobox game/row/engine|Monocle Engine|Windows, OS X, Linux}}\n{{Infobox game/row/engine|FNA|Windows, OS X, Linux}}\n{{Infobox game/row/engine|XNA|Windows}}\n|release dates= \n{{Infobox game/row/date|Windows|January 25, 2018}}\n{{Infobox game/row/date|OS X|January 25, 2018}}\n{{Infobox game/row/date|Linux|January 25, 2018}}\n|reception    = \n{{Infobox game/row/reception|Metacritic|celeste|88}}\n{{Infobox game/row/reception|OpenCritic|5403/celeste|92}}\n{{Infobox game/row/reception|IGDB|celeste|91}}\n|real ai level= 0\n|taxonomy     = \n{{Infobox game/row/taxonomy/monetization      | One-time game purchase }}\n{{Infobox game/row/taxonomy/microtransactions | None }}\n{{Infobox game/row/taxonomy/modes             | Singleplayer }}\n{{Infobox game/row/taxonomy/pacing            | Real-time }}\n{{Infobox game/row/taxonomy/perspectives      | Side view, Scrolling }}\n{{Infobox game/row/taxonomy/controls          | Direct control }}\n{{Infobox game/row/taxonomy/genres            | Action, Platform }}\n{{Infobox game/row/taxonomy/sports            | }}\n{{Infobox game/row/taxonomy/vehicles          | }}\n{{Infobox game/row/taxonomy/art styles        | Cartoon, Pixel art }}\n{{Infobox game/row/taxonomy/themes            | Contemporary, North America, Fantasy }}\n{{Infobox game/row/taxonomy/series            | Celeste }}\n|steam appid  = 504230\n|steam appid side  = \n|gogcom id    = \n|official site= http://www.celestegame.com/\n|hltb         = 42818\n|lutris       = celeste\n|mobygames    = 101142\n|strategywiki = Celeste\n|wikipedia    = Celeste (video game)\n|winehq       = 19256\n|license      = commercial\n}}\n"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

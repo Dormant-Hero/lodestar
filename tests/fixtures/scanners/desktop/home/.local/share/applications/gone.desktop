@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Uninstalled Game
+Exec=/nonexistent/bin/game
+TryExec=/nonexistent/bin/game
+Categories=Game;

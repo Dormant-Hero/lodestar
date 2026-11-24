@@ -1,0 +1,3 @@
+{"440":{"success":true,"data":{"type":"game","name":"Example","short_description":"",
+"about_the_game":"<p><img src=\"https://example.invalid/x.gif\"><br>Welcome to <strong>Example</strong> &amp; friends &mdash; it&#39;s &quot;great&quot;&nbsp;fun.</p><ul class=\"bb_ul\"><li>Feature one</li><li>Feature&#x20;two</li></ul><script>alert(1)</script><p>Last &copy; line &unknown; ok</p>",
+"developers":[],"genres":[],"release_date":{"coming_soon":true,"date":"Coming soon"}}}}

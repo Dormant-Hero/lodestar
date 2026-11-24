@@ -1,0 +1,468 @@
+# Classic — a text list on the left, artwork and metadata on the right. Built for large
+# libraries and quick letter jumps.
+
+[theme]
+name = "Classic"
+author = "Lodestar"
+version = "1"
+description = "Text list on the left, art, metadata and description on the right."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#14181d"
+surface = "#1b2027"
+surface_alt = "#242b34"
+text = "#e3e8ee"
+text_dim = "#8b97a5"
+accent = "#36c28a"
+accent_text = "#0d1a14"
+selection = "#4ad69c"
+border = "#2a323d"
+favorite = "#ffd166"
+danger = "#ef5b5b"
+
+[fonts]
+regular = "system:sans"
+bold = "system:sans-bold"
+title = "system:sans-bold"
+medium = "system:sans-semibold"
+
+# ------------------------------------------------------------------ collections
+
+[collections]
+background = "#14181d"
+
+[[collections.elements]]
+type = "rect"
+name = "band"
+z = 1
+pos = [0.0, 0.36]
+size = [1.0, 0.26]
+gradient = ["#1d242d", "#181e25"]
+
+[[collections.elements]]
+type = "rect"
+name = "band_top"
+z = 2
+pos = [0.0, 0.36]
+size = [1.0, 0.003]
+color = "#36c28a66"
+
+[[collections.elements]]
+type = "rect"
+name = "band_bottom"
+z = 2
+pos = [0.0, 0.617]
+size = [1.0, 0.003]
+color = "#36c28a66"
+
+[[collections.elements]]
+type = "text"
+name = "header"
+z = 3
+text = "SELECT A COLLECTION"
+pos = [0.5, 0.2]
+origin = [0.5, 0.5]
+style = { font = "bold", font_size = 0.022, color = "#8b97a5", align = "center", letter_spacing = 0.3 }
+
+[[collections.elements]]
+type = "carousel"
+name = "carousel"
+z = 3
+pos = [0.0, 0.36]
+size = [1.0, 0.26]
+orientation = "horizontal"
+item_size = [0.3, 0.2]
+visible_items = 3.0
+selected_position = 0.5
+selected_scale = 1.25
+unselected_opacity = 0.35
+item_image = "{collection.art.mark}"
+item_text = "{collection.name}"
+item_text_style = { font = "bold", font_size = 0.05, color = "#e3e8ee", uppercase = true, letter_spacing = 0.06 }
+item_fill = "#00000000"
+
+[[collections.elements]]
+type = "text"
+name = "count"
+z = 3
+text = "{collection.countlabel} available"
+pos = [0.5, 0.68]
+origin = [0.5, 0.5]
+style = { font = "medium", font_size = 0.024, color = "#36c28a", align = "center", letter_spacing = 0.18, uppercase = true }
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 3
+clock = true
+format = "%a %e %b  %H:%M"
+pos = [0.96, 0.06]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#8b97a5", align = "right" }
+
+# The battery level on laptops and handhelds (nothing without a battery), left of the clock.
+[[collections.elements]]
+type = "text"
+name = "battery"
+z = 5
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.825, 0.06]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.02, color = "#8b97a5", align = "right" }
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 4
+pos = [0.5, 0.94]
+origin = [0.5, 0.5]
+size = [0.96, 0.05]
+style = { font = "medium", font_size = 0.02, color = "#b4bec9", align = "center" }
+
+# ------------------------------------------------------------------ games
+
+[games]
+background = "#14181d"
+
+[[games.elements]]
+type = "rect"
+name = "header_bar"
+z = 1
+size = [1.0, 0.1]
+color = "#1b2027"
+
+[[games.elements]]
+type = "rect"
+name = "header_line"
+z = 2
+pos = [0.0, 0.1]
+size = [1.0, 0.003]
+color = "#36c28a88"
+
+[[games.elements]]
+type = "text"
+name = "header"
+z = 3
+text = "{collection.name}"
+pos = [0.035, 0.05]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.034, color = "#e3e8ee", uppercase = true, letter_spacing = 0.08 }
+
+[[games.elements]]
+type = "text"
+name = "position"
+z = 3
+text = "{list.index} / {list.count}"
+visible_if = "{list.index}"
+pos = [0.965, 0.05]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#8b97a5", align = "right" }
+
+[[games.elements]]
+type = "textlist"
+name = "gamelist"
+z = 2
+pos = [0.025, 0.13]
+size = [0.46, 0.77]
+item_text = "{game.name}"
+style = { font = "medium", font_size = 0.027, color = "#c7d0da" }
+selected_color = "#0d1a14"
+selector_color = "#36c28a"
+favorite_color = "#ffd166"
+row_height = 1.55
+margin = 0.012
+corner_radius = 0.006
+controller_badge = true
+favorite_badge = true
+
+[[games.elements]]
+type = "rect"
+name = "panel"
+z = 1
+pos = [0.51, 0.13]
+size = [0.465, 0.77]
+color = "#1b2027"
+corner_radius = 0.012
+
+[[games.elements]]
+type = "image"
+name = "art"
+z = 2
+path = "{art.hero}"
+fallbacks = ["{art.banner}", "{art.cover}"]
+pos = [0.51, 0.13]
+size = [0.465, 0.27]
+fit = "cover"
+corner_radius = 0.012
+gradient = ["#1b202700", "#1b2027ff"]
+
+[[games.elements]]
+type = "image"
+name = "cover"
+z = 3
+path = "{art.cover}"
+pos = [0.53, 0.38]
+origin = [0.0, 1.0]
+size = [0.0, 0.25]
+fit = "contain"
+corner_radius = 0.006
+
+[[games.elements]]
+type = "text"
+name = "title"
+z = 3
+text = "{game.name}"
+pos = [0.53, 0.41]
+size = [0.43, 0.0]
+wrap = true
+max_lines = 2
+style = { font = "title", font_size = 0.036, color = "#ffffff" }
+
+# Metadata: one label/value pair per row, each a single truncated line, so a long value
+# (a genre list) can never wrap and push the rows below out of line with their labels.
+# A label shows only when its value is known (no "Developer" next to nothing).
+[[games.elements]]
+type = "text"
+name = "meta_label_developer"
+z = 3
+text = "Developer"
+visible_if = "{game.developer}"
+pos = [0.53, 0.5070]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_developer"
+z = 3
+text = "{game.developer}"
+pos = [0.65, 0.5070]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_label_publisher"
+z = 3
+text = "Publisher"
+visible_if = "{game.publisher}"
+pos = [0.53, 0.5339]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_publisher"
+z = 3
+text = "{game.publisher}"
+pos = [0.65, 0.5339]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_label_genre"
+z = 3
+text = "Genre"
+visible_if = "{game.genre}"
+pos = [0.53, 0.5609]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_genre"
+z = 3
+text = "{game.genre}"
+pos = [0.65, 0.5609]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_label_released"
+z = 3
+text = "Released"
+visible_if = "{game.year}"
+pos = [0.53, 0.5878]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_released"
+z = 3
+text = "{game.year}"
+pos = [0.65, 0.5878]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_label_playtime"
+z = 3
+text = "Playtime"
+visible_if = "{game.playtime}"
+pos = [0.53, 0.6147]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_playtime"
+z = 3
+text = "{game.playtime}"
+pos = [0.65, 0.6147]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_label_last_played"
+z = 3
+text = "Last played"
+visible_if = "{game.lastplayed}"
+pos = [0.53, 0.6417]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_last_played"
+z = 3
+text = "{game.lastplayed}"
+pos = [0.65, 0.6417]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_label_source"
+z = 3
+text = "Source"
+visible_if = "{game.source}"
+pos = [0.53, 0.6686]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_source"
+z = 3
+text = "{game.source}"
+pos = [0.65, 0.6686]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+# Controller support and the Steam Deck rating, with drawn icons (chips without a background
+# are plain text parts separated by dots). Hidden when neither is known.
+[[games.elements]]
+type = "text"
+name = "meta_label_controller"
+z = 3
+text = "Controller"
+visible_if = "{game.controller}{game.deck}"
+pos = [0.53, 0.6955]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_controller"
+z = 3
+chips = true
+text = "{game.controllershort} | {game.decklabel}"
+pos = [0.65, 0.6955]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+# The user's completion status (Edit Game Details / Options); hidden when not set.
+[[games.elements]]
+type = "text"
+name = "meta_label_completion"
+z = 3
+text = "Completion"
+visible_if = "{game.completion}"
+pos = [0.53, 0.7224]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "text"
+name = "meta_completion"
+z = 3
+text = "{game.completion}"
+pos = [0.65, 0.7224]
+size = [0.31, 0.0]
+style = { font_size = 0.0185, color = "#e3e8ee", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "rating"
+name = "rating"
+z = 3
+value = "{game.rating}"
+visible_if = "{game.rating}"
+pos = [0.53, 0.7585]
+size = [0.0, 0.026]
+color = "#ffd166"
+
+# Achievements in the values column, level with the stars, when the library knows them (with a
+# label of their own when the game has no stars).
+[[games.elements]]
+type = "text"
+name = "achievements_label"
+z = 3
+text = "Achievements"
+visible_if = "{game.achievements} && !{game.rating}"
+pos = [0.53, 0.7715]
+origin = [0.0, 0.5]
+size = [0.115, 0.0]
+style = { font = "medium", font_size = 0.0185, color = "#8b97a5", line_spacing = 1.3 }
+
+# Achievements in the values column, level with the stars, when the library knows them.
+[[games.elements]]
+type = "stack"
+name = "achievements"
+z = 3
+visible_if = "{game.achievements}"
+direction = "horizontal"
+align = "center"
+gap = 0.01
+pos = [0.65, 0.7715]
+origin = [0.0, 0.5]
+[[games.elements.children]]
+type = "text"
+text = "{game.achievementslabel}"
+style = { font_size = 0.0185, color = "#e3e8ee" }
+[[games.elements.children]]
+type = "rect"
+size = [0.07, 0.004]
+color = "#36c28a"
+track = "#ffffff26"
+fill = "{game.achievementspercent}"
+corner_radius = 0.002
+
+[[games.elements]]
+type = "text"
+name = "description"
+z = 3
+text = "{game.description}"
+pos = [0.53, 0.7935]
+size = [0.425, 0.0915]
+wrap = true
+scroll = true
+style = { font_size = 0.0195, color = "#b4bec9", line_spacing = 1.3 }
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 4
+pos = [0.5, 0.955]
+origin = [0.5, 0.5]
+size = [0.96, 0.05]
+style = { font = "medium", font_size = 0.019, color = "#b4bec9", align = "center" }

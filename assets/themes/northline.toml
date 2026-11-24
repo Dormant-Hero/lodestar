@@ -1,0 +1,225 @@
+# Northline — quiet and light. A plain list of collections on the left; the selected one's
+# console card stands on the right like a print on a wall. Game lists are a clean list with
+# the cover, facts and description beside it, the console drawn small in the corner.
+# Uses Lodestar's console artwork ({collection.art.*}).
+
+[theme]
+name = "Northline"
+author = "Lodestar"
+version = "1"
+description = "Minimal and light: a plain list, the console's card beside it."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = false
+background = "#eef0f3"
+surface = "#ffffff"
+surface_alt = "#e2e6eb"
+text = "#1c2129"
+text_dim = "#646d7a"
+accent = "#2f6fdc"
+accent_text = "#ffffff"
+selection = "#2f6fdc"
+border = "#d3d8df"
+favorite = "#d99a12"
+danger = "#d64545"
+
+[fonts]
+regular = "builtin:titillium-web"
+bold = "builtin:titillium-web-bold"
+title = "builtin:titillium-web-semibold"
+medium = "builtin:titillium-web-semibold"
+light = "builtin:titillium-web-light"
+
+# ------------------------------------------------------------------ collections
+
+[collections]
+background = "#eef0f3"
+
+[[collections.elements]]
+type = "text"
+name = "heading"
+z = 5
+text = "Library"
+pos = [0.06, 0.1]
+origin = [0.0, 0.5]
+style = { font = "light", font_size = 0.05, color = "#1c2129" }
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.94, 0.1]
+origin = [1.0, 0.5]
+style = { font = "light", font_size = 0.034, color = "#1c2129", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "battery"
+z = 5
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.875, 0.1]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#646d7a", align = "right" }
+
+[[collections.elements]]
+type = "rect"
+name = "rule"
+z = 2
+pos = [0.06, 0.16]
+size = [0.88, 0.0015]
+color = "#1c212922"
+
+[[collections.elements]]
+type = "textlist"
+name = "list"
+z = 4
+pos = [0.05, 0.2]
+size = [0.36, 0.7]
+item_text = "{collection.name}"
+style = { font = "medium", font_size = 0.032, color = "#2a303a" }
+selected_color = "#ffffff"
+selector_color = "#1c2129"
+row_height = 1.7
+margin = 0.014
+corner_radius = 0.012
+
+# The console's card, standing on the right like a print.
+[[collections.elements]]
+type = "image"
+name = "card"
+z = 3
+path = "{collection.art.card}"
+fallbacks = ["{collection.cover}"]
+fallback_text = "{collection.name}"
+pos = [0.69, 0.53]
+origin = [0.5, 0.5]
+size = [0.0, 0.66]
+fit = "contain"
+corner_radius = 0.018
+fade = 0.3
+
+[[collections.elements]]
+type = "text"
+name = "count"
+z = 5
+text = "{collection.countlabel}"
+pos = [0.69, 0.9]
+origin = [0.5, 0.5]
+style = { font = "medium", font_size = 0.024, color = "#646d7a", align = "center" }
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.94, 0.955]
+origin = [1.0, 0.5]
+size = [0.88, 0.04]
+style = { font = "medium", font_size = 0.019, color = "#4a525e", align = "right" }
+
+# ------------------------------------------------------------------ games
+
+[games]
+background = "#eef0f3"
+
+[[games.elements]]
+type = "text"
+name = "collection"
+z = 5
+text = "{collection.name}"
+pos = [0.06, 0.1]
+origin = [0.0, 0.5]
+size = [0.6, 0.0]
+max_lines = 1
+style = { font = "light", font_size = 0.05, color = "#1c2129" }
+
+[[games.elements]]
+type = "image"
+name = "device"
+z = 5
+path = "{collection.art.device}"
+pos = [0.94, 0.1]
+origin = [1.0, 0.5]
+size = [0.0, 0.12]
+fit = "contain"
+
+[[games.elements]]
+type = "rect"
+name = "rule"
+z = 2
+pos = [0.06, 0.16]
+size = [0.88, 0.0015]
+color = "#1c212922"
+
+[[games.elements]]
+type = "textlist"
+name = "gamelist"
+z = 4
+pos = [0.05, 0.2]
+size = [0.43, 0.7]
+item_text = "{game.name}"
+style = { font = "medium", font_size = 0.029, color = "#2a303a" }
+selected_color = "#ffffff"
+selector_color = "#1c2129"
+favorite_color = "#b57d05"
+row_height = 1.65
+margin = 0.014
+corner_radius = 0.012
+controller_badge = true
+favorite_badge = true
+
+[[games.elements]]
+type = "image"
+name = "cover"
+z = 4
+placeholder = true
+path = "{art.cover}"
+fallbacks = ["{art.hero}"]
+pos = [0.53, 0.2]
+size = [0.17, 0.45]
+fit = "cover"
+corner_radius = 0.012
+fade = 0.25
+
+# Name, then the facts right under it (a stack: a short name leaves no gap).
+[[games.elements]]
+type = "stack"
+name = "facts"
+z = 5
+direction = "vertical"
+gap = 0.01
+pos = [0.72, 0.2]
+size = [0.22, 0.0]
+children = [
+    { type = "text", name = "title", text = "{game.name}", wrap = true, max_lines = 3, style = { font = "title", font_size = 0.038, color = "#1c2129", line_spacing = 1.05 }, margin = [0.0, 0.0, 0.0, 0.012] },
+    { type = "text", name = "platform", text = "{game.platform}", style = { font = "medium", font_size = 0.02, color = "#2f6fdc" } },
+    { type = "text", name = "year", text = "{game.year}", style = { font_size = 0.02, color = "#646d7a" } },
+    { type = "text", name = "playtime", text = "{game.playtimelabel}", style = { font_size = 0.02, color = "#646d7a" } },
+    { type = "text", name = "last", text = "{game.lastplayedlabel}", style = { font_size = 0.02, color = "#646d7a" } },
+    { type = "text", name = "controller", text = "{game.controllerlabel}", style = { font_size = 0.02, color = "#646d7a" } },
+]
+
+[[games.elements]]
+type = "text"
+name = "description"
+z = 5
+text = "{game.description}"
+pos = [0.53, 0.69]
+size = [0.41, 0.2]
+wrap = true
+max_lines = 6
+style = { font_size = 0.021, color = "#3b434f", line_spacing = 1.35 }
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.94, 0.955]
+origin = [1.0, 0.5]
+size = [0.88, 0.04]
+style = { font = "medium", font_size = 0.019, color = "#4a525e", align = "right" }

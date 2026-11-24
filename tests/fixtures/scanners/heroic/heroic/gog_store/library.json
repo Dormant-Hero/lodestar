@@ -1,0 +1,24 @@
+{
+  "games": [
+    {
+      "runner": "gog",
+      "store_url": "https://www.gog.com/game/cyberpunk_2077",
+      "developer": "CD PROJEKT RED",
+      "app_name": "1423049311",
+      "art_cover": "https://images.gog-statics.com/c75e674590b8947542c809924df30bbef2190341163dd08668e243c266be70c5.jpg",
+      "art_square": "https://images.gog-statics.com/c75e674590b8947542c809924df30bbef2190341163dd08668e243c266be70c5_glx_vertical_cover.webp",
+      "art_background": "https://images.gog-statics.com/bg.jpg",
+      "cloud_save_enabled": true,
+      "extra": { "about": { "description": "", "shortDescription": "" }, "reqs": [], "releaseDate": "2020-12-09T23:00:00+0000" },
+      "folder_name": "Cyberpunk 2077",
+      "install": { "is_dlc": false },
+      "is_installed": true,
+      "title": "Cyberpunk 2077",
+      "canRunOffline": true,
+      "is_mac_native": false,
+      "is_linux_native": false
+    }
+  ],
+  "totalGames": 1,
+  "totalMovies": 0
+}

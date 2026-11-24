@@ -1,0 +1,25 @@
+"libraryfolders"
+{
+	"contentstatsid"		"-123"
+	"0"
+	{
+		"path"		"@HOME@/.local/share/Steam"
+		"label"		""
+		"apps"
+		{
+			"10"		"1000"
+		}
+	}
+	"1"
+	{
+		"path"		"/nonexistent/lodestar-test/SteamLibrary"
+		"apps"
+		{
+			"99"		"1"
+		}
+	}
+	"2"
+	{
+		"path"		"@HOME@/lib2"
+	}
+}

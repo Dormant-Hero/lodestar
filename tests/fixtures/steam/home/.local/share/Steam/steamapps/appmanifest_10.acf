@@ -1,0 +1,15 @@
+"AppState"
+{
+	"appid"		"10"
+	"Universe"		"1"
+	"name"		"Game Ten"
+	"StateFlags"		"4"
+	"installdir"		"Game Ten"
+	"LastUpdated"		"1700000000"
+	"LastPlayed"		"1700000500"
+	"SizeOnDisk"		"123456789"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

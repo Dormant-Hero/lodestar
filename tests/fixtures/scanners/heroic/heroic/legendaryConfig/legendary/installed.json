@@ -1,0 +1,32 @@
+{
+    "Fortnite": {
+        "app_name": "Fortnite",
+        "base_urls": [
+            "https://epicgames-download1.akamaized.net/Builds/Fortnite/CloudDir/"
+        ],
+        "can_run_offline": false,
+        "egl_guid": "",
+        "executable": "FortniteGame/Binaries/Win64/FortniteLauncher.exe",
+        "install_path": "/HOME/Games/Heroic/Fortnite",
+        "install_size": 31457280000,
+        "install_tags": [],
+        "is_dlc": false,
+        "launch_parameters": "",
+        "manifest_path": null,
+        "needs_verification": false,
+        "platform": "Windows",
+        "prereq_info": null,
+        "requires_ot": false,
+        "save_path": null,
+        "title": "Fortnite",
+        "version": "++Fortnite+Release-28.30-CL-31511038-Windows"
+    },
+    "dlc_thing": {
+        "app_name": "dlc_thing",
+        "install_path": "/HOME/Games/Heroic/Fortnite",
+        "install_size": 1,
+        "is_dlc": true,
+        "platform": "Windows",
+        "title": "Some DLC"
+    }
+}

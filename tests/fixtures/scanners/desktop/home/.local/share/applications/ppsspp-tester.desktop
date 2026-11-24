@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=PPSSPP
+Comment=A tester's PPSSPP entry that calls itself a game
+Exec=/usr/bin/PPSSPPSDL %f
+Categories=Game;ArcadeGame;

@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=Lodestar
+GenericName=Game Library
+Comment=All your games in one place
+Exec=@BIN@ --desktop
+Icon=lodestar
+Terminal=false
+Categories=Game;
+Keywords=games;library;launcher;steam;
+StartupWMClass=lodestar
+Actions=controller;rescan;
+
+[Desktop Action controller]
+Name=Controller Mode
+Exec=@BIN@ --controller
+
+[Desktop Action rescan]
+Name=Rescan Library
+Exec=@BIN@ --scan

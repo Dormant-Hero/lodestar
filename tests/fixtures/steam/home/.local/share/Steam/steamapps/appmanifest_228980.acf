@@ -1,0 +1,15 @@
+"AppState"
+{
+	"appid"		"228980"
+	"Universe"		"1"
+	"name"		"Steamworks Common Redistributables"
+	"StateFlags"		"4"
+	"installdir"		"Steamworks Shared"
+	"LastUpdated"		"1700000000"
+	"LastPlayed"		"0"
+	"SizeOnDisk"		"123456789"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

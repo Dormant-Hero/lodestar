@@ -1,0 +1,25 @@
+{
+  "Fortnite": {
+    "autoInstallDxvk": true,
+    "autoInstallVkd3d": true,
+    "enableEsync": true,
+    "enableFsync": true,
+    "enviromentOptions": [
+      { "key": "DXVK_HUD", "value": "fps" },
+      { "key": "PROTON_LOG_DIR", "value": "/tmp/a b" }
+    ],
+    "wrapperOptions": [
+      { "exe": "gamemoderun", "args": "" },
+      { "exe": "mangohud", "args": "--dlsym" }
+    ],
+    "launcherArgs": "-nosplash",
+    "nvidiaPrime": false,
+    "preferSystemLibs": false,
+    "showFps": false,
+    "useGameMode": false,
+    "wineVersion": { "bin": "/usr/bin/wine", "name": "Wine Default", "type": "wine" },
+    "winePrefix": "/home/u/Games/Heroic/Prefixes/default/Fortnite"
+  },
+  "version": "v0",
+  "explicit": true
+}

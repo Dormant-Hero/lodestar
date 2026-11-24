@@ -1,0 +1,17 @@
+{
+  "installed": [
+    {
+      "platform": "windows",
+      "executable": "",
+      "install_path": "/HOME/Games/Heroic/Cyberpunk 2077",
+      "install_size": "62.5 GiB",
+      "is_dlc": false,
+      "version": "2.12",
+      "appName": "1423049311",
+      "installedWithDLCs": false,
+      "language": "en-US",
+      "versionEtag": "\"1234\"",
+      "buildId": "57386432154324"
+    }
+  ]
+}

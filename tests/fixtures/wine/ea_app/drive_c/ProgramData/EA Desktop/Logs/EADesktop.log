@@ -1,0 +1,2 @@
+1	[2026-11-21T22:24:38.641Z]	PID:   632	TID:   636	INFO    	(eax::ui::GamesManagerProxy::initiateDownload)	initiateDownload() called for offerId=[Origin.OFR.50.0001469] slug[unravel] extraContent=[] installPath=[C:\Program Files\EA Games\Unravel] preferredLanguage=[en_US]
+2	[2026-11-21T22:24:39.000Z]	PID:   632	TID:   636	INFO    	(eax::ui::GamesManagerProxy::getAllInstalledOfferIds)	nothing

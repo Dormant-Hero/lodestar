@@ -1,0 +1,15 @@
+"AppState"
+{
+	"appid"		"30"
+	"Universe"		"1"
+	"name"		"Thirty"
+	"StateFlags"		"6"
+	"installdir"		"Thirty"
+	"LastUpdated"		"1700000000"
+	"LastPlayed"		"0"
+	"SizeOnDisk"		"123456789"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

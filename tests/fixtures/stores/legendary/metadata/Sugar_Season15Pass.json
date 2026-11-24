@@ -1,0 +1,10 @@
+{
+    "app_name": "Sugar_Season15Pass",
+    "app_title": "Rocket Pass",
+    "metadata": {
+        "title": "Rocket Pass",
+        "namespace": "sugar",
+        "categories": [{ "path": "addons" }],
+        "mainGameItem": { "id": "9773aa1aa54f4f7b80e44bef04986cea", "namespace": "sugar" }
+    }
+}

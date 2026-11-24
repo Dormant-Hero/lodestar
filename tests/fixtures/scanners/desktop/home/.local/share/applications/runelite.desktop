@@ -1,0 +1,16 @@
+[Desktop Entry]
+Name=RuneLite
+Name[de]=RuneLite DE
+Comment=Launcher for RuneLite client
+Exec="/HOME/.local/bin/RuneLite.AppImage"
+Icon=runelite
+Terminal=false
+Type=Application
+Categories=Game;
+StartupWMClass=net-runelite-launcher-Launcher
+
+TryExec=/HOME/.local/bin/RuneLite.AppImage
+
+[Desktop Action Other]
+Name=Other
+Exec=/bin/false

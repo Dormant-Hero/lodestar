@@ -1,0 +1,15 @@
+{
+    "app_name": "d8a4c98b5020483881eb7f0c3fc4cea3",
+    "app_title": "Control",
+    "asset_infos": {},
+    "base_urls": [],
+    "metadata": {
+        "title": "Control",
+        "developer": "Remedy Entertainment",
+        "namespace": "calluna",
+        "categories": [{ "path": "games" }, { "path": "applications" }],
+        "customAttributes": {
+            "com.epicgames.app.productSlug": { "type": "STRING", "value": "control" }
+        }
+    }
+}

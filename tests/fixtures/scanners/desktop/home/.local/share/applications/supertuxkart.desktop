@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=SuperTuxKart (mine)
+Comment=Kart racing
+Exec=supertuxkart --fullscreen %F
+Icon=supertuxkart
+Categories=Game;ArcadeGame;

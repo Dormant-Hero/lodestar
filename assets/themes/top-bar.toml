@@ -1,0 +1,452 @@
+# Top Bar — the arrangement of Playnite's own Fullscreen mode: a top bar with the
+# collection, battery and clock, a grid of covers, a bottom bar with the button hints, and a
+# details page with the artwork on top, the cover on the left and the facts next to it.
+#
+# Modelled on Playnite's default Fullscreen theme (Views/Main.xaml, Views/GameDetails.xaml,
+# DerivedStyles/ListGameItemStyle.xaml; Playnite is MIT licensed, © Josef Nemec, see
+# THIRD_PARTY_NOTICES.md). Sizes are Playnite's, from its 1920×1080 design size: a 110 px top
+# bar, a 100 px bottom bar, 5 px focus border with an orange glow, covers grown by 6 %.
+# Lodestar's own drawing; the Playnite theme importer fills this layout from a theme's look.
+# Element names starting with "pn_" are the ones the importer changes.
+
+[theme]
+name = "Top Bar"
+author = "Lodestar (after Playnite's Fullscreen mode)"
+version = "1"
+description = "Playnite Fullscreen's arrangement: top bar, a grid of covers, button hints at the bottom."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#0b1027"
+surface = "#121830"
+surface_alt = "#2b354d"
+text = "#ebebeb"
+text_dim = "#8d919d"
+accent = "#ec6200"
+accent_text = "#ffffff"
+selection = "#ffaa00"
+border = "#2b354d"
+favorite = "#ffaa00"
+danger = "#ff6b6b"
+
+# Playnite's fonts are Titillium Web (Light for text, Bold for titles); Lodestar includes them
+# when it was built with them, else the system's sans-serif stands in.
+[fonts]
+regular = "builtin:titillium-web-light"
+bold = "builtin:titillium-web-bold"
+title = "builtin:titillium-web-bold"
+medium = "builtin:titillium-web"
+semibold = "builtin:titillium-web-semibold"
+
+# ------------------------------------------------------------------ collections
+# Playnite has no page for this (it filters with presets in its top bar); here the same bars
+# frame the collections as cards.
+
+[collections]
+background = "#0b1027"
+
+[[collections.elements]]
+type = "rect"
+name = "pn_background"
+z = -2
+size = [1.0, 1.0]
+color = "#0b1027"
+gradient = ["#091f51", "#0b1027"]
+
+[[collections.elements]]
+type = "image"
+name = "pn_backdrop"
+z = -1
+path = "{collection.hero}"
+fallbacks = ["{collection.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.02
+opacity = 0.12
+fade = 0.4
+
+[[collections.elements]]
+type = "rect"
+name = "pn_topbar"
+z = 3
+size = [1.0, 0.1019]
+color = "#091f51"
+gradient = ["#091f51", "#0b1027aa"]
+gradient_horizontal = true
+
+[[collections.elements]]
+type = "text"
+name = "pn_filter"
+z = 5
+text = "{collection.name}"
+pos = [0.0521, 0.051]
+origin = [0.0, 0.5]
+size = [0.6, 0.0]
+max_lines = 1
+style = { font = "semibold", font_size = 0.0296, color = "#ffffff" }
+
+[[collections.elements]]
+type = "text"
+name = "pn_count"
+z = 5
+text = "{collection.countlabel}"
+pos = [0.0521, 0.086]
+origin = [0.0, 0.5]
+style = { font_size = 0.0167, color = "#8d919d" }
+
+[[collections.elements]]
+type = "text"
+name = "pn_battery"
+z = 5
+text = "▮ {system.battery}"
+visible_if = "{system.battery}"
+pos = [0.862, 0.051]
+origin = [1.0, 0.5]
+style = { font_size = 0.0204, color = "#ebebeb", align = "right" }
+
+[[collections.elements]]
+type = "datetime"
+name = "pn_clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.912, 0.051]
+origin = [1.0, 0.5]
+style = { font_size = 0.0204, color = "#ebebeb", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "pn_menu"
+z = 5
+text = "☰"
+pos = [0.948, 0.051]
+origin = [1.0, 0.5]
+style = { font_size = 0.032, color = "#ffaa00", align = "right" }
+
+[[collections.elements]]
+type = "grid"
+name = "pn_list"
+z = 4
+pos = [0.0521, 0.135]
+size = [0.8958, 0.735]
+columns = 4
+item_aspect = 0.5625
+spacing = 0.026
+item_image = "{collection.hero}"
+item_fallbacks = ["{collection.banner}", "{collection.cover}"]
+item_text = "{collection.name}"
+item_text_style = { font = "semibold", font_size = 0.026, color = "#ebebeb" }
+item_subtext = "{collection.countlabel}"
+item_caption = "{collection.name}"
+item_fit = "cover"
+item_background = "#2b354d"
+corner_radius = 0.0028
+selected_scale = 1.06
+selected_border = "#ffaa00"
+unselected_opacity = 1.0
+
+[[collections.elements]]
+type = "rect"
+name = "pn_bottombar"
+z = 3
+pos = [0.0, 0.9074]
+size = [1.0, 0.0926]
+color = "#091f51"
+gradient = ["#091f51", "#0b1027aa"]
+gradient_horizontal = true
+
+[[collections.elements]]
+type = "helpbar"
+name = "pn_help"
+z = 6
+pos = [0.0625, 0.9537]
+origin = [0.0, 0.5]
+size = [0.85, 0.042]
+style = { font_size = 0.0204, color = "#ebebeb" }
+icon_color = "#ebebeb"
+
+# ------------------------------------------------------------------ games
+# Playnite's main screen: top bar, the cover grid, bottom bar.
+
+[games]
+background = "#0b1027"
+
+[[games.elements]]
+type = "rect"
+name = "pn_background"
+z = -2
+size = [1.0, 1.0]
+color = "#0b1027"
+gradient = ["#091f51", "#0b1027"]
+
+[[games.elements]]
+type = "rect"
+name = "pn_topbar"
+z = 3
+size = [1.0, 0.1019]
+color = "#091f51"
+gradient = ["#091f51", "#0b1027aa"]
+gradient_horizontal = true
+
+[[games.elements]]
+type = "text"
+name = "pn_filter"
+z = 5
+text = "{collection.name}"
+pos = [0.0521, 0.051]
+origin = [0.0, 0.5]
+size = [0.5, 0.0]
+max_lines = 1
+style = { font = "semibold", font_size = 0.0296, color = "#ffffff" }
+
+[[games.elements]]
+type = "text"
+name = "pn_count"
+z = 5
+text = "{list.index} / {list.count}"
+pos = [0.0521, 0.086]
+origin = [0.0, 0.5]
+style = { font_size = 0.0167, color = "#8d919d" }
+
+[[games.elements]]
+type = "text"
+name = "pn_battery"
+z = 5
+text = "▮ {system.battery}"
+visible_if = "{system.battery}"
+pos = [0.862, 0.051]
+origin = [1.0, 0.5]
+style = { font_size = 0.0204, color = "#ebebeb", align = "right" }
+
+[[games.elements]]
+type = "datetime"
+name = "pn_clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.912, 0.051]
+origin = [1.0, 0.5]
+style = { font_size = 0.0204, color = "#ebebeb", align = "right" }
+
+[[games.elements]]
+type = "text"
+name = "pn_menu"
+z = 5
+text = "☰"
+pos = [0.948, 0.051]
+origin = [1.0, 0.5]
+style = { font_size = 0.032, color = "#ffaa00", align = "right" }
+
+[[games.elements]]
+type = "grid"
+name = "pn_list"
+z = 4
+pos = [0.013, 0.118]
+size = [0.974, 0.774]
+columns = 7
+item_aspect = 1.5
+spacing = 0.0185
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font_size = 0.0167, color = "#ebebeb", align = "center" }
+item_caption = "{game.name}"
+item_fit = "cover"
+item_background = "#2b354d"
+corner_radius = 0.0028
+selected_scale = 1.06
+selected_border = "#ffaa00"
+unselected_opacity = 1.0
+controller_badge = true
+favorite_badge = true
+
+[[games.elements]]
+type = "rect"
+name = "pn_bottombar"
+z = 3
+pos = [0.0, 0.9074]
+size = [1.0, 0.0926]
+color = "#091f51"
+gradient = ["#091f51", "#0b1027aa"]
+gradient_horizontal = true
+
+[[games.elements]]
+type = "helpbar"
+name = "pn_help"
+z = 6
+pos = [0.0625, 0.9537]
+origin = [0.0, 0.5]
+size = [0.85, 0.042]
+style = { font_size = 0.0204, color = "#ebebeb" }
+icon_color = "#ebebeb"
+
+# ------------------------------------------------------------------ details
+# Playnite's GameDetails: the game's artwork across the top, a band from 3/7 of the height
+# down (fading in over its first third), the cover on the left, name and facts next to it.
+
+[details]
+background = "#0b1027"
+
+[[details.elements]]
+type = "rect"
+name = "pn_background"
+z = -2
+size = [1.0, 1.0]
+color = "#0b1027"
+gradient = ["#091f51", "#0b1027"]
+
+[[details.elements]]
+type = "image"
+name = "pn_picture"
+z = -1
+placeholder = true
+path = "{art.hero}"
+fallbacks = ["{art.banner}"]
+size = [1.0, 1.0]
+fit = "cover"
+fade = 0.3
+
+[[details.elements]]
+type = "rect"
+name = "pn_band_fade"
+z = 1
+pos = [0.0, 0.4286]
+size = [1.0, 0.1829]
+gradient = ["#091f5100", "#0b1027ee"]
+
+[[details.elements]]
+type = "rect"
+name = "pn_band"
+z = 1
+pos = [0.0, 0.6114]
+size = [1.0, 0.3886]
+color = "#0b1027ee"
+
+[[details.elements]]
+type = "image"
+name = "pn_cover"
+z = 3
+path = "{art.cover}"
+pos = [0.2771, 0.4417]
+origin = [1.0, 0.0]
+size = [0.1677, 0.447]
+fit = "contain"
+corner_radius = 0.0028
+
+[[details.elements]]
+type = "image"
+name = "pn_logo"
+z = 4
+path = "{art.logo}"
+visible = false
+visible_if = "{art.logo}"
+pos = [0.2948, 0.4472]
+size = [0.3, 0.064]
+fit = "contain"
+
+[[details.elements]]
+type = "text"
+name = "pn_title"
+z = 4
+text = "{game.name}"
+pos = [0.2948, 0.4472]
+size = [0.6, 0.0]
+max_lines = 1
+style = { font = "title", font_size = 0.0352, color = "#ffffff", shadow = "#000000" }
+
+[[details.elements]]
+type = "text"
+name = "pn_label_playtime"
+z = 4
+text = "Time played"
+pos = [0.2948, 0.5185]
+style = { font = "bold", font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_playtime"
+z = 4
+text = "{game.playtime}"
+pos = [0.2948, 0.5509]
+style = { font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_label_lastplayed"
+z = 4
+text = "Last played"
+pos = [0.4115, 0.5185]
+style = { font = "bold", font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_lastplayed"
+z = 4
+text = "{game.lastplayed}"
+pos = [0.4115, 0.5509]
+style = { font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_label_release"
+z = 4
+text = "Release date"
+pos = [0.5281, 0.5185]
+style = { font = "bold", font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_release"
+z = 4
+text = "{game.year}"
+pos = [0.5281, 0.5509]
+style = { font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_label_platform"
+z = 4
+text = "Platform"
+pos = [0.6448, 0.5185]
+style = { font = "bold", font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_platform"
+z = 4
+text = "{game.platform}"
+pos = [0.6448, 0.5509]
+size = [0.25, 0.0]
+max_lines = 1
+style = { font_size = 0.0204, color = "#ebebeb" }
+
+[[details.elements]]
+type = "text"
+name = "pn_description"
+z = 4
+text = "{game.description}"
+pos = [0.2948, 0.615]
+size = [0.6, 0.27]
+wrap = true
+scroll = true
+style = { font_size = 0.0167, color = "#ebebeb", line_spacing = 1.35 }
+
+[[details.elements]]
+type = "rect"
+name = "pn_bottombar"
+z = 3
+pos = [0.0, 0.9074]
+size = [1.0, 0.0926]
+color = "#091f5100"
+
+[[details.elements]]
+type = "helpbar"
+name = "pn_help"
+z = 6
+pos = [0.0625, 0.9537]
+origin = [0.0, 0.5]
+size = [0.85, 0.042]
+style = { font_size = 0.0204, color = "#ebebeb" }
+icon_color = "#ebebeb"

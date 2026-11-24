@@ -1,0 +1,15 @@
+{"games": [
+  {"id": "alpha", "name": "Alpha Quest", "installed": true,
+   "launch": {"program": "sh", "args": ["-c", "sleep 1"], "cwd": "/tmp", "env": {"FOO": "bar"}},
+   "cover": "art/cover.png", "hero": "https://example.invalid/hero.jpg", "logo": "art/missing.png",
+   "playtime_secs": 3600, "last_played": 1767225600, "size_bytes": 1000,
+   "description": "First.", "developer": "Dev A", "publisher": "Pub A", "genres": ["RPG", " ", "Action"],
+   "release_year": 2024, "platform": "Linux"},
+  {"id": 42, "name": "Numbered", "installed": false, "launch": {"url": "fixture://launch/42"}},
+  {"id": "beta", "name": "Beta Direct"},
+  {"id": "alpha", "name": "Alpha Duplicate"},
+  {"id": "", "name": "No id"},
+  {"id": "noname"},
+  {"id": "rel", "name": "Relative Program", "launch": {"program": "./bin/game.sh", "args": []},
+   "cover": "file:///nonexistent/cover.png", "release_year": 99999}
+]}

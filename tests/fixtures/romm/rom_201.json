@@ -1,0 +1,7 @@
+{"id":201,"name":"Final Fantasy VII","fs_name":"Final Fantasy VII (USA)","full_path":"psx/roms/Final Fantasy VII (USA)","has_multiple_files":true,
+ "files":[
+  {"id":901,"rom_id":201,"file_name":"Final Fantasy VII (USA).m3u","file_path":"psx/roms/Final Fantasy VII (USA)","file_size_bytes":10,"full_path":"psx/roms/Final Fantasy VII (USA)/Final Fantasy VII (USA).m3u","is_top_level":true},
+  {"id":902,"rom_id":201,"file_name":"Disc 1.chd","file_path":"psx/roms/Final Fantasy VII (USA)/discs","file_size_bytes":10,"full_path":"psx/roms/Final Fantasy VII (USA)/discs/Disc 1.chd","is_top_level":false},
+  {"id":903,"rom_id":201,"file_name":"Disc 2.chd","file_path":"psx/roms/Final Fantasy VII (USA)/discs","file_size_bytes":10,"full_path":"psx/roms/Final Fantasy VII (USA)/discs/Disc 2.chd","is_top_level":false},
+  {"id":904,"rom_id":201,"file_name":"..","file_path":"psx/roms","file_size_bytes":1,"full_path":"psx/roms/..","is_top_level":true}
+ ]}

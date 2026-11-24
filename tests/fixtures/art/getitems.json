@@ -1,0 +1,76 @@
+{
+ "response": {
+  "store_items": [
+   {
+    "item_type": 0,
+    "id": 1245620,
+    "success": 1,
+    "visible": true,
+    "name": "ELDEN RING",
+    "store_url_path": "app/1245620/ELDEN_RING",
+    "store_url_slug": "ELDEN_RING",
+    "appid": 1245620,
+    "type": 0,
+    "assets": {
+     "asset_url_format": "steam/apps/1245620/${FILENAME}?t=1790290043",
+     "main_capsule": "capsule_616x353.jpg",
+     "small_capsule": "capsule_231x87.jpg",
+     "header": "header.jpg",
+     "page_background": "page_bg_generated_v6b.jpg",
+     "hero_capsule": "hero_capsule.jpg",
+     "library_capsule": "library_600x900.jpg",
+     "library_capsule_2x": "library_600x900_2x.jpg",
+     "library_hero": "library_hero.jpg",
+     "library_hero_2x": "library_hero_2x.jpg",
+     "community_icon": "b6e290dd5a92ce98f89089a207733c70c41a1871",
+     "page_background_path": "app/1245620?t=1790290043",
+     "raw_page_background": "page_bg_raw.jpg",
+     "edition_comparison": "74a5e0bf6820afb6e0056cc7d5e3ed346f3ce083/edition_comparision.png",
+     "last_modified": 1790290043
+    }
+   },
+   {
+    "item_type": 0,
+    "id": 2622380,
+    "success": 1,
+    "visible": true,
+    "name": "ELDEN RING NIGHTREIGN",
+    "store_url_path": "app/2622380/ELDEN_RING_NIGHTREIGN",
+    "store_url_slug": "ELDEN_RING_NIGHTREIGN",
+    "appid": 2622380,
+    "type": 0,
+    "assets": {
+     "asset_url_format": "steam/apps/2622380/${FILENAME}?t=1791488960",
+     "main_capsule": "800a6d64a1685c303bf985f084fbf5c08ac2ae5c/capsule_616x353.jpg",
+     "main_capsule_2x": "800a6d64a1685c303bf985f084fbf5c08ac2ae5c/capsule_616x353_2x.jpg",
+     "small_capsule": "8ebc4260af27bc55ba8b88982fd7eb7f970d43c9/capsule_231x87.jpg",
+     "small_capsule_2x": "8ebc4260af27bc55ba8b88982fd7eb7f970d43c9/capsule_231x87_2x.jpg",
+     "header": "header.jpg",
+     "header_2x": "header_2x.jpg",
+     "page_background": "page_bg_generated_v6b.jpg",
+     "hero_capsule": "40691afcade19838519b542efc059b5520291f05/hero_capsule.jpg",
+     "hero_capsule_2x": "40691afcade19838519b542efc059b5520291f05/hero_capsule_2x.jpg",
+     "library_capsule": "d1ee7bc631966b1a99e232a9f84af736bb298395/library_600x900.jpg",
+     "library_capsule_2x": "d1ee7bc631966b1a99e232a9f84af736bb298395/library_600x900_2x.jpg",
+     "library_hero": "d3fec2085d29f131be9ff47b5aea72d360d4e453/library_hero.jpg",
+     "library_hero_2x": "d3fec2085d29f131be9ff47b5aea72d360d4e453/library_hero_2x.jpg",
+     "community_icon": "c59f3732d379c9667450b174353d69d5bcea95a5",
+     "page_background_path": "app/2622380?t=1791488960",
+     "raw_page_background": "page_bg_raw.jpg",
+     "edition_comparison": "7443e46d4787ac399c56adc4fcc43dcd3054d826/edition_comparision.png",
+     "last_modified": 1791488960
+    }
+   },
+   {
+    "item_type": 0,
+    "id": 99999999,
+    "success": 15,
+    "visible": false,
+    "name": "",
+    "store_url_path": "app/0/",
+    "store_url_slug": "",
+    "appid": 0
+   }
+  ]
+ }
+}

@@ -1,0 +1,31 @@
+[
+  {
+    "id": 26226,
+    "aggregated_rating": 91.6666666666667,
+    "artworks": [{"id": 6342, "height": 1080, "image_id": "ar4vo", "width": 1920}],
+    "collections": [{"id": 6539, "name": "Celeste"}],
+    "cover": {"id": 286478, "height": 1600, "image_id": "co3byy", "width": 1200},
+    "first_release_date": 1516838400,
+    "game_modes": [{"id": 1, "name": "Single player"}],
+    "genres": [{"id": 8, "name": "Platform"}, {"id": 31, "name": "Adventure"}, {"id": 32, "name": "Indie"}],
+    "involved_companies": [
+      {"id": 53941, "company": {"id": 12998, "name": "Maddy Makes Games"}, "developer": true, "publisher": true},
+      {"id": 97761, "company": {"id": 3240, "name": "Ethan Lee"}, "developer": false, "publisher": false}
+    ],
+    "name": "Celeste",
+    "player_perspectives": [{"id": 4, "name": "Side view"}],
+    "rating": 87.4081930183478,
+    "screenshots": [
+      {"id": 224316, "height": 720, "image_id": "uu1kr40grvthbmypxpeh", "width": 1280},
+      {"id": 224317, "height": 720, "image_id": "j9eclcg3x9aeogr0hosx", "width": 1280}
+    ],
+    "summary": "Help Madeline survive her inner demons on her journey to the top of Celeste Mountain, in this super-tight platformer from the creators of TowerFall.",
+    "themes": [{"id": 1, "name": "Action"}]
+  },
+  {
+    "id": 279633,
+    "cover": {"id": 334511, "height": 1200, "image_id": "co7out", "width": 900},
+    "first_release_date": 1706140800,
+    "name": "Celeste 64: Fragments of the Mountain"
+  }
+]

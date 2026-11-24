@@ -1,0 +1,191 @@
+{
+ "sha": "4743c3120beb41035dc0966a184b2230abcf310f",
+ "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/trees/4743c3120beb41035dc0966a184b2230abcf310f",
+ "tree": [
+  {
+   "path": "007 - The World Is Not Enough (Europe) (En,Fr,De).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "b9822c41ee243c4e27ac4f4587cbd5adad22aa99",
+   "size": 298161,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/b9822c41ee243c4e27ac4f4587cbd5adad22aa99"
+  },
+  {
+   "path": "007 - The World Is Not Enough (USA) (v2) (Beta).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "2ce0e23f50eb12a7ce5a92021df8aa34489a3df2",
+   "size": 39,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/2ce0e23f50eb12a7ce5a92021df8aa34489a3df2"
+  },
+  {
+   "path": "007 - The World Is Not Enough (USA) (v21) (Beta).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "2ce0e23f50eb12a7ce5a92021df8aa34489a3df2",
+   "size": 39,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/2ce0e23f50eb12a7ce5a92021df8aa34489a3df2"
+  },
+  {
+   "path": "007 - The World Is Not Enough (USA).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "8b02ea513a6e7bacdfa7196b75658249eb10c9cb",
+   "size": 307968,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/8b02ea513a6e7bacdfa7196b75658249eb10c9cb"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (Europe) (Beta) (2003-02-13) (GameCube).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "2eb8d878d228bfe83945cd3bd64d607dff74f2e7",
+   "size": 62,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/2eb8d878d228bfe83945cd3bd64d607dff74f2e7"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (Europe) (Debug) (GameCube).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "2eb8d878d228bfe83945cd3bd64d607dff74f2e7",
+   "size": 62,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/2eb8d878d228bfe83945cd3bd64d607dff74f2e7"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (Europe) (En,Fr,De) (Rev 1).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "2eb8d878d228bfe83945cd3bd64d607dff74f2e7",
+   "size": 62,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/2eb8d878d228bfe83945cd3bd64d607dff74f2e7"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (Europe) (En,Fr,De).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "6d4efbc8dcb9b88015133e1c04d4f6ab8cd3936d",
+   "size": 128467,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/6d4efbc8dcb9b88015133e1c04d4f6ab8cd3936d"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (Europe) (GameCube).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "2eb8d878d228bfe83945cd3bd64d607dff74f2e7",
+   "size": 62,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/2eb8d878d228bfe83945cd3bd64d607dff74f2e7"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (USA) (Beta).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "528252964793d8d1c7cb744810ebe9bbaf9fd0ba",
+   "size": 48,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/528252964793d8d1c7cb744810ebe9bbaf9fd0ba"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (USA) (GameCube).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "528252964793d8d1c7cb744810ebe9bbaf9fd0ba",
+   "size": 48,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/528252964793d8d1c7cb744810ebe9bbaf9fd0ba"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (USA) (Rev 1).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "528252964793d8d1c7cb744810ebe9bbaf9fd0ba",
+   "size": 48,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/528252964793d8d1c7cb744810ebe9bbaf9fd0ba"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (USA) (Rev 2).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "528252964793d8d1c7cb744810ebe9bbaf9fd0ba",
+   "size": 48,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/528252964793d8d1c7cb744810ebe9bbaf9fd0ba"
+  },
+  {
+   "path": "Legend of Zelda, The - Ocarina of Time (USA).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "89d6258c8a5053a98c964cadbf2427ba958826bc",
+   "size": 166785,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/89d6258c8a5053a98c964cadbf2427ba958826bc"
+  },
+  {
+   "path": "Mario Kart 64 (Europe) (Rev 1).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "011cbae69ae46be176dd336857876a2397810518",
+   "size": 26,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/011cbae69ae46be176dd336857876a2397810518"
+  },
+  {
+   "path": "Mario Kart 64 (Europe).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "6cf5878d7bb8c7878497435070738093280f320a",
+   "size": 265650,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/6cf5878d7bb8c7878497435070738093280f320a"
+  },
+  {
+   "path": "Mario Kart 64 (Japan) (Rev 1).png",
+   "mode": "120000",
+   "type": "blob",
+   "sha": "b60c3a188f9bc8f4ebe8a3facc421882a79256a2",
+   "size": 25,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/b60c3a188f9bc8f4ebe8a3facc421882a79256a2"
+  },
+  {
+   "path": "Mario Kart 64 (Japan).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "4dd976cf7446c84adb941bfb32ed79e7bb906270",
+   "size": 668177,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/4dd976cf7446c84adb941bfb32ed79e7bb906270"
+  },
+  {
+   "path": "Mario Kart 64 (USA).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "31af20caa22c405bf99f548db6ee71d05fdb2197",
+   "size": 313299,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/31af20caa22c405bf99f548db6ee71d05fdb2197"
+  },
+  {
+   "path": "Super Mario 64 (Europe) (En,Fr,De).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "ada83495ee842e2b23cf34cfeef594b8ce27da12",
+   "size": 205970,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/ada83495ee842e2b23cf34cfeef594b8ce27da12"
+  },
+  {
+   "path": "Super Mario 64 (Japan) (Rev 3) (Shindou Edition).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "74c41de9b4b758886f039e3e111cc586fb4d2c07",
+   "size": 552175,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/74c41de9b4b758886f039e3e111cc586fb4d2c07"
+  },
+  {
+   "path": "Super Mario 64 (Japan).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "1f39b6e16f8ecd97edba311739f2c21fe5e63044",
+   "size": 571429,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/1f39b6e16f8ecd97edba311739f2c21fe5e63044"
+  },
+  {
+   "path": "Super Mario 64 (USA).png",
+   "mode": "100644",
+   "type": "blob",
+   "sha": "75d2554291b2382ffcb0bd5aebd6cf76e62f6d9e",
+   "size": 276622,
+   "url": "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Nintendo_64/git/blobs/75d2554291b2382ffcb0bd5aebd6cf76e62f6d9e"
+  }
+ ],
+ "truncated": false
+}

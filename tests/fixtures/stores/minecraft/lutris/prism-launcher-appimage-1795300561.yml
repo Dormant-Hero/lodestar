@@ -1,0 +1,17 @@
+game:
+  exe: /HOME/Games/prism-launcher/PrismLauncher-Linux-x86_64.AppImage
+game_slug: prism-launcher
+name: Prism Launcher
+script:
+  files:
+  - prog: https://github.com/PrismLauncher/PrismLauncher/releases/download/9.4/PrismLauncher-Linux-x86_64.AppImage
+  game:
+    exe: $GAMEDIR/PrismLauncher-Linux-x86_64.AppImage
+  installer:
+  - copy:
+      dst: $GAMEDIR
+      src: prog
+  - chmodx: $GAMEDIR/PrismLauncher-Linux-x86_64.AppImage
+slug: prism-launcher-appimage
+version: AppImage
+year: 2022

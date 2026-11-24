@@ -1,0 +1,73 @@
+WINE REGISTRY Version 2
+;; All keys relative to \\Machine
+
+#arch=win64
+
+[Software\\Wine] 1700000000
+#time=1da0000000000000
+"Version"="win10"
+
+[Software\\Wow6432Node\\Ubisoft\\Launcher] 1700000000
+#time=1da0000000000000
+"InstallDir"="C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\"
+"Version"=dword:00000096
+
+[Software\\Wow6432Node\\Ubisoft\\Launcher\\Installs\\635] 1700000000
+#time=1da0000000000000
+"InstallDir"="C:/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/games/Assassin's Creed Origins/"
+"Language"="en-US"
+
+[Software\\Wow6432Node\\Ubisoft\\Launcher\\Installs\\5595] 1700000000
+"InstallDir"="C:/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/games/Far Cry 6/"
+
+[Software\\Wow6432Node\\Ubisoft\\Launcher\\Installs\\999] 1700000000
+"InstallDir"="C:/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/games/Removed Game/"
+
+[Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Uplay Install 635] 1700000000
+"DisplayName"="Assassin's Creed Origins"
+"InstallLocation"="C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Assassin's Creed Origins\\"
+
+[Software\\Electronic Arts\\EA Desktop] 1700000000
+"ClientPath"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe"
+"InstallLocation"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop"
+"InstallSuccessful"="true"
+
+[Software\\Wow6432Node\\Electronic Arts\\EA Core] 1700000000
+"EADM6InstallDir"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop"
+
+[Software\\Wow6432Node\\EA Games\\Mass Effect Legendary Edition] 1700000000
+"Install Dir"="C:\\Program Files\\EA Games\\Mass Effect Legendary Edition\\"
+"Locale"="en_US"
+"DisplayName"="Mass Effect Legendary Edition"
+
+[Software\\Wow6432Node\\EA Games\\Battlefield 1] 1700000000
+"Install Dir"="C:\\Program Files\\EA Games\\Battlefield 1\\"
+
+[Software\\Wow6432Node\\Rockstar Games\\Launcher] 1700000000
+"InstallFolder"="C:\\Program Files\\Rockstar Games\\Launcher"
+"Language"="en-US"
+
+[Software\\Wow6432Node\\Rockstar Games\\Grand Theft Auto V] 1700000000
+"InstallFolder"="C:\\Program Files\\Rockstar Games\\Grand Theft Auto V"
+
+[Software\\Wow6432Node\\Rockstar Games\\Red Dead Redemption 2] 1700000000
+"InstallFolder"="C:\\Program Files\\Rockstar Games\\Red Dead Redemption 2"
+
+[Software\\Wow6432Node\\Rockstar Games\\Rockstar Games Social Club] 1700000000
+"InstallFolder"="C:\\Program Files\\Rockstar Games\\Social Club"
+
+[Software\\Wow6432Node\\Rockstar Games\\Max Payne 3] 1700000000
+"InstallFolder"="C:\\Program Files\\Rockstar Games\\Max Payne 3"
+
+[Software\\Microsoft\\Windows NT\\CurrentVersion] 1700000000
+"ProductName"="Microsoft Windows 10"
+"PathExpand"=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,\
+  74,00,25,00,00,00
+"Blob"=hex:de,ad,\
+  be,ef
+"Multi"=str(7):"one\0two\0"
+"Expand"=str(2):"%SystemRoot%\\system32"
+@="default"
+"Uni"="caf\xe9 \x4e2d"
+"Quote"="say \"hi\""
+

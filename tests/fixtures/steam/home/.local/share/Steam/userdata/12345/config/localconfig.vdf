@@ -1,0 +1,38 @@
+"UserLocalConfigStore"
+{
+	"Software"
+	{
+		"Valve"
+		{
+			"Steam"
+			{
+				"apps"
+				{
+					"10"
+					{
+						"LastPlayed"		"1700009999"
+						"Playtime"		"125"
+						"LaunchOptions"		"MANGOHUD=1 %command% -novid"
+						"cloud"
+						{
+							"last_sync_state"		"synchronized"
+						}
+					}
+					"30"
+					{
+						"Playtime"		"2"
+					}
+					"70"
+					{
+						"LastPlayed"		"1600000000"
+						"Playtime"		"600"
+					}
+					"71"
+					{
+						"Playtime"		"1"
+					}
+				}
+			}
+		}
+	}
+}

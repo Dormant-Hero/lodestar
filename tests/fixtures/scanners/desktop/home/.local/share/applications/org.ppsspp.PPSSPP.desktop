@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=PPSSPP
+Exec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=PPSSPPSDL --file-forwarding org.ppsspp.PPSSPP @@u %U @@
+Icon=org.ppsspp.PPSSPP
+Categories=Game;Emulator;

@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<DiPManifest version="4.0">
+  <contentIDs><contentID>196749</contentID></contentIDs>
+  <gameTitles><gameTitle locale="en_US">Mass Effect™ Legendary Edition</gameTitle></gameTitles>
+  <runtime>
+    <launcher uid="1-0">
+      <filePath>[HKEY_LOCAL_MACHINE\SOFTWARE\BioWare\Mass Effect Legendary Edition\Install Dir]Game\Launcher\Trial.exe</filePath>
+      <trial>1</trial>
+    </launcher>
+    <launcher uid="1-1">
+      <filePath>[HKEY_LOCAL_MACHINE\SOFTWARE\BioWare\Mass Effect Legendary Edition\Install Dir]Game\Launcher\MassEffectLauncher.exe</filePath>
+      <trial>0</trial>
+      <hidden>0</hidden>
+    </launcher>
+  </runtime>
+</DiPManifest>

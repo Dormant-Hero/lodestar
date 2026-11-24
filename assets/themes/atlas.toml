@@ -1,0 +1,254 @@
+# Atlas — every console as a card on a wall, two rows at a time. The selected console's
+# colours wash over the background; its name, maker and game count sit above the wall. The
+# game list is a wall of covers under the console's wordmark, the selected game's facts in a
+# bar along the bottom. Uses Lodestar's console artwork ({collection.art.*}).
+
+[theme]
+name = "Atlas"
+author = "Lodestar"
+version = "1"
+description = "A wall of console cards; covers under each console's wordmark."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#101319"
+surface = "#171b23"
+surface_alt = "#212631"
+text = "#edf0f5"
+text_dim = "#9aa3b3"
+accent = "#ffb454"
+accent_text = "#1a1206"
+selection = "#ffb454"
+border = "#2a303b"
+favorite = "#ffc44d"
+danger = "#ef5350"
+
+[fonts]
+regular = "builtin:titillium-web"
+bold = "builtin:titillium-web-bold"
+title = "builtin:titillium-web-semibold"
+medium = "builtin:titillium-web-semibold"
+light = "builtin:titillium-web-light"
+
+# ------------------------------------------------------------------ collections
+
+[collections]
+background = "#101319"
+
+# The selected console's backdrop, blurred into a wash of its colours.
+[[collections.elements]]
+type = "image"
+name = "wash"
+path = "{collection.art.hero}"
+fallbacks = ["{collection.hero}", "{collection.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.03
+opacity = 0.55
+fade = 0.5
+
+[[collections.elements]]
+type = "rect"
+name = "scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#10131980", "#101319f0"]
+
+[[collections.elements]]
+type = "text"
+name = "heading"
+z = 5
+text = "{collection.name}"
+pos = [0.05, 0.115]
+origin = [0.0, 1.0]
+size = [0.62, 0.0]
+max_lines = 1
+style = { font = "title", font_size = 0.058, color = "#ffffff", shadow = "#00000070" }
+
+[[collections.elements]]
+type = "text"
+name = "count"
+z = 5
+text = "{collection.countlabel}"
+pos = [0.05, 0.128]
+style = { font = "medium", font_size = 0.022, color = "#ffb454" }
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.95, 0.08]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#ffffff", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "battery"
+z = 5
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.895, 0.08]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#ffffffb0", align = "right" }
+
+[[collections.elements]]
+type = "grid"
+name = "wall"
+z = 4
+pos = [0.05, 0.21]
+size = [0.9, 0.72]
+columns = 6
+item_aspect = 1.3333
+spacing = 0.026
+item_image = "{collection.art.card}"
+item_fallbacks = ["{collection.cover}"]
+item_text = "{collection.name}"
+item_text_style = { font = "title", font_size = 0.026, color = "#ffffff" }
+item_subtext = "{collection.countlabel}"
+item_fit = "cover"
+selected_scale = 1.07
+unselected_opacity = 0.82
+corner_radius = 0.014
+item_background = "#212631"
+selected_border = "#ffb454"
+selected_border_width = 0.0045
+
+# The next row peeks out under the wall and fades away.
+[[collections.elements]]
+type = "rect"
+name = "fade_bottom"
+z = 5
+pos = [0.0, 0.86]
+size = [1.0, 0.14]
+gradient = ["#10131900", "#101319"]
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.95, 0.96]
+origin = [1.0, 0.5]
+size = [0.9, 0.04]
+style = { font = "medium", font_size = 0.019, color = "#d4dae4", align = "right" }
+
+# ------------------------------------------------------------------ games
+
+[games]
+background = "#101319"
+
+[[games.elements]]
+type = "image"
+name = "wash"
+path = "{collection.art.hero}"
+fallbacks = ["{art.hero}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.03
+opacity = 0.45
+fade = 0.5
+
+[[games.elements]]
+type = "rect"
+name = "scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#10131990", "#101319f2"]
+
+[[games.elements]]
+type = "image"
+name = "mark"
+z = 5
+path = "{collection.art.mark}"
+pos = [0.05, 0.085]
+origin = [0.0, 0.5]
+size = [0.0, 0.085]
+fit = "contain"
+
+[[games.elements]]
+type = "text"
+name = "collection"
+z = 5
+text = "{collection.name}"
+hidden_if = "{collection.art.mark}"
+pos = [0.05, 0.085]
+origin = [0.0, 0.5]
+style = { font = "title", font_size = 0.05, color = "#ffffff" }
+
+[[games.elements]]
+type = "text"
+name = "count"
+z = 5
+text = "{list.countlabel}"
+pos = [0.95, 0.085]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#ffb454", align = "right" }
+
+[[games.elements]]
+type = "grid"
+name = "covers"
+z = 4
+pos = [0.05, 0.175]
+size = [0.9, 0.62]
+columns = 8
+item_aspect = 1.5
+spacing = 0.02
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font = "title", font_size = 0.02, color = "#e6e9ef" }
+item_fit = "cover"
+selected_scale = 1.08
+unselected_opacity = 0.9
+corner_radius = 0.008
+item_background = "#212631"
+selected_border = "#ffb454"
+selected_border_width = 0.004
+controller_badge = true
+favorite_badge = true
+placeholder = true
+
+[[games.elements]]
+type = "rect"
+name = "bar"
+z = 3
+pos = [0.0, 0.82]
+size = [1.0, 0.18]
+gradient = ["#10131900", "#101319f5"]
+
+[[games.elements]]
+type = "text"
+name = "title"
+z = 5
+text = "{game.name}"
+pos = [0.05, 0.865]
+origin = [0.0, 0.5]
+size = [0.6, 0.0]
+max_lines = 1
+style = { font = "title", font_size = 0.04, color = "#ffffff" }
+
+[[games.elements]]
+type = "stack"
+name = "facts"
+z = 5
+direction = "horizontal"
+gap = 0.012
+align = "center"
+pos = [0.05, 0.915]
+origin = [0.0, 0.5]
+children = [
+    { type = "image", name = "console_mark", path = "{game.consoleart.mark}", size = [0.0, 0.032], fit = "contain" },
+    { type = "text", name = "chips", chips = true, text = "{game.favoritelabel} | {game.year} | {game.playtimelabel} | {game.lastplayedlabel} | {game.controllershort}", background = "#ffffff1c", padding = [0.011, 0.006], radius = 0.02, style = { font = "medium", font_size = 0.018, color = "#e6eaf0" } },
+]
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.95, 0.96]
+origin = [1.0, 0.5]
+size = [0.45, 0.04]
+style = { font = "medium", font_size = 0.019, color = "#d4dae4", align = "right" }

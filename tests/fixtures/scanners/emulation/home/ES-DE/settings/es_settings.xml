@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<bool name="ScraperUseAccountScreenScraper" value="false" />
+<string name="MediaDirectory" value="" />
+<string name="ROMDirectory" value="~/ESDE-ROMs" />

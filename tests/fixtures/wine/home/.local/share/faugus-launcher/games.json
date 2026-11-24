@@ -1,0 +1,10 @@
+[
+    {
+        "gameid": "battlenet",
+        "title": "Battle.net",
+        "path": "@HOME@/Faugus/battlenet/drive_c/Program Files (x86)/Battle.net/Battle.net Launcher.exe",
+        "prefix": "@HOME@/Faugus/battlenet",
+        "runner": "Fixture-Proton",
+        "playtime": 0
+    }
+]

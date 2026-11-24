@@ -1,0 +1,15 @@
+"AppState"
+{
+	"appid"		"60"
+	"Universe"		"1"
+	"name"		"Wallpaper App"
+	"StateFlags"		"4"
+	"installdir"		"Wallpaper App"
+	"LastUpdated"		"1700000000"
+	"LastPlayed"		"0"
+	"SizeOnDisk"		"123456789"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

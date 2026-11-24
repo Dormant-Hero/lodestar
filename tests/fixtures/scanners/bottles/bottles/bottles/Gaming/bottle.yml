@@ -1,0 +1,38 @@
+Arch: win64
+Cache:
+  dxvk: true
+Creation_Date: '2024-01-10 18:22:01.123456'
+Custom_Path: false
+DLL_Overrides: {}
+Environment: Gaming
+Environment_Variables:
+  DXVK_ASYNC: '1'
+External_Programs:
+  3d0e5b5a-1c2b-4f0e-8d9a-0b1c2d3e4f50:
+    arguments: -force-d3d11
+    executable: hollow_knight.exe
+    folder: /ROOT/bottles/Gaming/drive_c/Program Files (x86)/Hollow Knight
+    id: 3d0e5b5a-1c2b-4f0e-8d9a-0b1c2d3e4f50
+    name: Hollow Knight
+    path: /ROOT/bottles/Gaming/drive_c/Program Files (x86)/Hollow Knight/hollow_knight.exe
+    removed: false
+  77777777-1c2b-4f0e-8d9a-0b1c2d3e4f50:
+    arguments: ''
+    executable: game.exe
+    id: 77777777-1c2b-4f0e-8d9a-0b1c2d3e4f50
+    name: 'A Game With A Really Long Name That PyYAML Folds Onto The Next Line:
+      Deluxe'
+    path: /ROOT/bottles/Gaming/drive_c/Program Files/A Game With A Really Long Name
+      That PyYAML Folds/game.exe
+Installed_Dependencies:
+- vcredist2019
+- dotnet48
+Language: sys
+Name: Gaming
+Parameters:
+  dxvk: true
+  vkd3d: true
+Path: Gaming
+Runner: soda-9.0-1
+Versioning: false
+Windows: win10

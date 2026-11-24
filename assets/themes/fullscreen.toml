@@ -1,0 +1,538 @@
+# Fullscreen — a couch layout in the spirit of Playnite's Fullscreen mode.
+# A navigation rail on the left (Home, All games, Platforms, Sources, Collections, Filters),
+# the focused game's artwork, logo, year, genres, score and description at the top, and rows
+# of covers underneath (Recently played, Favourites, a console or two, a store or two …).
+# Lodestar's own drawing; only the layout idea comes from Playnite.
+
+[theme]
+name = "Fullscreen"
+author = "Lodestar"
+version = "1"
+description = "Playnite Fullscreen-style layout: side menu, big artwork of the selected game and rows of covers."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#0f1115"
+surface = "#171a20"
+surface_alt = "#20242c"
+text = "#f1f3f7"
+text_dim = "#a4acb9"
+accent = "#3d8bfd"
+accent_text = "#ffffff"
+selection = "#ffffff"
+border = "#2c313b"
+favorite = "#ffc44d"
+danger = "#ef5350"
+
+[fonts]
+regular = "system:sans"
+bold = "system:sans-bold"
+title = "system:display"
+medium = "system:sans-semibold"
+
+# ------------------------------------------------------------------ home
+
+[home]
+background = "#0f1115"
+
+[[home.elements]]
+type = "image"
+name = "backdrop"
+path = "{art.hero}"
+fallbacks = ["{art.banner}", "{art.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.018
+opacity = 0.55
+fade = 0.35
+
+# The selected game's artwork, sharp, top right, fading into the page (a game without any
+# gets a wash in its console's colour with the console's outline instead of an empty corner).
+[[home.elements]]
+type = "image"
+name = "hero"
+z = 1
+placeholder = true
+path = "{art.hero}"
+pos = [1.0, 0.0]
+origin = [1.0, 0.0]
+size = [0.72, 0.66]
+fit = "cover"
+mask = [0.45, 0.0, 0.0, 0.45]
+fade = 0.3
+
+[[home.elements]]
+type = "rect"
+name = "scrim_left"
+z = 2
+size = [0.75, 1.0]
+gradient = ["#0f1115f5", "#0f111500"]
+gradient_horizontal = true
+
+[[home.elements]]
+type = "rect"
+name = "scrim_bottom"
+z = 2
+pos = [0.0, 0.42]
+size = [1.0, 0.58]
+gradient = ["#0f111500", "#0f1115f7"]
+
+[[home.elements]]
+type = "rect"
+name = "scrim_top"
+z = 2
+size = [1.0, 0.14]
+gradient = ["#0f1115a0", "#0f111500"]
+
+[[home.elements]]
+type = "rect"
+name = "rail_panel"
+z = 3
+size = [0.165, 1.0]
+gradient = ["#0b0d10e6", "#0b0d1000"]
+gradient_horizontal = true
+
+[[home.elements]]
+type = "text"
+name = "wordmark"
+z = 6
+text = "LODESTAR"
+pos = [0.03, 0.075]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.02, color = "#3d8bfd", letter_spacing = 0.3 }
+
+[[home.elements]]
+type = "rail"
+name = "rail"
+z = 6
+pos = [0.012, 0.16]
+size = [0.15, 0.6]
+style = { font = "medium", font_size = 0.024, color = "#f1f3f7" }
+current_color = "#ffffff"
+selector_color = "#3d8bfd"
+
+[[home.elements]]
+type = "datetime"
+name = "clock"
+z = 6
+clock = true
+format = "%H:%M"
+pos = [0.965, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#f1f3f7", align = "right", shadow = "#00000080" }
+
+[[home.elements]]
+type = "text"
+name = "battery"
+z = 6
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.915, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#a4acb9", align = "right" }
+
+[[home.elements]]
+type = "image"
+name = "logo"
+z = 5
+path = "{art.logo}"
+pos = [0.19, 0.3]
+origin = [0.0, 1.0]
+size = [0.3, 0.17]
+fit = "contain"
+fade = 0.25
+
+[[home.elements]]
+type = "text"
+name = "title"
+z = 5
+text = "{game.name}"
+hidden_if = "{art.logo}"
+pos = [0.19, 0.3]
+origin = [0.0, 1.0]
+size = [0.5, 0.0]
+wrap = true
+max_lines = 2
+style = { font = "title", font_size = 0.062, color = "#ffffff", shadow = "#000000a0", line_spacing = 1.05 }
+
+[[home.elements]]
+type = "text"
+name = "facts"
+z = 5
+chips = true
+text = "{game.year} | {game.achievementslabel} | {game.genrelist} | {game.scorelabel} | {game.source} | {game.playtimelabel}"
+pos = [0.19, 0.325]
+size = [0.55, 0.0]
+background = "#ffffff1f"
+padding = [0.012, 0.006]
+radius = 0.016
+style = { font = "medium", font_size = 0.0195, color = "#f1f3f7" }
+
+[[home.elements]]
+type = "rating"
+name = "stars"
+z = 5
+visible_if = "{game.rating}"
+pos = [0.19, 0.385]
+size = [0.0, 0.022]
+
+[[home.elements]]
+type = "text"
+name = "description"
+z = 5
+text = "{game.description}"
+pos = [0.19, 0.418]
+size = [0.42, 0.1]
+wrap = true
+max_lines = 3
+style = { font_size = 0.0205, color = "#c3cad6", line_spacing = 1.3, shadow = "#00000080" }
+
+[[home.elements]]
+type = "rows"
+name = "rows"
+z = 4
+pos = [0.182, 0.53]
+size = [0.818, 0.42]
+rows = ["recent", "favorites", "platforms:2", "sources:2", "collections:1", "all"]
+max_rows = 8
+row_items = 30
+item_size = [0.078, 0.208]
+spacing = 0.009
+row_spacing = 0.012
+title = "{collection.name}"
+title_style = { font = "bold", font_size = 0.023, color = "#f1f3f7", shadow = "#00000080" }
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font = "bold", font_size = 0.019, color = "#f1f3f7" }
+item_fit = "cover"
+radius = 0.008
+item_fill = "#20242c"
+selected_scale = 1.1
+selected_border = "#ffffff"
+unselected_opacity = 0.72
+controller_badge = true
+favorite_badge = true
+
+# Keeps the button hints legible over the row peeking in from below.
+[[home.elements]]
+type = "rect"
+name = "scrim_hints"
+z = 6
+pos = [0.0, 0.9]
+size = [1.0, 0.1]
+gradient = ["#0f111500", "#0f1115e6"]
+
+[[home.elements]]
+type = "helpbar"
+name = "help"
+z = 7
+pos = [0.965, 0.965]
+origin = [1.0, 0.5]
+size = [0.8, 0.045]
+style = { font = "medium", font_size = 0.02, color = "#c3cad6", align = "right" }
+
+# ------------------------------------------------------------------ collections
+# One rail section: its platforms, stores, collections or filters as cards.
+
+[collections]
+background = "#0f1115"
+
+[[collections.elements]]
+type = "image"
+name = "backdrop"
+path = "{collection.hero}"
+fallbacks = ["{collection.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.022
+opacity = 0.4
+fade = 0.45
+
+[[collections.elements]]
+type = "rect"
+name = "scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#0f1115b0", "#0f1115f5"]
+
+[[collections.elements]]
+type = "rect"
+name = "rail_panel"
+z = 3
+size = [0.165, 1.0]
+gradient = ["#0b0d10e6", "#0b0d1000"]
+gradient_horizontal = true
+
+[[collections.elements]]
+type = "text"
+name = "wordmark"
+z = 6
+text = "LODESTAR"
+pos = [0.03, 0.075]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.02, color = "#3d8bfd", letter_spacing = 0.3 }
+
+[[collections.elements]]
+type = "rail"
+name = "rail"
+z = 6
+pos = [0.012, 0.16]
+size = [0.15, 0.6]
+style = { font = "medium", font_size = 0.024, color = "#f1f3f7" }
+current_color = "#ffffff"
+selector_color = "#3d8bfd"
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 6
+clock = true
+format = "%H:%M"
+pos = [0.965, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#f1f3f7", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "battery"
+z = 6
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.915, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#a4acb9", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "heading"
+z = 5
+text = "{section.name}"
+pos = [0.19, 0.125]
+origin = [0.0, 0.5]
+style = { font = "title", font_size = 0.052, color = "#ffffff" }
+
+[[collections.elements]]
+type = "text"
+name = "selected"
+z = 5
+text = "{collection.name} · {collection.countlabel}"
+pos = [0.19, 0.185]
+origin = [0.0, 0.5]
+style = { font = "medium", font_size = 0.023, color = "#a4acb9" }
+
+[[collections.elements]]
+type = "grid"
+name = "cards"
+z = 4
+pos = [0.19, 0.24]
+size = [0.775, 0.68]
+columns = 4
+item_aspect = 0.5625
+spacing = 0.024
+item_image = "{collection.hero}"
+item_fallbacks = ["{collection.banner}", "{collection.cover}"]
+item_text = "{collection.name}"
+item_text_style = { font = "bold", font_size = 0.025, color = "#f1f3f7" }
+item_subtext = "{collection.countlabel}"
+item_caption = "{collection.name}"
+item_fit = "cover"
+item_background = "#20242c"
+corner_radius = 0.012
+selected_scale = 1.06
+selected_border = "#ffffff"
+unselected_opacity = 0.75
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 7
+pos = [0.965, 0.965]
+origin = [1.0, 0.5]
+size = [0.8, 0.045]
+style = { font = "medium", font_size = 0.02, color = "#c3cad6", align = "right" }
+
+# ------------------------------------------------------------------ games
+# The full grid of one collection, with its game count.
+
+[games]
+background = "#0f1115"
+
+[[games.elements]]
+type = "image"
+name = "backdrop"
+path = "{art.hero}"
+fallbacks = ["{art.banner}", "{art.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.022
+opacity = 0.35
+fade = 0.35
+
+[[games.elements]]
+type = "rect"
+name = "scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#0f1115b8", "#0f1115f5"]
+
+[[games.elements]]
+type = "rect"
+name = "rail_panel"
+z = 3
+size = [0.165, 1.0]
+gradient = ["#0b0d10e6", "#0b0d1000"]
+gradient_horizontal = true
+
+[[games.elements]]
+type = "text"
+name = "wordmark"
+z = 6
+text = "LODESTAR"
+pos = [0.03, 0.075]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.02, color = "#3d8bfd", letter_spacing = 0.3 }
+
+[[games.elements]]
+type = "rail"
+name = "rail"
+z = 6
+pos = [0.012, 0.16]
+size = [0.15, 0.6]
+style = { font = "medium", font_size = 0.024, color = "#f1f3f7" }
+current_color = "#ffffff"
+selector_color = "#3d8bfd"
+
+[[games.elements]]
+type = "datetime"
+name = "clock"
+z = 6
+clock = true
+format = "%H:%M"
+pos = [0.965, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#f1f3f7", align = "right" }
+
+[[games.elements]]
+type = "text"
+name = "battery"
+z = 6
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.915, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#a4acb9", align = "right" }
+
+[[games.elements]]
+type = "text"
+name = "heading"
+z = 5
+text = "{collection.name}"
+pos = [0.19, 0.125]
+origin = [0.0, 0.5]
+size = [0.55, 0.0]
+style = { font = "title", font_size = 0.052, color = "#ffffff" }
+
+[[games.elements]]
+type = "text"
+name = "count"
+z = 5
+text = "{list.countlabel}"
+pos = [0.19, 0.185]
+origin = [0.0, 0.5]
+style = { font = "medium", font_size = 0.023, color = "#a4acb9" }
+
+# The selected game, top right.
+[[games.elements]]
+type = "text"
+name = "selected"
+z = 5
+text = "{game.name}"
+pos = [0.965, 0.135]
+origin = [1.0, 0.5]
+size = [0.4, 0.0]
+max_lines = 1
+style = { font = "bold", font_size = 0.026, color = "#ffffff", align = "right" }
+
+[[games.elements]]
+type = "text"
+name = "selected_facts"
+z = 5
+text = "{game.year}   {game.playtimelabel}"
+hidden_if = "{game.achievements}"
+pos = [0.965, 0.18]
+origin = [1.0, 0.5]
+size = [0.4, 0.0]
+max_lines = 1
+style = { font = "medium", font_size = 0.02, color = "#a4acb9", align = "right" }
+
+# The same line with the achievement count at its end, when the library knows it.
+[[games.elements]]
+type = "stack"
+name = "selected_facts_achievements"
+z = 5
+visible_if = "{game.achievements}"
+direction = "horizontal"
+align = "center"
+justify = "end"
+gap = 0.012
+pos = [0.965, 0.18]
+origin = [1.0, 0.5]
+size = [0.4, 0.0]
+[[games.elements.children]]
+type = "text"
+text = "{game.year}   {game.playtimelabel}"
+shrink = true
+style = { font = "medium", font_size = 0.02, color = "#a4acb9" }
+
+[[games.elements.children]]
+type = "stack"
+name = "selected_achievements"
+gap = 0.004
+padding = [0.007, 0.0045]
+background = "#ffffff14"
+corner_radius = 0.004
+[[games.elements.children.children]]
+type = "text"
+text = "{game.achievementslabel}"
+style = { font = "medium", font_size = 0.017, color = "#f1f3f7" }
+[[games.elements.children.children]]
+type = "rect"
+size = [0.0, 0.003]
+color = "#3d8bfd"
+track = "#ffffff2e"
+fill = "{game.achievementspercent}"
+corner_radius = 0.0015
+
+[[games.elements]]
+type = "grid"
+name = "grid"
+z = 4
+pos = [0.19, 0.235]
+size = [0.775, 0.69]
+columns = 7
+item_aspect = 1.5
+spacing = 0.022
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font = "medium", font_size = 0.017, color = "#dfe3ea", align = "center" }
+show_labels = true
+item_fit = "cover"
+item_background = "#20242c"
+corner_radius = 0.008
+selected_scale = 1.07
+selected_border = "#ffffff"
+unselected_opacity = 0.85
+controller_badge = true
+favorite_badge = true
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 7
+pos = [0.965, 0.965]
+origin = [1.0, 0.5]
+size = [0.8, 0.045]
+style = { font = "medium", font_size = 0.02, color = "#c3cad6", align = "right" }

@@ -1,0 +1,109 @@
+# Starter — a small, complete Lodestar controller theme to copy and change.
+# Folder: <Lodestar data folder>/themes/starter/theme.toml (Add-ons → Controller themes lists it).
+
+[theme]
+name = "Starter"
+author = "Your name"
+version = "1.0.0"
+description = "A console carousel, then a grid of covers."
+controller = true
+
+[palette]
+dark = true
+background = "#14171c"
+surface = "#1d2128"
+surface_alt = "#262b33"
+text = "#e8ebf0"
+text_dim = "#9aa3b2"
+accent = "#4c8dff"
+accent_text = "#ffffff"
+selection = "#4c8dff"
+border = "#2f353f"
+favorite = "#f2b84b"
+danger = "#e5534b"
+
+[fonts]
+regular = "builtin:titillium-web"
+bold = "builtin:titillium-web-bold"
+light = "builtin:titillium-web-light"
+
+# ------------------------------------------------------------------ collections
+
+[[collections.elements]]
+type = "image"
+name = "backdrop"
+z = 0
+path = "{collection.art.hero}"
+pos = [0.0, 0.0]
+size = [1.0, 1.0]
+
+[[collections.elements]]
+type = "rect"
+name = "shade"
+z = 1
+pos = [0.0, 0.55]
+size = [1.0, 0.45]
+color = "#14171cdd"
+
+[[collections.elements]]
+type = "carousel"
+name = "consoles"
+z = 2
+pos = [0.0, 0.62]
+size = [1.0, 0.3]
+orientation = "horizontal"
+item_size = [0.16, 0.28]
+visible_items = 5.0
+selected_scale = 1.15
+item_image = "{collection.art.card}"
+item_text = "{collection.name}"
+
+[[collections.elements]]
+type = "text"
+name = "count"
+z = 3
+text = "{collection.countlabel}"
+pos = [0.05, 0.08]
+style = { font = "bold", font_size = 0.035, color = "#e8ebf0" }
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 4
+pos = [0.95, 0.96]
+origin = [1.0, 1.0]
+
+# ------------------------------------------------------------------ games
+
+[[games.elements]]
+type = "text"
+name = "title"
+z = 2
+text = "{collection.name}"
+pos = [0.05, 0.06]
+style = { font = "bold", font_size = 0.045, color = "#e8ebf0" }
+
+[[games.elements]]
+type = "grid"
+name = "covers"
+z = 1
+pos = [0.05, 0.15]
+size = [0.9, 0.72]
+columns = 6
+item_image = "{art.cover}"
+item_text = "{game.name}"
+
+[[games.elements]]
+type = "text"
+name = "selected"
+z = 2
+text = "{game.name}  ·  {game.playtimelabel}"
+pos = [0.05, 0.91]
+style = { font = "regular", font_size = 0.026, color = "#9aa3b2" }
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 4
+pos = [0.95, 0.96]
+origin = [1.0, 1.0]

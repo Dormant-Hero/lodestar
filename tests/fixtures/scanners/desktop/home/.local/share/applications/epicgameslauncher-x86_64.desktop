@@ -1,0 +1,8 @@
+[Desktop Entry]
+Categories=Game;
+Comment=Epic Games Launcher
+Exec="/HOME/.local/bin/RuneLite.AppImage" %u
+Icon=epicgameslauncher-x86_64
+Name=Epic Games Launcher
+Terminal=false
+Type=Application

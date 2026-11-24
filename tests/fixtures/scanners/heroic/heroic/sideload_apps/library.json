@@ -1,0 +1,21 @@
+{
+  "games": [
+    {
+      "runner": "sideload",
+      "app_name": "sl_itchy",
+      "title": "Itchy Game",
+      "install": {
+        "executable": "/HOME/Games/itchy/run.sh",
+        "platform": "linux"
+      },
+      "folder_name": "/HOME/Games/itchy",
+      "art_cover": "file:///HOME/Pictures/itchy.png",
+      "art_square": "/HOME/Pictures/itchy.png",
+      "is_installed": true,
+      "canRunOffline": true,
+      "browserUrl": "",
+      "customUserAgent": "",
+      "launchFullScreen": false
+    }
+  ]
+}

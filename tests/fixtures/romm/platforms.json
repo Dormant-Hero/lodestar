@@ -1,0 +1,7 @@
+[
+ {"id":1,"slug":"atari2600","fs_slug":"atari2600","rom_count":1,"name":"Atari 2600","igdb_slug":"atari2600","custom_name":"","igdb_id":59,"category":"Console","display_name":"Atari 2600"},
+ {"id":12,"slug":"snes","fs_slug":"snes","rom_count":1,"name":"Super Nintendo Entertainment System","igdb_slug":"snes","custom_name":"","igdb_id":19,"display_name":"Super Nintendo Entertainment System"},
+ {"id":13,"slug":"genesis","fs_slug":"genesis","rom_count":1,"name":"Sega Mega Drive/Genesis","igdb_slug":"genesis-slash-megadrive","custom_name":"","igdb_id":29,"display_name":"Sega Mega Drive/Genesis"},
+ {"id":20,"slug":"psx","fs_slug":"psx","rom_count":1,"name":"PlayStation","igdb_slug":"ps","custom_name":"","igdb_id":7,"display_name":"PlayStation"},
+ {"id":30,"slug":"pico","fs_slug":"pico-8","rom_count":1,"name":"PICO-8 Fantasy Console","igdb_slug":null,"custom_name":"","igdb_id":null,"display_name":"PICO-8 Fantasy Console"}
+]

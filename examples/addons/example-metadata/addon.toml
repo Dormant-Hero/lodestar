@@ -1,0 +1,17 @@
+# Example Lodestar metadata add-on: answers `search` and `fetch` with fixed data.
+id = "example-metadata"
+name = "Example Metadata"
+author = "Lodestar"
+version = "1.0.0"
+description = "Answers every search with one match and fixed details. Shows the metadata protocol."
+kind = "metadata"
+exec = "main.sh"
+timeout_secs = 10
+permissions = []
+
+[[settings]]
+key = "api_key"
+label = "API key"
+kind = "secret"
+default = ""
+help = "Not used; shows how a key field looks."

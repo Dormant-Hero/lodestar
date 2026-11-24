@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Football Life 2026 (Faugus)
+Exec=/usr/bin/faugus-launcher --game fl-2026
+Icon=/HOME/.local/share/faugus-launcher/icons/fl-2026.png
+Type=Application
+Categories=Game;
+Path=/HOME/Faugus/football-life/drive_c/Program Files (x86)/SP Football Life 2026

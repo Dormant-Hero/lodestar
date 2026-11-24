@@ -1,0 +1,324 @@
+# Lodestar — the default theme (controller and desktop).
+# Big-screen layout: the selected game's artwork fills the screen, a shelf of covers runs
+# along the bottom, logo / chips / description sit on the left.
+
+[theme]
+name = "Lodestar"
+author = "Lodestar"
+version = "1"
+description = "Big-screen default: artwork backdrop, cover shelf, clean type."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#1b1e24"
+surface = "#22262e"
+surface_alt = "#2b3039"
+text = "#e6e9ef"
+text_dim = "#9aa3b2"
+accent = "#4c8dff"
+accent_text = "#ffffff"
+selection = "#69a2ff"
+border = "#333945"
+favorite = "#ffc44d"
+danger = "#ef5350"
+
+[fonts]
+regular = "system:sans"
+bold = "system:sans-bold"
+title = "system:display"
+medium = "system:sans-semibold"
+
+# ------------------------------------------------------------------ collections
+
+[collections]
+background = "#1b1e24"
+
+[[collections.elements]]
+type = "image"
+name = "backdrop"
+path = "{collection.hero}"
+fallbacks = ["{collection.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.022
+opacity = 0.6
+fade = 0.45
+
+[[collections.elements]]
+type = "rect"
+name = "scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#1b1e2480", "#1b1e24f5"]
+
+[[collections.elements]]
+type = "rect"
+name = "scrim_left"
+z = 1
+size = [0.7, 1.0]
+gradient = ["#15171ccc", "#15171c00"]
+gradient_horizontal = true
+
+[[collections.elements]]
+type = "text"
+name = "wordmark"
+z = 5
+text = "LODESTAR"
+pos = [0.045, 0.065]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.02, color = "#69a2ff", letter_spacing = 0.32 }
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.955, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.026, color = "#e6e9ef", align = "right" }
+
+# The battery level on laptops and handhelds (nothing without a battery), left of the clock.
+[[collections.elements]]
+type = "text"
+name = "battery"
+z = 5
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.905, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.021, color = "#a4acb9", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "title"
+z = 5
+text = "{collection.name}"
+pos = [0.045, 0.235]
+origin = [0.0, 1.0]
+size = [0.8, 0.0]
+style = { font = "title", font_size = 0.075, color = "#ffffff", shadow = "#00000080" }
+
+[[collections.elements]]
+type = "text"
+name = "subtitle"
+z = 5
+text = "{collection.countlabel}"
+pos = [0.047, 0.255]
+style = { font = "medium", font_size = 0.027, color = "#9aa3b2" }
+
+[[collections.elements]]
+type = "carousel"
+name = "carousel"
+z = 4
+pos = [0.0, 0.34]
+size = [1.0, 0.44]
+orientation = "horizontal"
+item_size = [0.27, 0.27]
+visible_items = 3.3
+selected_position = 0.5
+item_align = 0.5
+selected_scale = 1.16
+unselected_opacity = 0.5
+item_image = "{collection.hero}"
+item_fallbacks = ["{collection.banner}", "{collection.cover}"]
+item_text = "{collection.name}"
+item_text_style = { font = "bold", font_size = 0.038, color = "#ffffff" }
+item_subtext = "{collection.countlabel}"
+item_caption = "{collection.name}"
+item_fit = "cover"
+radius = 0.016
+item_fill = "#2b3039"
+selected_border = "#69a2ff"
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.955, 0.94]
+origin = [1.0, 0.5]
+size = [0.9, 0.05]
+style = { font = "medium", font_size = 0.021, color = "#c3cad6", align = "right" }
+
+# ------------------------------------------------------------------ games
+
+[games]
+background = "#1b1e24"
+
+[[games.elements]]
+type = "image"
+name = "backdrop"
+path = "{art.hero}"
+fallbacks = ["{art.banner}", "{art.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.025
+opacity = 0.5
+fade = 0.35
+
+[[games.elements]]
+type = "image"
+name = "hero"
+z = 1
+path = "{art.hero}"
+size = [1.0, 0.7]
+fit = "cover"
+opacity = 0.95
+mask = [0.0, 0.0, 0.0, 0.5]
+fade = 0.3
+
+[[games.elements]]
+type = "rect"
+name = "scrim_left"
+z = 2
+size = [0.68, 1.0]
+gradient = ["#16181df2", "#16181d00"]
+gradient_horizontal = true
+
+[[games.elements]]
+type = "rect"
+name = "scrim_bottom"
+z = 2
+pos = [0.0, 0.55]
+size = [1.0, 0.45]
+gradient = ["#1b1e2400", "#1b1e24f0"]
+
+# Keeps the header (collection name, clock) legible over bright artwork.
+[[games.elements]]
+type = "rect"
+name = "scrim_top"
+z = 2
+size = [1.0, 0.16]
+gradient = ["#16181db0", "#16181d00"]
+
+[[games.elements]]
+type = "text"
+name = "collection"
+z = 5
+text = "{collection.name}"
+pos = [0.045, 0.065]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.02, color = "#69a2ff", letter_spacing = 0.18, uppercase = true }
+
+[[games.elements]]
+type = "datetime"
+name = "clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.955, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.026, color = "#e6e9ef", align = "right" }
+
+# The battery level on laptops and handhelds (nothing without a battery), left of the clock.
+[[games.elements]]
+type = "text"
+name = "battery"
+z = 5
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.905, 0.065]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.021, color = "#a4acb9", align = "right" }
+
+[[games.elements]]
+type = "image"
+name = "logo"
+z = 5
+path = "{art.logo}"
+pos = [0.045, 0.335]
+origin = [0.0, 1.0]
+size = [0.36, 0.2]
+fit = "contain"
+fade = 0.25
+
+[[games.elements]]
+type = "text"
+name = "title"
+z = 5
+text = "{game.name}"
+hidden_if = "{art.logo}"
+pos = [0.045, 0.335]
+origin = [0.0, 1.0]
+size = [0.55, 0.0]
+wrap = true
+max_lines = 2
+style = { font = "title", font_size = 0.064, color = "#ffffff", shadow = "#00000090", line_spacing = 1.05 }
+
+[[games.elements]]
+type = "text"
+name = "chips"
+z = 5
+chips = true
+text = "{game.favoritelabel} | {game.source} | {game.controllerlabel} | {game.playtimelabel} | {game.lastplayedlabel} | {game.year} | {game.achievementslabel}"
+pos = [0.045, 0.36]
+size = [0.6, 0.0]
+background = "#ffffff1c"
+padding = [0.013, 0.0065]
+style = { font = "medium", font_size = 0.019, color = "#e6e9ef" }
+
+[[games.elements]]
+type = "text"
+name = "description"
+z = 5
+text = "{game.description}"
+pos = [0.045, 0.425]
+size = [0.43, 0.105]
+wrap = true
+max_lines = 3
+style = { font_size = 0.0205, color = "#b9c1ce", line_spacing = 1.3, shadow = "#00000060" }
+
+[[games.elements]]
+type = "text"
+name = "shelf_label"
+z = 5
+text = "{collection.name}"
+pos = [0.045, 0.585]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.021, color = "#e6e9ef" }
+
+[[games.elements]]
+type = "text"
+name = "position"
+z = 5
+text = "{list.index} / {list.count}"
+visible_if = "{list.index}"
+pos = [0.955, 0.585]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.019, color = "#9aa3b2", align = "right" }
+
+[[games.elements]]
+type = "carousel"
+name = "shelf"
+z = 4
+pos = [0.0, 0.615]
+size = [1.0, 0.3]
+orientation = "horizontal"
+item_size = [0.1, 0.264]
+visible_items = 9.0
+selected_position = 0.1
+item_align = 0.5
+selected_scale = 1.12
+unselected_opacity = 0.78
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font = "bold", font_size = 0.021, color = "#e6e9ef" }
+item_subtext = "{game.source}"
+item_fit = "cover"
+radius = 0.009
+controller_badge = true
+favorite_badge = true
+item_fill = "#2b3039"
+selected_border = "#69a2ff"
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.955, 0.955]
+origin = [1.0, 0.5]
+size = [0.9, 0.045]
+style = { font = "medium", font_size = 0.02, color = "#c3cad6", align = "right" }

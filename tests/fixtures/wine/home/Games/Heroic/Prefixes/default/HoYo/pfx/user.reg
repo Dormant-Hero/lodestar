@@ -1,0 +1,15 @@
+WINE REGISTRY Version 2
+;; All keys relative to \\User\\S-1-5-21-0-0-0-1000
+
+#arch=win64
+
+[Software\\Cognosphere\\HYP\\1_0\\hk4e_global] 1700000000
+#time=1da0000000000000
+"GameInstallPath"="C:\\Program Files\\HoYoPlay\\games\\Genshin Impact game"
+
+[Software\\Cognosphere\\HYP\\1_0\\nap_global] 1700000000
+"GameInstallPath"="C:\\Program Files\\HoYoPlay\\games\\ZenlessZoneZero Game"
+
+[Software\\Cognosphere\\HYP\\1_0\\bh3_global] 1700000000
+"GameInstallPath"="C:\\Games\\Missing"
+

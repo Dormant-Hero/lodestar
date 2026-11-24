@@ -1,0 +1,15 @@
+{
+  "library": [
+    {
+      "runner": "nile",
+      "app_name": "amzn1.adg.product.tombraider",
+      "art_cover": "https://m.media-amazon.com/images/I/tr_wide.jpg",
+      "art_square": "https://m.media-amazon.com/images/I/tr_tall.jpg",
+      "art_logo": "https://m.media-amazon.com/images/I/tr_logo.png",
+      "developer": "Crystal Dynamics",
+      "is_installed": true,
+      "title": "Tomb Raider",
+      "install": { "platform": "Windows" }
+    }
+  ]
+}

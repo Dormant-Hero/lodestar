@@ -1,0 +1,44 @@
+{
+ "description": "<div style=\"overflow:hidden;\"><a href=\"https://www.gog.com/game/the_witcher_3_wild_hunt_game_of_the_year_edition\"><img src=\"https://items.gog.com/the_witcher_3_wild_hunt/COVER_970x300_EN.png\"></a></di",
+ "_links": {
+  "self": {
+   "href": "https://api.gog.com/v2/games/1207664663?locale=en-US"
+  },
+  "store": {
+   "href": "https://www.gog.com/en/game/the_witcher_3_wild_hunt"
+  },
+  "icon": {
+   "href": "https://images.gog-statics.com/b42b5d2814d11c06f01558e313b23218029c4a845f1e9f1b9c80e0fc4eb22974.png"
+  },
+  "iconSquare": {
+   "href": "https://images.gog-statics.com/53a25d35838048505997623a23673eb4342e5ca44300353f4c61aef3d667b4fb.png"
+  },
+  "logo": {
+   "href": "https://images.gog-statics.com/676c424592d576d253c18437972337e8fa4776eecfe6c5868aadf36010f9b11e.png"
+  },
+  "boxArtImage": {
+   "href": "https://images.gog-statics.com/43972f6e5406e50b6ac3e82b16500c601e8c45f9a3577d026d99acd7c291607c.jpg"
+  },
+  "backgroundImage": {
+   "href": "https://images.gog-statics.com/a31cc28555c4e773d8962b993f9d1dd62aa6895f2077a5d755eb8a01ed0bba91.jpg"
+  },
+  "galaxyBackgroundImage": {
+   "href": "https://images.gog-statics.com/8b55161db272b2689fc816afcae69c58f533587d7eb483d03509baac29b1f682.jpg"
+  }
+ },
+ "_embedded": {
+  "product": {
+   "id": 1207664663,
+   "title": "The Witcher 3: Wild Hunt - Complete Edition",
+   "isAvailableForSale": false,
+   "isVisibleInCatalog": false,
+   "isPreorder": false,
+   "isInstallable": false,
+   "hasProductCard": false,
+   "isSecret": false,
+   "globalReleaseDate": "2015-05-19T00:00:00+02:00",
+   "gogReleaseDate": "2015-05-19T01:00:00+02:00"
+  },
+  "productType": "PACK"
+ }
+}

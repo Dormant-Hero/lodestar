@@ -1,0 +1,29 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "redirects": [
+   {
+    "from": "The Witcher 3",
+    "to": "The Witcher 3: Wild Hunt"
+   }
+  ],
+  "pages": [
+   {
+    "pageid": 17653,
+    "ns": 0,
+    "title": "The Witcher 3: Wild Hunt",
+    "revisions": [
+     {
+      "slots": {
+       "main": {
+        "contentmodel": "wikitext",
+        "contentformat": "text/x-wiki",
+        "content": "{{Featured article}}\n{{Infobox game\n|cover        = The Witcher 3 Wild Hunt - cover.jpg\n|developers   = \n{{Infobox game/row/developer|CD Projekt Red}}\n{{Infobox game/row/developer|Fool's Theory|Songs of the Past|ref=<ref>{{Refurl|url=https://www.cdprojekt.com/en/media/news/the-witcher-3-wild-hunt-songs-of-the-past-announced/|title=CD Projekt - The Witcher 3: Wild Hunt – Songs of the Past Announced|date=2026-05-27|snippet=CD PROJEKT RED is co-developing Songs of the Past with Fool’s Theory}}</ref>}}\n|publishers   = \n{{Infobox game/row/publisher|CD Projekt}}\n|engines      = \n{{Infobox game/row/engine|REDengine|name=REDengine 3}}\n|release dates= \n{{Infobox game/row/date|Windows|May 19, 2015}}\n|reception    = \n{{Infobox game/row/reception|Metacritic|the-witcher-3-wild-hunt|93}}\n{{Infobox game/row/reception|OpenCritic|463/the-witcher-3-wild-hunt|93}}\n{{Infobox game/row/reception|IGDB|the-witcher-3-wild-hunt|92}}\n|real ai level= 0\n|taxonomy     =\n{{Infobox game/row/taxonomy/monetization      | One-time game purchase, Expansion pack }}\n{{Infobox game/row/taxonomy/microtransactions | None }}\n{{Infobox game/row/taxonomy/modes             | Singleplayer }}\n{{Infobox game/row/taxonomy/pacing            | Real-time }}\n{{Infobox game/row/taxonomy/perspectives      | Third-person }}\n{{Infobox game/row/taxonomy/controls          | Direct control }}\n{{Infobox game/row/taxonomy/genres            | Action, RPG, Open world }}\n{{Infobox game/row/taxonomy/sports            | }}\n{{Infobox game/row/taxonomy/vehicles          | }}\n{{Infobox game/row/taxonomy/art styles        | Realistic}}\n{{Infobox game/row/taxonomy/themes            | Fantasy }}\n{{Infobox game/row/taxonomy/series            | The Witcher }}\n|steam appid  = 292030\n|steam appid side = 355880, 370000, 370001, 370002, 370003, 373950, 373951, 376390, 376391, 378640, 378641, 378642, 378643, 378644, 378645, 378646, 378647, 378648, 378649, 499450, 2684660\n|gogcom id    = 1495134320\n|gogcom id side = 1207664663,1207664643,1427195509,1441620909,1441355562,1427206931,1636895344,1640424747,1430743168,1441199941\n|official site= http://thewitcher.com/witcher3/\n|hltb         = 10270\n|lutris       = the-witcher-3-wild-hunt-game-of-the-year-edition\n|strategywiki = \n|mobygames    = 73001\n|wikipedia    = The Witcher 3: Wild Hunt\n|winehq       = 16884\n|license      = commercial\n}}\n"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

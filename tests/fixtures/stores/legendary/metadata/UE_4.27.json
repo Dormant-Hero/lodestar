@@ -1,0 +1,5 @@
+{
+    "app_name": "UE_4.27",
+    "app_title": "Unreal Engine 4.27",
+    "metadata": { "title": "Unreal Engine", "namespace": "ue", "categories": [{ "path": "engines" }] }
+}

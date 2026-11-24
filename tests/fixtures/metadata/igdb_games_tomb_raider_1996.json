@@ -1,0 +1,14 @@
+[
+  {
+    "id": 912,
+    "name": "Tomb Raider",
+    "summary": "Lara Croft, an adventurer, sets out to find the pieces of an ancient artefact, the Scion of Atlantis.",
+    "first_release_date": 846633600,
+    "genres": [{"id": 8, "name": "Platform"}, {"id": 31, "name": "Adventure"}],
+    "involved_companies": [
+      {"id": 3, "company": {"id": 40, "name": "Core Design"}, "developer": true, "publisher": false},
+      {"id": 4, "company": {"id": 41, "name": "Eidos Interactive"}, "developer": false, "publisher": true}
+    ],
+    "platforms": [{"id": 7, "name": "PlayStation"}, {"id": 32, "name": "Sega Saturn"}, {"id": 13, "name": "DOS"}]
+  }
+]

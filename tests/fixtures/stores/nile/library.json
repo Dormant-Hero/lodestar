@@ -1,0 +1,30 @@
+[
+  {
+    "id": "8c5a7d6e-1111-2222-3333-444455556666",
+    "product": {
+      "id": "amzn1.adg.product.hitman",
+      "title": "HITMAN World of Assassination",
+      "productDetail": {
+        "iconUrl": "https://m.media-amazon.com/images/I/hitman_icon.png",
+        "details": {
+          "developer": "IO Interactive",
+          "publisher": "IO Interactive",
+          "shortDescription": "Become Agent 47.",
+          "releaseDate": "2023-01-26T00:00:00Z",
+          "genres": ["Action", "Stealth"],
+          "logoUrl": "https://m.media-amazon.com/images/I/hitman_logo.png",
+          "backgroundUrl1": "https://m.media-amazon.com/images/I/hitman_bg.jpg"
+        }
+      }
+    }
+  },
+  {
+    "id": "9d6b8e7f-1111-2222-3333-444455556666",
+    "product": {
+      "id": "amzn1.adg.product.fallout76",
+      "title": "Fallout 76",
+      "productDetail": { "details": { "developer": "Bethesda Game Studios" } }
+    }
+  },
+  { "id": "broken-entitlement", "product": { "id": "", "title": "" } }
+]

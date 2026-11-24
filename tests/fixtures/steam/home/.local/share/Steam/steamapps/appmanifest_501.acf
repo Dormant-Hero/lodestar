@@ -1,0 +1,15 @@
+"AppState"
+{
+	"appid"		"501"
+	"Universe"		"1"
+	"name"		"Proton 42.0"
+	"StateFlags"		"4"
+	"installdir"		"Proton 42.0"
+	"LastUpdated"		"1700000000"
+	"LastPlayed"		"0"
+	"SizeOnDisk"		"123456789"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

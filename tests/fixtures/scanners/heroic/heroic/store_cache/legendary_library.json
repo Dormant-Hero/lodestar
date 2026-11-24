@@ -1,0 +1,52 @@
+{
+  "library": [
+    {
+      "runner": "legendary",
+      "app_name": "Fortnite",
+      "art_cover": "https://cdn1.epicgames.com/offer/fn/FNBR_Wide_2560x1440.jpg",
+      "art_logo": "https://cdn1.epicgames.com/offer/fn/FNBR_Logo.png",
+      "art_square": "https://cdn1.epicgames.com/offer/fn/FNBR_Tall_1200x1600.jpg",
+      "cloud_save_enabled": false,
+      "developer": "Epic Games",
+      "extra": {
+        "about": { "description": "Battle royale.", "shortDescription": "" },
+        "reqs": [],
+        "storeUrl": "https://www.epicgames.com/store/product/fortnite"
+      },
+      "folder_name": "Fortnite",
+      "install": {
+        "executable": "FortniteGame/Binaries/Win64/FortniteLauncher.exe",
+        "install_path": "/home/u/Games/Heroic/Fortnite",
+        "install_size": "29.3 GiB",
+        "is_dlc": false,
+        "platform": "Windows",
+        "version": "++Fortnite+Release-28.30"
+      },
+      "is_installed": true,
+      "namespace": "fn",
+      "title": "Fortnite",
+      "canRunOffline": false,
+      "is_mac_native": false,
+      "is_linux_native": false
+    },
+    {
+      "runner": "legendary",
+      "app_name": "Hades",
+      "art_cover": "https://cdn1.epicgames.com/min/hades_wide.jpg",
+      "art_square": "https://cdn1.epicgames.com/min/hades_tall.jpg",
+      "developer": "Supergiant Games",
+      "extra": { "about": { "description": "Defy the god of the dead.", "shortDescription": "" } },
+      "install": { "is_dlc": false },
+      "is_installed": false,
+      "title": "Hades",
+      "canRunOffline": true
+    },
+    {
+      "runner": "legendary",
+      "app_name": "dlc_thing",
+      "install": { "is_dlc": true },
+      "is_installed": false,
+      "title": "Some DLC"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Lutris Game Shortcut
+Icon=lutris_some-game
+Exec=lutris lutris:rungameid/7
+Categories=Game

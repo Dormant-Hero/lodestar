@@ -1,0 +1,33 @@
+{
+    "Sugar": {
+        "app_name": "Sugar",
+        "base_urls": [
+            "https://download.epicgames.com/Builds/Org/o-zxswyyl6x2lbkz0sb6dt72e5d3ju2g/Sugar/default/"
+        ],
+        "can_run_offline": true,
+        "egl_guid": "",
+        "executable": "Binaries/Win64/RocketLeague.exe",
+        "install_path": "/HOME/Games/legendary/RocketLeague",
+        "install_size": 28991029248,
+        "install_tags": [],
+        "is_dlc": false,
+        "launch_parameters": "",
+        "manifest_path": null,
+        "needs_verification": false,
+        "platform": "Windows",
+        "prereq_info": null,
+        "requires_ot": false,
+        "save_path": null,
+        "title": "Rocket League®",
+        "uninstaller": null,
+        "version": "1.0.10897.0"
+    },
+    "Sugar_Season15Pass": {
+        "app_name": "Sugar_Season15Pass",
+        "install_path": "/HOME/Games/legendary/RocketLeague",
+        "install_size": 1,
+        "is_dlc": true,
+        "platform": "Windows",
+        "title": "Rocket Pass"
+    }
+}

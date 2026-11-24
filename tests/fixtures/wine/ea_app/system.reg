@@ -1,0 +1,44 @@
+WINE REGISTRY Version 2
+;; All keys relative to \\Machine
+
+#arch=win64
+
+[Software\\Electronic Arts\\EA Core] 1795299450
+"ClientPath"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\legacyPM\\OriginLegacyCLI.exe"
+
+[Software\\Electronic Arts\\EA Desktop] 1795299501
+"ClientPath"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe"
+"DesktopAppPath"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe"
+
+[Software\\Classes\\link2ea\\shell\\open\\command] 1795299501
+@="\"C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\Link2EA.exe\" \"%1\""
+
+[Software\\Maxis\\The Sims 4] 1795300146
+"DisplayName"="The Sims\x2122 4"
+"Install Dir"="C:\\Program Files\\EA Games\\The Sims 4\\"
+"Locale"="en_US"
+
+[Software\\Valve\\NotEA] 1795300146
+"Install Dir"="C:\\Games\\NotEA\\"
+
+[Software\\Wow6432Node\\BioWare\\Mass Effect Legendary Edition] 1795300146
+"Install Dir"="C:\\Games\\EA\\MELE\\"
+
+[Software\\Wow6432Node\\Electronic Arts\\EADM] 1795299447
+"ClientPath"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe"
+
+[Software\\Wow6432Node\\Maxis\\The Sims 4] 1795300146
+"DisplayName"="The Sims\x2122 4"
+"Install Dir"="C:\\Program Files\\EA Games\\The Sims 4\\"
+
+[Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{48EBEBBF-B9F8-4520-A3CF-89A730721917}] 1795300146
+"DisplayName"="The Sims\x2122 4"
+"InstallLocation"="C:\\Program Files\\EA Games\\The Sims 4\\"
+"Publisher"="Electronic Arts Inc."
+
+[Software\\Wow6432Node\\Origin] 1795299447
+"ClientPath"="C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe"
+
+[Software\\Wow6432Node\\Origin Games\\1015875] 1795300146
+"DisplayName"="The Sims\x2122 4"
+"Locale"="en_US"

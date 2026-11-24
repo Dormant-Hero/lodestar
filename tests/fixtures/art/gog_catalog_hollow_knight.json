@@ -1,0 +1,101 @@
+{
+ "pages": 1,
+ "currentlyShownProductCount": 4,
+ "productCount": 4,
+ "products": [
+  {
+   "id": "1308320804",
+   "slug": "hollow_knight",
+   "title": "Hollow Knight",
+   "productType": "game",
+   "releaseDate": "2017.02.24",
+   "coverHorizontal": "https://images.gog-statics.com/e0a2e359588dcfd93af4fdf058f48ca8f77a79ad5c015d9f30bbda6190f1b777.png",
+   "coverVertical": "https://images.gog-statics.com/f4d36161412a6f30994503f3208ba285391b9eaf38bb879b4cf0fca2beabbaef.jpg",
+   "logo": "https://images.gog-statics.com/284150bf0e0f99576231c8212e2977b49b1b23937cf8878a1ae8d0eb2187e6ff.png",
+   "galaxyBackgroundImage": "https://images.gog-statics.com/79019bedff2a52b4252bfbab89344a9b0da906e4b1555028fce87d7798b3568c.jpg",
+   "developers": [
+    "Team Cherry"
+   ],
+   "publishers": [
+    "Team Cherry"
+   ],
+   "genres": [
+    {
+     "name": "Action",
+     "slug": "action"
+    },
+    {
+     "name": "Adventure",
+     "slug": "adventure"
+    },
+    {
+     "name": "Metroidvania",
+     "slug": "metroidvania"
+    }
+   ]
+  },
+  {
+   "id": "1558393671",
+   "slug": "hollow_knight_silksong",
+   "title": "Hollow Knight: Silksong",
+   "productType": "game",
+   "releaseDate": "2025.09.04",
+   "coverHorizontal": "https://images.gog-statics.com/bc4ca88f79ded16afa3a7fe9a1446c3a1780785bfb57b1e3b744624ff635902b.png",
+   "coverVertical": "https://images.gog-statics.com/04b6d615bed9f634f9544889f5a5d8c1b5e11c2455c2b78fc78dd029a1cf2b73.jpg",
+   "logo": "https://images.gog-statics.com/1676c2fd3a311a6882db7a8a1d58d66248311f4cc744f4e52a7e7f8c0d677c14.png",
+   "galaxyBackgroundImage": "https://images.gog-statics.com/b8477cba1e6919e0615d895547b68cf3bac2630dfee7fdac404292d670d6e99e.jpg",
+   "developers": [
+    "Team Cherry"
+   ],
+   "publishers": [
+    "Team Cherry"
+   ],
+   "genres": [
+    {
+     "name": "Action",
+     "slug": "action"
+    },
+    {
+     "name": "Adventure",
+     "slug": "adventure"
+    },
+    {
+     "name": "Metroidvania",
+     "slug": "metroidvania"
+    }
+   ]
+  },
+  {
+   "id": "1255753774",
+   "slug": "hollow_knight_soundtracks",
+   "title": "Hollow Knight & Soundtracks",
+   "productType": "pack",
+   "releaseDate": "2017.02.24",
+   "coverHorizontal": "https://images.gog-statics.com/00ff9c8be2d000a708b9faaf7882110c21a99f646e3811e73623863621145f3e.png",
+   "coverVertical": "https://images.gog-statics.com/87fea3caa965410ad918c500344c85feee72a5ad29bbc1226a1268b37d05d6a0.jpg",
+   "logo": "https://images.gog-statics.com/620519fc73dd6afed1c670a9a40da4e7d51dd620d7e7c563b4b18df0ada3bba0.png",
+   "galaxyBackgroundImage": "https://images.gog-statics.com/03a64ab1d225a9523043178ac9bfba5bd6537d4dde1e9c1fe49497caf6b85a51.jpg",
+   "developers": [
+    "Team Cherry"
+   ],
+   "publishers": [
+    "Team Cherry"
+   ],
+   "genres": [
+    {
+     "name": "Action",
+     "slug": "action"
+    },
+    {
+     "name": "Adventure",
+     "slug": "adventure"
+    },
+    {
+     "name": "Metroidvania",
+     "slug": "metroidvania"
+    }
+   ]
+  }
+ ],
+ "searchAlgo": "default"
+}

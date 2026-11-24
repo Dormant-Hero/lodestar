@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=DuckStation
+Exec="/HOME/Applications/DuckStation-x64.AppImage" %f
+Categories=Game;

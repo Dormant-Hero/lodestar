@@ -1,0 +1,10 @@
+Arch: win64
+Custom_Path: false
+DXVK: dxvk-2.3
+Environment: Gaming
+Name: Riot Games
+Path: Riot
+Runner: soda-9.0-1
+Versioning: false
+Windows: win10
+workdir: ''

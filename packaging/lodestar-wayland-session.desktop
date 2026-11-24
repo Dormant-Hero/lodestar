@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Lodestar (Controller)
+Comment=Boot straight into the Lodestar controller-mode game library
+Exec=/usr/local/bin/lodestar-session
+Type=Application
+DesktopNames=Lodestar

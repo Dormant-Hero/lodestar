@@ -1,0 +1,471 @@
+# Single Row — console-style home page: the selected game's artwork fills the screen, its logo
+# or name and a few facts sit above ONE row of covers (Up / Down change the row: Recently
+# played, Favourites, a console or a store …). A slim icon rail on the left opens the rest.
+# The layout Playnite fullscreen themes in the PlayStation 5 / Xbox style are imported onto.
+# Lodestar's own drawing. Element names starting with "pn_" are the ones the Playnite theme
+# importer changes.
+
+[theme]
+name = "Single Row"
+author = "Lodestar"
+version = "1"
+description = "Big artwork of the selected game above one row of covers, console style."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#0c0f14"
+surface = "#151a22"
+surface_alt = "#1f2530"
+text = "#f2f4f8"
+text_dim = "#a7afbd"
+accent = "#4c8dff"
+accent_text = "#ffffff"
+selection = "#ffffff"
+border = "#2b313c"
+favorite = "#ffc44d"
+danger = "#ef5350"
+
+[fonts]
+regular = "system:sans"
+bold = "system:sans-bold"
+title = "system:display"
+medium = "system:sans-semibold"
+
+# ------------------------------------------------------------------ home
+
+[home]
+background = "#0c0f14"
+
+[[home.elements]]
+type = "rect"
+name = "pn_background"
+z = -3
+size = [1.0, 1.0]
+color = "#0c0f14"
+
+[[home.elements]]
+type = "image"
+name = "pn_picture"
+z = -1
+placeholder = true
+path = "{art.hero}"
+fallbacks = ["{art.banner}", "{art.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+fade = 0.35
+
+[[home.elements]]
+type = "rect"
+name = "pn_scrim_left"
+z = 1
+size = [0.7, 1.0]
+gradient = ["#0c0f14e0", "#0c0f1400"]
+gradient_horizontal = true
+
+[[home.elements]]
+type = "rect"
+name = "pn_scrim_bottom"
+z = 1
+pos = [0.0, 0.38]
+size = [1.0, 0.62]
+gradient = ["#0c0f1400", "#0c0f14f2"]
+
+[[home.elements]]
+type = "rect"
+name = "pn_topbar"
+z = 2
+size = [1.0, 0.1019]
+gradient = ["#0c0f14a0", "#0c0f1400"]
+
+[[home.elements]]
+type = "rail"
+name = "rail"
+z = 6
+compact = true
+pos = [0.008, 0.2]
+size = [0.15, 0.36]
+style = { font = "medium", font_size = 0.022, color = "#f2f4f8" }
+current_color = "#ffffff"
+selector_color = "#4c8dff"
+background = "#0c0f14e6"
+
+[[home.elements]]
+type = "text"
+name = "pn_battery"
+z = 6
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.905, 0.051]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#a7afbd", align = "right" }
+
+[[home.elements]]
+type = "datetime"
+name = "pn_clock"
+z = 6
+clock = true
+format = "%H:%M"
+pos = [0.955, 0.051]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#f2f4f8", align = "right", shadow = "#00000080" }
+
+[[home.elements]]
+type = "image"
+name = "pn_logo"
+z = 5
+path = "{art.logo}"
+pos = [0.07, 0.4]
+origin = [0.0, 1.0]
+size = [0.32, 0.18]
+fit = "contain"
+fade = 0.25
+
+[[home.elements]]
+type = "text"
+name = "pn_title"
+z = 5
+text = "{game.name}"
+hidden_if = "{art.logo}"
+pos = [0.07, 0.4]
+origin = [0.0, 1.0]
+size = [0.55, 0.0]
+wrap = true
+max_lines = 2
+style = { font = "title", font_size = 0.06, color = "#ffffff", shadow = "#000000a0", line_spacing = 1.05 }
+
+[[home.elements]]
+type = "text"
+name = "pn_facts"
+z = 5
+chips = true
+text = "{game.year} | {game.genrelist} | {game.source} | {game.playtimelabel} | {game.achievementslabel}"
+pos = [0.07, 0.425]
+size = [0.6, 0.0]
+background = "#ffffff1f"
+padding = [0.012, 0.006]
+radius = 0.016
+style = { font = "medium", font_size = 0.0195, color = "#f2f4f8" }
+
+[[home.elements]]
+type = "text"
+name = "pn_description"
+z = 5
+text = "{game.description}"
+pos = [0.07, 0.485]
+size = [0.45, 0.08]
+wrap = true
+max_lines = 2
+style = { font_size = 0.0195, color = "#c9cfda", line_spacing = 1.3, shadow = "#00000080" }
+
+[[home.elements]]
+type = "rows"
+name = "pn_list"
+z = 4
+pos = [0.062, 0.6]
+size = [0.938, 0.31]
+rows = ["recent", "favorites", "platforms:3", "sources:2", "collections:1", "all"]
+max_rows = 8
+row_items = 30
+item_size = [0.088, 0.235]
+spacing = 0.008
+row_spacing = 0.03
+title = "{collection.name}"
+title_style = { font = "bold", font_size = 0.022, color = "#f2f4f8", shadow = "#00000080" }
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font = "bold", font_size = 0.018, color = "#f2f4f8" }
+item_fit = "cover"
+radius = 0.008
+item_fill = "#1f2530"
+selected_scale = 1.12
+selected_border = "#ffffff"
+unselected_opacity = 0.8
+controller_badge = true
+favorite_badge = true
+
+[[home.elements]]
+type = "rect"
+name = "pn_bottombar"
+z = 3
+pos = [0.0, 0.92]
+size = [1.0, 0.08]
+gradient = ["#0c0f1400", "#0c0f14d0"]
+
+[[home.elements]]
+type = "helpbar"
+name = "pn_help"
+z = 7
+pos = [0.955, 0.96]
+origin = [1.0, 0.5]
+size = [0.8, 0.042]
+style = { font = "medium", font_size = 0.02, color = "#c9cfda", align = "right" }
+
+# ------------------------------------------------------------------ collections
+
+[collections]
+background = "#0c0f14"
+
+[[collections.elements]]
+type = "rect"
+name = "pn_background"
+z = -3
+size = [1.0, 1.0]
+color = "#0c0f14"
+
+[[collections.elements]]
+type = "image"
+name = "pn_picture"
+z = -1
+path = "{collection.hero}"
+fallbacks = ["{collection.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.02
+opacity = 0.35
+fade = 0.45
+
+[[collections.elements]]
+type = "rect"
+name = "pn_scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#0c0f14a0", "#0c0f14f0"]
+
+[[collections.elements]]
+type = "rail"
+name = "rail"
+z = 6
+compact = true
+pos = [0.008, 0.2]
+size = [0.15, 0.6]
+style = { font = "medium", font_size = 0.022, color = "#f2f4f8" }
+current_color = "#ffffff"
+selector_color = "#4c8dff"
+background = "#0c0f14e6"
+
+[[collections.elements]]
+type = "datetime"
+name = "pn_clock"
+z = 6
+clock = true
+format = "%H:%M"
+pos = [0.955, 0.051]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#f2f4f8", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "pn_battery"
+z = 6
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.905, 0.051]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#a7afbd", align = "right" }
+
+[[collections.elements]]
+type = "text"
+name = "pn_heading"
+z = 5
+text = "{section.name}"
+pos = [0.07, 0.125]
+origin = [0.0, 0.5]
+style = { font = "title", font_size = 0.05, color = "#ffffff" }
+
+[[collections.elements]]
+type = "text"
+name = "pn_selected"
+z = 5
+text = "{collection.name} · {collection.countlabel}"
+pos = [0.07, 0.185]
+origin = [0.0, 0.5]
+style = { font = "medium", font_size = 0.023, color = "#a7afbd" }
+
+[[collections.elements]]
+type = "grid"
+name = "pn_list"
+z = 4
+pos = [0.07, 0.24]
+size = [0.895, 0.66]
+columns = 4
+item_aspect = 0.5625
+spacing = 0.024
+item_image = "{collection.hero}"
+item_fallbacks = ["{collection.banner}", "{collection.cover}"]
+item_text = "{collection.name}"
+item_text_style = { font = "bold", font_size = 0.025, color = "#f2f4f8" }
+item_subtext = "{collection.countlabel}"
+item_caption = "{collection.name}"
+item_fit = "cover"
+item_background = "#1f2530"
+corner_radius = 0.01
+selected_scale = 1.06
+selected_border = "#ffffff"
+unselected_opacity = 0.8
+
+[[collections.elements]]
+type = "helpbar"
+name = "pn_help"
+z = 7
+pos = [0.955, 0.96]
+origin = [1.0, 0.5]
+size = [0.8, 0.042]
+style = { font = "medium", font_size = 0.02, color = "#c9cfda", align = "right" }
+
+# ------------------------------------------------------------------ games
+
+[games]
+background = "#0c0f14"
+
+[[games.elements]]
+type = "rect"
+name = "pn_background"
+z = -3
+size = [1.0, 1.0]
+color = "#0c0f14"
+
+[[games.elements]]
+type = "image"
+name = "pn_picture"
+z = -1
+path = "{art.hero}"
+fallbacks = ["{art.banner}", "{art.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.02
+opacity = 0.3
+fade = 0.35
+
+[[games.elements]]
+type = "rect"
+name = "pn_scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#0c0f14b0", "#0c0f14f2"]
+
+[[games.elements]]
+type = "rail"
+name = "rail"
+z = 6
+compact = true
+pos = [0.008, 0.2]
+size = [0.15, 0.6]
+style = { font = "medium", font_size = 0.022, color = "#f2f4f8" }
+current_color = "#ffffff"
+selector_color = "#4c8dff"
+background = "#0c0f14e6"
+
+[[games.elements]]
+type = "datetime"
+name = "pn_clock"
+z = 6
+clock = true
+format = "%H:%M"
+pos = [0.955, 0.051]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#f2f4f8", align = "right" }
+
+[[games.elements]]
+type = "text"
+name = "pn_battery"
+z = 6
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.905, 0.051]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#a7afbd", align = "right" }
+
+[[games.elements]]
+type = "text"
+name = "pn_heading"
+z = 5
+text = "{collection.name}"
+pos = [0.07, 0.125]
+origin = [0.0, 0.5]
+size = [0.55, 0.0]
+max_lines = 1
+style = { font = "title", font_size = 0.05, color = "#ffffff" }
+
+[[games.elements]]
+type = "text"
+name = "pn_selected"
+z = 5
+text = "{game.name}"
+pos = [0.955, 0.135]
+origin = [1.0, 0.5]
+size = [0.4, 0.0]
+max_lines = 1
+style = { font = "bold", font_size = 0.026, color = "#ffffff", align = "right" }
+
+# The selected game's achievement count under its name, when the library knows it.
+[[games.elements]]
+type = "stack"
+name = "selected_achievements"
+z = 5
+visible_if = "{game.achievements}"
+direction = "horizontal"
+justify = "end"
+pos = [0.955, 0.185]
+origin = [1.0, 0.5]
+
+[[games.elements.children]]
+type = "stack"
+name = "selected_achievements_pill"
+gap = 0.004
+padding = [0.007, 0.0045]
+background = "#ffffff14"
+corner_radius = 0.004
+[[games.elements.children.children]]
+type = "text"
+text = "{game.achievementslabel}"
+style = { font = "medium", font_size = 0.017, color = "#f2f4f8" }
+[[games.elements.children.children]]
+type = "rect"
+size = [0.0, 0.003]
+color = "#4c8dff"
+track = "#ffffff2e"
+fill = "{game.achievementspercent}"
+corner_radius = 0.0015
+
+[[games.elements]]
+type = "text"
+name = "pn_count"
+z = 5
+text = "{list.countlabel}"
+pos = [0.07, 0.185]
+origin = [0.0, 0.5]
+style = { font = "medium", font_size = 0.023, color = "#a7afbd" }
+
+[[games.elements]]
+type = "grid"
+name = "pn_list"
+z = 4
+pos = [0.07, 0.235]
+size = [0.895, 0.67]
+columns = 7
+item_aspect = 1.5
+spacing = 0.022
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font = "medium", font_size = 0.017, color = "#e2e6ee", align = "center" }
+show_labels = true
+item_fit = "cover"
+item_background = "#1f2530"
+corner_radius = 0.008
+selected_scale = 1.07
+selected_border = "#ffffff"
+unselected_opacity = 0.85
+controller_badge = true
+favorite_badge = true
+
+[[games.elements]]
+type = "helpbar"
+name = "pn_help"
+z = 7
+pos = [0.955, 0.96]
+origin = [1.0, 0.5]
+size = [0.8, 0.042]
+style = { font = "medium", font_size = 0.02, color = "#c9cfda", align = "right" }

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Wind Waker
+Comment=A game shortcut that starts an emulator with a game: stays
+Exec=flatpak run org.DolphinEmu.dolphin-emu -e /HOME/roms/gc/WindWaker.rvz
+Categories=Game;

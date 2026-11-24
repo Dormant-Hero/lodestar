@@ -1,0 +1,38 @@
+{
+    "app_name": "Sugar",
+    "app_title": "Rocket League®",
+    "asset_infos": {
+        "Windows": {
+            "app_name": "Sugar",
+            "asset_id": "Sugar",
+            "build_version": "1.0.10897.0",
+            "catalog_item_id": "9773aa1aa54f4f7b80e44bef04986cea",
+            "label_name": "Live-Windows",
+            "metadata": {},
+            "namespace": "sugar"
+        }
+    },
+    "base_urls": [],
+    "metadata": {
+        "id": "9773aa1aa54f4f7b80e44bef04986cea",
+        "title": "Rocket League®",
+        "description": "Rocket League is a high-powered hybrid of arcade-style soccer and vehicular mayhem.",
+        "developer": "Psyonix LLC",
+        "developerId": "o-zxswyyl6x2lbkz0sb6dt72e5d3ju2g",
+        "namespace": "sugar",
+        "status": "ACTIVE",
+        "categories": [{ "path": "public" }, { "path": "games" }, { "path": "applications" }],
+        "keyImages": [
+            { "type": "DieselGameBoxTall", "url": "https://cdn1.epicgames.com/sugar/tall.jpg", "width": 1200, "height": 1600 },
+            { "type": "DieselGameBox", "url": "https://cdn1.epicgames.com/sugar/wide.jpg", "width": 2560, "height": 1440 }
+        ],
+        "customAttributes": {
+            "CanRunOffline": { "type": "STRING", "value": "true" },
+            "com.epicgames.app.productSlug": { "type": "STRING", "value": "rocket-league/home" },
+            "FolderName": { "type": "STRING", "value": "rocketleague" }
+        },
+        "releaseInfo": [{ "appId": "Sugar", "platform": ["Windows"], "dateAdded": "2020-09-23T15:00:00.000Z" }],
+        "creationDate": "2020-08-01T12:00:00.000Z",
+        "lastModifiedDate": "2024-01-01T12:00:00.000Z"
+    }
+}

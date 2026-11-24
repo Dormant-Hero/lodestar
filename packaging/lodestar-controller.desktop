@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Lodestar Controller Mode
+Comment=Fullscreen, controller-friendly game library
+Exec=@BIN@ --controller
+Icon=lodestar
+Terminal=false
+Categories=Game;
+StartupWMClass=lodestar

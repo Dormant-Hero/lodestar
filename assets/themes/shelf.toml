@@ -1,0 +1,269 @@
+# Shelf — a dense wall of covers with a slim information strip.
+
+[theme]
+name = "Shelf"
+author = "Lodestar"
+version = "1"
+description = "Dense cover wall with a slim info strip."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#121316"
+surface = "#1a1c20"
+surface_alt = "#24272d"
+text = "#ecebe7"
+text_dim = "#9c9a94"
+accent = "#e8a33d"
+accent_text = "#16130d"
+selection = "#f2bb63"
+border = "#2c2f35"
+favorite = "#f2bb63"
+danger = "#e5534b"
+
+[fonts]
+regular = "system:sans"
+bold = "system:sans-bold"
+title = "system:sans-bold"
+medium = "system:sans-semibold"
+
+# ------------------------------------------------------------------ collections
+
+[collections]
+background = "#121316"
+
+[[collections.elements]]
+type = "image"
+name = "backdrop"
+path = "{collection.hero}"
+fallbacks = ["{collection.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+blur = 0.03
+opacity = 0.16
+fade = 0.4
+
+[[collections.elements]]
+type = "text"
+name = "heading"
+z = 3
+text = "Library"
+pos = [0.04, 0.07]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.034, color = "#ecebe7" }
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 3
+clock = true
+format = "%H:%M"
+pos = [0.96, 0.07]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.024, color = "#9c9a94", align = "right" }
+
+# The battery level on laptops and handhelds (nothing without a battery), left of the clock.
+[[collections.elements]]
+type = "text"
+name = "battery"
+z = 5
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.915, 0.07]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.02, color = "#9c9a94", align = "right" }
+
+[[collections.elements]]
+type = "grid"
+name = "collections"
+z = 2
+pos = [0.04, 0.14]
+size = [0.92, 0.72]
+columns = 6
+item_aspect = 1.5
+spacing = 0.028
+item_image = "{collection.cover}"
+item_text = "{collection.name}"
+item_text_style = { font = "bold", font_size = 0.026, color = "#ecebe7", align = "left" }
+item_subtext = "{collection.countlabel}"
+item_caption = "{collection.name}"
+item_fit = "cover"
+show_labels = false
+selected_scale = 1.06
+selected_border = "#f2bb63"
+item_background = "#24272d"
+corner_radius = 0.008
+unselected_opacity = 0.75
+
+[[collections.elements]]
+type = "rect"
+name = "strip"
+z = 4
+pos = [0.0, 0.915]
+size = [1.0, 0.085]
+color = "#1a1c20f2"
+
+[[collections.elements]]
+type = "text"
+name = "strip_title"
+z = 5
+text = "{collection.name}"
+pos = [0.04, 0.9575]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.026, color = "#ecebe7" }
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 5
+pos = [0.96, 0.9575]
+origin = [1.0, 0.5]
+size = [0.7, 0.05]
+style = { font = "medium", font_size = 0.019, color = "#c9c6bf", align = "right" }
+icon_color = "#e8a33d"
+
+# ------------------------------------------------------------------ games
+
+[games]
+background = "#121316"
+
+[[games.elements]]
+type = "text"
+name = "heading"
+z = 3
+text = "{collection.name}"
+pos = [0.03, 0.055]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.03, color = "#ecebe7" }
+
+[[games.elements]]
+type = "text"
+name = "position"
+z = 3
+text = "{list.index} of {list.count}"
+visible_if = "{list.index}"
+pos = [0.97, 0.055]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.02, color = "#9c9a94", align = "right" }
+
+[[games.elements]]
+type = "grid"
+name = "wall"
+z = 2
+pos = [0.03, 0.095]
+size = [0.94, 0.8]
+columns = 9
+item_aspect = 1.5
+spacing = 0.016
+item_image = "{art.cover}"
+item_text = "{game.name}"
+item_text_style = { font = "bold", font_size = 0.019, color = "#ecebe7" }
+item_subtext = "{game.source}"
+item_fit = "cover"
+selected_scale = 1.08
+selected_border = "#f2bb63"
+item_background = "#24272d"
+corner_radius = 0.005
+unselected_opacity = 0.85
+controller_badge = true
+favorite_badge = true
+
+[[games.elements]]
+type = "rect"
+name = "strip"
+z = 4
+pos = [0.0, 0.905]
+size = [1.0, 0.095]
+color = "#1a1c20f7"
+
+[[games.elements]]
+type = "rect"
+name = "strip_line"
+z = 4
+pos = [0.0, 0.905]
+size = [1.0, 0.002]
+color = "#e8a33d55"
+
+[[games.elements]]
+type = "image"
+name = "strip_icon"
+z = 5
+path = "{art.icon}"
+fallbacks = ["{art.cover}"]
+pos = [0.03, 0.9525]
+origin = [0.0, 0.5]
+size = [0.0, 0.056]
+fit = "contain"
+corner_radius = 0.006
+
+[[games.elements]]
+type = "text"
+name = "strip_title"
+z = 5
+text = "{game.name}"
+hidden_if = "{game.achievements}"
+pos = [0.07, 0.935]
+origin = [0.0, 0.5]
+size = [0.42, 0.0]
+style = { font = "bold", font_size = 0.025, color = "#ecebe7" }
+
+# The title with the achievement count next to it ("31 of 54 achievements" over a bar), when
+# the library knows the game's count; a long title gives way to it.
+[[games.elements]]
+type = "stack"
+name = "strip_title_achievements"
+z = 5
+visible_if = "{game.achievements}"
+direction = "horizontal"
+align = "center"
+gap = 0.012
+pos = [0.07, 0.935]
+origin = [0.0, 0.5]
+size = [0.48, 0.0]
+[[games.elements.children]]
+type = "text"
+text = "{game.name}"
+shrink = true
+style = { font = "bold", font_size = 0.025, color = "#ecebe7" }
+
+[[games.elements.children]]
+type = "stack"
+name = "strip_achievements"
+gap = 0.004
+padding = [0.007, 0.0045]
+background = "#ffffff14"
+corner_radius = 0.004
+[[games.elements.children.children]]
+type = "text"
+text = "{game.achievementslabel}"
+style = { font = "medium", font_size = 0.0165, color = "#ecebe7" }
+[[games.elements.children.children]]
+type = "rect"
+size = [0.0, 0.003]
+color = "#e8a33d"
+track = "#ffffff2e"
+fill = "{game.achievementspercent}"
+corner_radius = 0.0015
+
+[[games.elements]]
+type = "text"
+name = "strip_meta"
+z = 5
+chips = true
+text = "{game.favoritelabel} | {game.source} | {game.controllerlabel} | {game.playtimelabel} | {game.lastplayedlabel} | {game.genre}"
+pos = [0.07, 0.972]
+origin = [0.0, 0.5]
+size = [0.5, 0.0]
+style = { font = "medium", font_size = 0.0165, color = "#9c9a94" }
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 5
+pos = [0.97, 0.9525]
+origin = [1.0, 0.5]
+size = [0.42, 0.05]
+style = { font = "medium", font_size = 0.018, color = "#c9c6bf", align = "right" }
+icon_color = "#e8a33d"

@@ -1,0 +1,108 @@
+{
+ "count": 3,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "id": 108955,
+   "name": "Age of Empires Online: Celeste Fan Project",
+   "slug": "age-of-empires-online-celeste-fan-project",
+   "year": 2017,
+   "banner_url": "",
+   "icon_url": "",
+   "coverart": null,
+   "platforms": [
+    {
+     "name": "Windows"
+    }
+   ],
+   "provider_games": [
+    {
+     "name": "Age of Empires Online: Celeste Fan Project",
+     "slug": "age-of-empires-online-celeste-fan-project",
+     "service": "igdb"
+    }
+   ],
+   "aliases": [],
+   "shaders": [],
+   "discord_id": "",
+   "change_for": null
+  },
+  {
+   "id": 16545,
+   "name": "Celeste",
+   "slug": "celeste",
+   "year": 2018,
+   "banner_url": "https://lutris.net/games/banner/celeste.jpg",
+   "icon_url": "https://lutris.net/games/icon/celeste.png",
+   "coverart": "https://lutris.net/media/igdb/cover_big/co3byy.jpg",
+   "platforms": [
+    {
+     "name": "Google Stadia"
+    },
+    {
+     "name": "Linux"
+    },
+    {
+     "name": "Macintosh"
+    },
+    {
+     "name": "Nintendo Switch"
+    },
+    {
+     "name": "Sony Playstation 4"
+    },
+    {
+     "name": "Windows"
+    },
+    {
+     "name": "Xbox One"
+    }
+   ],
+   "provider_games": [
+    {
+     "name": "Celeste",
+     "slug": "504230",
+     "service": "steam"
+    },
+    {
+     "name": "Celeste",
+     "slug": "celeste",
+     "service": "igdb"
+    }
+   ],
+   "aliases": [],
+   "shaders": [],
+   "discord_id": "454814894596816907",
+   "change_for": null
+  },
+  {
+   "id": 272091,
+   "name": "Celeste 64: Fragments of the Mountain",
+   "slug": "celeste-64-fragments-of-the-mountain",
+   "year": 2024,
+   "banner_url": "https://lutris.net/games/banner/celeste-64-fragments-of-the-mountain.jpg",
+   "icon_url": "",
+   "coverart": "https://lutris.net/media/igdb/cover_big/co7out.jpg",
+   "platforms": [
+    {
+     "name": "Linux"
+    },
+    {
+     "name": "Windows"
+    }
+   ],
+   "provider_games": [
+    {
+     "name": "Celeste 64: Fragments of the Mountain",
+     "slug": "celeste-64-fragments-of-the-mountain",
+     "service": "igdb"
+    }
+   ],
+   "aliases": [],
+   "shaders": [],
+   "discord_id": "",
+   "change_for": null
+  }
+ ]
+}

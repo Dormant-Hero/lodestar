@@ -1,0 +1,23 @@
+# Example Lodestar library add-on. Copy this folder, change the id, and edit main.sh.
+id = "example-library"
+name = "Example Library"
+author = "Lodestar"
+version = "1.0.0"
+description = "Lists two tiny demo games that only wait two seconds. Shows the add-on protocol."
+kind = "library"
+exec = "main.sh"
+timeout_secs = 10
+permissions = []
+
+[[settings]]
+key = "prefix"
+label = "Name prefix"
+kind = "text"
+default = "Example"
+help = "Put in front of the demo game names."
+
+[[settings]]
+key = "show_second"
+label = "Show the second game"
+kind = "toggle"
+default = "true"

@@ -1,0 +1,339 @@
+# Meridian — a console carousel. Each console's own wide artwork fills the screen in its own
+# colours, its name sits large on the left, a row of console cards runs along the bottom.
+# The game list keeps the console's backdrop and shows the selected game's artwork beside it.
+# Uses Lodestar's console artwork ({collection.art.*}); collections without it (your own
+# collections, tags) show their games' artwork and their name instead.
+
+[theme]
+name = "Meridian"
+author = "Lodestar"
+version = "1"
+description = "Console carousel: each console's artwork and colours fill the screen; game list with artwork."
+origin = "lodestar"
+aspect = 1.7778
+controller = true
+
+[palette]
+dark = true
+background = "#0d1016"
+surface = "#161a22"
+surface_alt = "#20252f"
+text = "#eef1f6"
+text_dim = "#a3acbb"
+accent = "#6aa5ff"
+accent_text = "#ffffff"
+selection = "#ffffff"
+border = "#2a303b"
+favorite = "#ffc44d"
+danger = "#ef5350"
+
+[fonts]
+regular = "builtin:titillium-web"
+bold = "builtin:titillium-web-bold"
+title = "builtin:titillium-web-semibold"
+medium = "builtin:titillium-web-semibold"
+light = "builtin:titillium-web-light"
+
+# ------------------------------------------------------------------ collections
+
+[collections]
+background = "#0d1016"
+
+[[collections.elements]]
+type = "image"
+name = "backdrop"
+path = "{collection.art.hero}"
+fallbacks = ["{collection.hero}", "{collection.cover}"]
+size = [1.0, 1.0]
+fit = "cover"
+fade = 0.4
+
+# Game artwork stands in for collections without console art: keep it calm.
+[[collections.elements]]
+type = "rect"
+name = "game_art_scrim"
+z = 1
+hidden_if = "{collection.art.hero}"
+size = [1.0, 1.0]
+gradient = ["#0d1016b0", "#0d1016f0"]
+
+[[collections.elements]]
+type = "rect"
+name = "scrim_bottom"
+z = 1
+pos = [0.0, 0.5]
+size = [1.0, 0.5]
+gradient = ["#0d101600", "#0d1016e6"]
+
+[[collections.elements]]
+type = "text"
+name = "wordmark"
+z = 5
+text = "LODESTAR"
+pos = [0.05, 0.075]
+origin = [0.0, 0.5]
+style = { font = "bold", font_size = 0.019, color = "#ffffffb0", letter_spacing = 0.34 }
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.95, 0.075]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#ffffff", align = "right", shadow = "#00000080" }
+
+[[collections.elements]]
+type = "text"
+name = "battery"
+z = 5
+text = "{system.battery}"
+visible_if = "{system.battery}"
+pos = [0.895, 0.075]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.022, color = "#ffffffb0", align = "right" }
+
+# The console's name as its wordmark (name, maker and year), left-aligned.
+[[collections.elements]]
+type = "image"
+name = "mark"
+z = 5
+path = "{collection.art.mark}"
+pos = [0.05, 0.42]
+origin = [0.0, 1.0]
+size = [0.0, 0.15]
+fit = "contain"
+fade = 0.3
+
+[[collections.elements]]
+type = "text"
+name = "title"
+z = 5
+text = "{collection.name}"
+hidden_if = "{collection.art.mark}"
+pos = [0.05, 0.42]
+origin = [0.0, 1.0]
+size = [0.5, 0.0]
+wrap = true
+max_lines = 2
+style = { font = "title", font_size = 0.085, color = "#ffffff", shadow = "#00000090", line_spacing = 1.0 }
+
+[[collections.elements]]
+type = "text"
+name = "count"
+z = 5
+text = "{collection.countlabel}"
+pos = [0.05, 0.445]
+background = "#ffffff22"
+padding = [0.014, 0.007]
+radius = 0.02
+style = { font = "medium", font_size = 0.022, color = "#ffffff" }
+
+[[collections.elements]]
+type = "carousel"
+name = "carousel"
+z = 4
+pos = [0.0, 0.56]
+size = [1.0, 0.36]
+orientation = "horizontal"
+item_size = [0.1, 0.24]
+visible_items = 9.5
+selected_position = 0.5
+item_align = 0.5
+selected_scale = 1.18
+unselected_opacity = 0.85
+saturation = 0.85
+item_image = "{collection.art.card}"
+item_fallbacks = ["{collection.cover}"]
+item_text = "{collection.name}"
+item_text_style = { font = "title", font_size = 0.026, color = "#ffffff" }
+item_subtext = "{collection.countlabel}"
+item_fit = "cover"
+radius = 0.012
+item_fill = "#20252f"
+selected_border = "#ffffff"
+selected_border_width = 0.003
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.95, 0.955]
+origin = [1.0, 0.5]
+size = [0.9, 0.045]
+style = { font = "medium", font_size = 0.02, color = "#d4dae4", align = "right" }
+
+# ------------------------------------------------------------------ games
+
+[games]
+background = "#0d1016"
+
+[[games.elements]]
+type = "image"
+name = "backdrop"
+path = "{collection.art.hero}"
+fallbacks = ["{game.consoleart.hero}"]
+size = [1.0, 1.0]
+fit = "cover"
+opacity = 0.75
+fade = 0.4
+
+[[games.elements]]
+type = "rect"
+name = "scrim"
+z = 1
+size = [1.0, 1.0]
+gradient = ["#0d1016d0", "#0d101640"]
+gradient_horizontal = true
+
+[[games.elements]]
+type = "rect"
+name = "scrim_bottom"
+z = 1
+pos = [0.0, 0.7]
+size = [1.0, 0.3]
+gradient = ["#0d101600", "#0d1016c0"]
+
+[[games.elements]]
+type = "image"
+name = "mark"
+z = 5
+path = "{collection.art.mark}"
+pos = [0.05, 0.075]
+origin = [0.0, 0.5]
+size = [0.0, 0.07]
+fit = "contain"
+
+[[games.elements]]
+type = "text"
+name = "collection"
+z = 5
+text = "{collection.name}"
+hidden_if = "{collection.art.mark}"
+pos = [0.05, 0.075]
+origin = [0.0, 0.5]
+style = { font = "title", font_size = 0.042, color = "#ffffff" }
+
+[[games.elements]]
+type = "text"
+name = "position"
+z = 5
+text = "{list.index} of {list.count}"
+visible_if = "{list.index}"
+pos = [0.47, 0.075]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.02, color = "#ffffffa0", align = "right" }
+
+[[games.elements]]
+type = "datetime"
+name = "clock"
+z = 5
+clock = true
+format = "%H:%M"
+pos = [0.95, 0.075]
+origin = [1.0, 0.5]
+style = { font = "medium", font_size = 0.028, color = "#ffffff", align = "right", shadow = "#00000080" }
+
+[[games.elements]]
+type = "textlist"
+name = "gamelist"
+z = 3
+pos = [0.035, 0.15]
+size = [0.44, 0.76]
+item_text = "{game.name}"
+style = { font = "medium", font_size = 0.029, color = "#dfe4ec" }
+selected_color = "#0d1016"
+selector_color = "#ffffffeb"
+favorite_color = "#ffd27a"
+row_height = 1.6
+margin = 0.014
+corner_radius = 0.01
+controller_badge = true
+favorite_badge = true
+
+[[games.elements]]
+type = "rect"
+name = "panel"
+z = 2
+pos = [0.505, 0.15]
+size = [0.445, 0.76]
+color = "#0d1016e6"
+corner_radius = 0.016
+
+[[games.elements]]
+type = "image"
+name = "art"
+z = 3
+placeholder = true
+path = "{art.hero}"
+fallbacks = ["{art.banner}", "{art.cover}"]
+pos = [0.505, 0.15]
+size = [0.445, 0.40]
+fit = "cover"
+corner_radius = 0.016
+mask = [0.0, 0.0, 0.0, 0.35]
+fade = 0.3
+
+[[games.elements]]
+type = "image"
+name = "logo"
+z = 4
+path = "{art.logo}"
+pos = [0.525, 0.53]
+origin = [0.0, 1.0]
+size = [0.22, 0.12]
+fit = "contain"
+fade = 0.25
+
+[[games.elements]]
+type = "text"
+name = "title"
+z = 4
+text = "{game.name}"
+pos = [0.525, 0.565]
+size = [0.405, 0.0]
+wrap = true
+max_lines = 2
+style = { font = "title", font_size = 0.04, color = "#ffffff", line_spacing = 1.05 }
+
+[[games.elements]]
+type = "stack"
+name = "facts"
+z = 4
+direction = "horizontal"
+gap = 0.012
+align = "center"
+pos = [0.525, 0.66]
+size = [0.405, 0.04]
+children = [
+    { type = "image", name = "console_mark", path = "{game.consoleart.mark}", size = [0.0, 0.042], fit = "contain" },
+    { type = "text", name = "chips", chips = true, text = "{game.year} | {game.playtimelabel} | {game.controllershort} | {game.achievementslabel}", background = "#ffffff1c", padding = [0.011, 0.006], radius = 0.02, style = { font = "medium", font_size = 0.018, color = "#e6eaf0" } },
+]
+
+[[games.elements]]
+type = "text"
+name = "description"
+z = 4
+text = "{game.description}"
+pos = [0.525, 0.72]
+size = [0.405, 0.17]
+wrap = true
+max_lines = 5
+style = { font_size = 0.02, color = "#c1c8d4", line_spacing = 1.32 }
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+z = 6
+pos = [0.95, 0.955]
+origin = [1.0, 0.5]
+size = [0.9, 0.045]
+style = { font = "medium", font_size = 0.02, color = "#d4dae4", align = "right" }
+
+# Steam Deck and other 16:10 screens: a slightly smaller name, so it stays clear of the art.
+[aspects."16:10".collections.mark]
+size = [0.0, 0.125]
+
+[aspects."16:10".collections.title]
+style = { font = "title", font_size = 0.07, color = "#ffffff", shadow = "#00000090", line_spacing = 1.0 }

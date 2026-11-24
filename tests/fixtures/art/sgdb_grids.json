@@ -1,0 +1,7 @@
+{"success":true,"page":0,"total":4,"limit":50,"data":[
+ {"id":1,"score":3,"style":"alternate","width":600,"height":900,"nsfw":false,"humor":false,"notes":null,"mime":"image/png","language":"en","url":"https://cdn2.steamgriddb.com/grid/aaa.png","thumb":"https://cdn2.steamgriddb.com/thumb/aaa.jpg","lock":false,"epilepsy":false,"upvotes":3,"downvotes":0,"author":{"name":"someone","steam64":"1","avatar":"https://x/a.jpg"}},
+ {"id":2,"score":0,"style":"material","width":342,"height":482,"nsfw":true,"humor":false,"mime":"image/png","url":"https://cdn2.steamgriddb.com/grid/nsfw.png","thumb":"https://cdn2.steamgriddb.com/thumb/nsfw.jpg"},
+ {"id":3,"score":0,"style":"alternate","width":600,"height":900,"nsfw":false,"humor":false,"mime":"video/webm","url":"https://cdn2.steamgriddb.com/grid/anim.webm","thumb":"https://cdn2.steamgriddb.com/thumb/anim.jpg"},
+ {"id":4,"score":0,"style":"","width":660,"height":930,"nsfw":false,"humor":true,"mime":"image/jpeg","url":"https://cdn2.steamgriddb.com/grid/ddd.jpg"},
+ {"id":5,"score":0,"style":"blurred","width":600,"height":900,"url":"http://insecure.example/x.png"}
+]}

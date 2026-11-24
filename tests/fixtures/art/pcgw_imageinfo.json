@@ -1,0 +1,32 @@
+{
+ "continue": {
+  "iistart": "2019-04-02T21:41:56Z",
+  "continue": "||"
+ },
+ "query": {
+  "pages": [
+   {
+    "pageid": 90765,
+    "ns": 6,
+    "title": "File:Celeste cover.png",
+    "imagerepository": "local",
+    "imageinfo": [
+     {
+      "size": 6783687,
+      "width": 2600,
+      "height": 4168,
+      "thumburl": "https://thumbnails.pcgamingwiki.com/a/a6/Celeste_cover.png/300px-Celeste_cover.png",
+      "thumbwidth": 300,
+      "thumbheight": 481,
+      "responsiveUrls": {
+       "1.5": "https://thumbnails.pcgamingwiki.com/a/a6/Celeste_cover.png/450px-Celeste_cover.png",
+       "2": "https://thumbnails.pcgamingwiki.com/a/a6/Celeste_cover.png/600px-Celeste_cover.png"
+      },
+      "url": "https://images.pcgamingwiki.com/a/a6/Celeste_cover.png",
+      "descriptionurl": "https://www.pcgamingwiki.com/wiki/File:Celeste_cover.png"
+     }
+    ]
+   }
+  ]
+ }
+}

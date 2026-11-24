@@ -1,0 +1,119 @@
+# Test fixture (controller UI): wheel carousel, per-collection logos ({collection.key}),
+# tiled background, textlist with favourites, rating, datetime, per-collection override.
+[theme]
+name = "Wheel Test"
+origin = "lodestar"
+
+[palette]
+accent = "#e2603d"
+selection = "#ff8a65"
+
+[collections]
+background = "#000000"
+
+[[collections.elements]]
+type = "image"
+name = "tile"
+path = "tile.svg"
+size = [1.0, 1.0]
+tile = true
+
+[[collections.elements]]
+type = "carousel"
+name = "wheel"
+z = 2
+orientation = "wheel"
+pos = [0.05, 0.0]
+size = [0.4, 1.0]
+item_size = [0.3, 0.1]
+visible_items = 7
+wheel_angle = 9.0
+item_image = "logos/{collection.key}.svg"
+item_text = "{collection.name}"
+item_text_style = { font_size = 0.04, color = "#ffffff" }
+item_fill = "#00000000"
+selected_scale = 1.3
+unselected_opacity = 0.4
+
+[[collections.elements]]
+type = "text"
+name = "count"
+z = 3
+text = "{collection.count} games"
+pos = [0.75, 0.5]
+origin = [0.5, 0.5]
+style = { font_size = 0.05, align = "center", color = "#e2603d" }
+
+[[collections.elements]]
+type = "datetime"
+name = "clock"
+z = 3
+clock = true
+format = "%Y-%m-%d %H:%M"
+pos = [0.97, 0.05]
+origin = [1.0, 0.5]
+style = { font_size = 0.025, align = "right" }
+
+[[collections.elements]]
+type = "helpbar"
+name = "help"
+z = 3
+pos = [0.5, 0.95]
+origin = [0.5, 0.5]
+size = [1.0, 0.05]
+background = "#00000099"
+style = { font_size = 0.02, align = "center" }
+
+[games]
+background = "#101820"
+
+[[games.elements]]
+type = "textlist"
+name = "list"
+pos = [0.05, 0.1]
+size = [0.45, 0.8]
+style = { font_size = 0.03, color = "#bbbbbb" }
+selector_color = "#e2603d"
+selected_color = "#ffffff"
+favorite_color = "#ffd54f"
+corner_radius = 0.01
+
+[[games.elements]]
+type = "image"
+name = "art"
+path = "{art.cover}"
+fallbacks = ["{art.hero}"]
+pos = [0.75, 0.4]
+origin = [0.5, 0.5]
+size = [0.0, 0.5]
+corner_radius = 0.01
+
+[[games.elements]]
+type = "rating"
+name = "stars"
+pos = [0.75, 0.7]
+origin = [0.5, 0.0]
+size = [0.0, 0.04]
+
+[[games.elements]]
+type = "text"
+name = "title"
+text = "{game.name}"
+pos = [0.75, 0.78]
+origin = [0.5, 0.0]
+size = [0.45, 0.0]
+wrap = true
+style = { font_size = 0.035, align = "center" }
+
+[[games.elements]]
+type = "helpbar"
+name = "help"
+pos = [0.5, 0.96]
+origin = [0.5, 0.5]
+size = [1.0, 0.05]
+style = { font_size = 0.02, align = "center" }
+
+[overrides.steam]
+display_name = "Steam Library"
+[overrides.steam.collections.count]
+style = { color = "#66c0f4" }

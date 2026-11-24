@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Thing
+Exec=env WINEPREFIX="/opt/prefix" wine C:\\\\Games\\\\Thing\\\\thing.exe
+Type=Application
+Categories=Game;ActionGame;
+Path=/opt/thing
+Icon=no-such-icon

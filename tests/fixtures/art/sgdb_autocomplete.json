@@ -1,0 +1,5 @@
+{"success":true,"data":[
+ {"id":5254936,"name":"RuneLite","release_date":1528502400,"types":["steam"],"verified":true},
+ {"id":12,"name":"RuneScape","release_date":1012521600,"types":["steam"],"verified":true},
+ {"id":"bad","name":"Broken"}
+]}

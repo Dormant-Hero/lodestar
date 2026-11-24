@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='utf-8'?>
+<DiPManifest version="4.0">
+  <contentIDs>
+    <contentID>1011164</contentID>
+    <contentID>1015875</contentID>
+    <contentID>1015876</contentID>
+  </contentIDs>
+  <gameTitles>
+    <gameTitle locale="de_DE">Die Sims™ 4</gameTitle>
+    <gameTitle locale="en_US">The Sims™ 4</gameTitle>
+  </gameTitles>
+  <runtime>
+    <launcher uid="1-1">
+      <name locale="en_US">The Sims™ 4 64 Bit</name>
+      <filePath>[HKEY_LOCAL_MACHINE\SOFTWARE\Maxis\The Sims 4\Install Dir]Game\Bin\TS4_Launcher_x64.exe</filePath>
+      <parameters />
+      <trial>0</trial>
+      <hidden>0</hidden>
+      <contentID />
+    </launcher>
+  </runtime>
+</DiPManifest>

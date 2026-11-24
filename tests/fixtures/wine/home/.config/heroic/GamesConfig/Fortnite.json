@@ -1,0 +1,11 @@
+{
+  "Fortnite": {
+    "winePrefix": "@HOME@/Games/Heroic/Prefixes/default/HoYo",
+    "wineVersion": {
+      "bin": "@HOME@/.local/share/Steam/compatibilitytools.d/Fixture-Proton/proton",
+      "name": "Fixture Proton",
+      "type": "proton"
+    },
+    "launcherArgs": ""
+  }
+}
