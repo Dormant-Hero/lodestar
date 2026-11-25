@@ -3,7 +3,7 @@
 //! multi-selection, with an Undo toast) and Settings → Libraries → Missing games (select,
 //! Remove selected / Remove all / Keep, with Undo on the page).
 
-use super::dialogs::{hint_text, modal, plain_button, title};
+use super::dialogs::{Buttons, footer, hint_text, modal, title};
 use super::hidden_ui::{card, section_with};
 use super::undo::UndoWhat;
 use super::{DesktopUi, Pal};
@@ -11,7 +11,7 @@ use crate::app::AppState;
 use crate::missing_app::{RemovedGames, one_source};
 use crate::model::{Game, GameId, Source, now_unix};
 use crate::ui::widgets::{Icon, mix, paint_icon, with_alpha};
-use egui::{Align, Color32, Layout, RichText, Sense, Ui, vec2};
+use egui::{Align, Layout, RichText, Sense, Ui, vec2};
 use std::collections::BTreeMap;
 
 /// "since today" / "since yesterday" / "for 5 days" / "since 2026-10-01".
@@ -113,18 +113,13 @@ impl DesktopUi {
                     ui.label(RichText::new(format!("…and {} more", names.len() - SHOWN)).size(12.5).color(pal.dim));
                 }
             }
-            ui.add_space(14.0);
-            ui.horizontal(|ui| {
-                let b = egui::Button::new(RichText::new("Remove").color(Color32::WHITE).strong())
-                    .fill(pal.danger)
-                    .min_size(vec2(90.0, 30.0));
-                if ui.add(b).clicked() {
-                    answer = Some(true);
-                }
-                if plain_button(ui, "Cancel").clicked() {
-                    answer = Some(false);
-                }
-            });
+            let f = footer(ui, &pal, Buttons::primary("Remove", true).danger().cancel("Cancel"), |_| {});
+            if f.primary {
+                answer = Some(true);
+            }
+            if f.cancel {
+                answer = Some(false);
+            }
         });
         if answer == Some(true) {
             let text = removed_text(st, &ids);

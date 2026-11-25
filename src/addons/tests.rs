@@ -442,6 +442,7 @@ fn scan_ctx(tmp: &Path, cfg: AddonsConfig) -> crate::scan::ScanContext {
         data_dir: tmp.join("data"),
         addons: cfg,
         emulation: crate::config::EmulationConfig::detect_nothing(),
+        steam_names: Default::default(),
     }
 }
 

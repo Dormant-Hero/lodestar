@@ -3,9 +3,13 @@
 //! Per Steam root (native, `~/.steam/*`, Flatpak, Snap, `extra_steam_roots`; deduped by canonical path):
 //!   * libraries from `steamapps/libraryfolders.vdf` (+ `config/libraryfolders.vdf`); missing ones skipped,
 //!   * `appmanifest_*.acf` -> installed apps,
-//!   * `appcache/appinfo.vdf` (only the needed entries) -> type filter (drops Proton, runtimes,
+//!   * Steam's app cache, `appcache/appinfo.vdf` or the newer `appcache/appinfo/appinfo_XX.vdf`
+//!     shards (only the needed entries) -> type filter (drops Proton, runtimes,
 //!     redistributables …) + developer/publisher/year/genres/oslist,
-//!   * active user's `localconfig.vdf` -> playtime, last played, Steam launch options,
+//!   * apps the app cache doesn't describe: names from Steam's desktop shortcuts and Lodestar's
+//!     caches of store names / the owned-games list (names.rs; filled in the background),
+//!   * active user's `localconfig.vdf` -> playtime, last played, Steam launch options, and the
+//!     apps the account has used here (not-installed games),
 //!   * active user's `shortcuts.vdf` -> non-Steam shortcuts (source_id `shortcut:<appid>`),
 //!   * art from `userdata/<id>/config/grid` (custom, wins) and `appcache/librarycache`.
 //!
@@ -21,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 pub mod appinfo;
 pub mod direct;
+pub mod names;
 pub use direct::direct_launch_for_source_id;
 
 /// Steam64 id of account id 0.
@@ -122,8 +127,9 @@ pub fn scan(ctx: &ScanContext) -> anyhow::Result<Vec<ScannedGame>> {
     let mut out: Vec<ScannedGame> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     let mut first_err: Option<anyhow::Error> = None;
+    let mut needs = names::Needs::default();
     for root in &roots {
-        match scan_root(ctx, &root.path) {
+        match scan_root(ctx, &root.path, &mut needs) {
             Ok(games) => {
                 for g in games {
                     if seen.insert(g.source_id.clone()) {
@@ -137,6 +143,7 @@ pub fn scan(ctx: &ScanContext) -> anyhow::Result<Vec<ScannedGame>> {
             }
         }
     }
+    *ctx.steam_names.needs.lock() = needs;
     match first_err {
         // Data exists but nothing could be read: let the DB keep its previous state.
         Some(e) if out.is_empty() => Err(e),
@@ -198,6 +205,8 @@ pub struct Manifest {
     pub state_flags: u64,
     pub size_on_disk: Option<u64>,
     pub last_played: Option<i64>,
+    /// SteamID64 of the account that owns the installed copy (`LastOwner`).
+    pub last_owner: Option<u64>,
     pub library: PathBuf,
 }
 
@@ -226,6 +235,7 @@ pub fn parse_manifest(text: &str, library: &Path) -> anyhow::Result<Manifest> {
         state_flags: st.get("StateFlags").and_then(Vdf::uint).unwrap_or(0),
         size_on_disk: st.get("SizeOnDisk").and_then(Vdf::uint).filter(|&s| s > 0),
         last_played: st.get("LastPlayed").and_then(Vdf::int).filter(|&t| t > 0),
+        last_owner: st.get("LastOwner").and_then(Vdf::uint).filter(|&o| o > 0),
         library: library.to_path_buf(),
     })
 }
@@ -286,6 +296,33 @@ pub fn root_manifests(root: &Path) -> anyhow::Result<Vec<Manifest>> {
 // ---------------------------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------------------------
+
+/// `userdata/<accountid>` of the account whose library this is: the one that owns most of the
+/// installed games (each `appmanifest_*.acf` names its `LastOwner`), else the most recent user.
+/// With several accounts on one PC, the most recently logged-in one may be a second account that
+/// owns none of these games; its lists would hide every game the main account hasn't installed.
+pub fn main_user(root: &Path) -> Option<PathBuf> {
+    let manifests = root_manifests(root).unwrap_or_default();
+    library_owner(root, &manifests).or_else(|| active_user(root))
+}
+
+/// The account (with a `userdata` folder) that owns most of `manifests`.
+fn library_owner(root: &Path, manifests: &[Manifest]) -> Option<PathBuf> {
+    let mut counts: HashMap<u64, usize> = HashMap::new();
+    for owner in manifests.iter().filter_map(|m| m.last_owner) {
+        *counts.entry(owner).or_default() += 1;
+    }
+    let mut owners: Vec<(u64, usize)> = counts.into_iter().collect();
+    owners.sort_by_key(|&(id, n)| (std::cmp::Reverse(n), id));
+    owners.into_iter().find_map(|(sid, n)| {
+        let account = sid.checked_sub(STEAMID64_BASE)?;
+        let dir = root.join("userdata").join(account.to_string());
+        dir.is_dir().then(|| {
+            log::info!("steam: library of account {account} (owns {n} of {} installed games)", manifests.len());
+            dir
+        })
+    })
+}
 
 /// `userdata/<accountid>` of the most recent user of this root.
 pub fn active_user(root: &Path) -> Option<PathBuf> {
@@ -443,9 +480,43 @@ fn apply_local(g: &mut ScannedGame, local: Option<&LocalApp>) {
     g.source_launch_options.clone_from(&l.launch_options);
 }
 
-fn scan_root(ctx: &ScanContext, root: &Path) -> anyhow::Result<Vec<ScannedGame>> {
+/// How the not-installed games of one scan were named, and why others were left out.
+#[derive(Default)]
+struct Tally {
+    by_appinfo: usize,
+    by_desktop: usize,
+    by_store: usize,
+    by_owned: usize,
+    /// Owned games (owned-games list) that the account never started on this PC.
+    owned_only: usize,
+    not_game_type: usize,
+    not_game_name: usize,
+    unnamed: usize,
+    not_on_store: usize,
+}
+
+impl Tally {
+    fn named(&mut self, src: names::NameSource) {
+        match src {
+            names::NameSource::AppInfo => self.by_appinfo += 1,
+            names::NameSource::Desktop => self.by_desktop += 1,
+            names::NameSource::Store => self.by_store += 1,
+            names::NameSource::Owned => self.by_owned += 1,
+        }
+    }
+    fn listed(&self) -> usize {
+        self.by_appinfo + self.by_desktop + self.by_store + self.by_owned
+    }
+}
+
+/// The account id of a `userdata/<id>` folder.
+fn account_of(user: &Path) -> Option<u32> {
+    user.file_name()?.to_str()?.parse().ok()
+}
+
+fn scan_root(ctx: &ScanContext, root: &Path, needs: &mut names::Needs) -> anyhow::Result<Vec<ScannedGame>> {
     let manifests = root_manifests(root)?;
-    let user = active_user(root);
+    let user = library_owner(root, &manifests).or_else(|| active_user(root));
     let local: HashMap<u32, LocalApp> = user
         .as_ref()
         .and_then(|u| read_text(u.join("config/localconfig.vdf")).ok())
@@ -458,29 +529,47 @@ fn scan_root(ctx: &ScanContext, root: &Path) -> anyhow::Result<Vec<ScannedGame>>
         .unwrap_or_default();
     let grid = user.as_ref().map(|u| u.join("config/grid")).filter(|g| g.is_dir());
     let compat = compat_tools(root);
+    // Every game the account owns, also those never started here (needs the user's own Steam
+    // Web API key; fetched in the background, see steam_names.rs).
+    let owned: Vec<names::OwnedGame> = if ctx.config.include_uninstalled {
+        names::owned_games(ctx, user.as_deref().and_then(account_of))
+    } else {
+        Vec::new()
+    };
 
     let installed_ids: HashSet<u32> = manifests.iter().map(|m| m.appid).collect();
     let mut wanted: HashSet<u32> = installed_ids.clone();
     if ctx.config.include_uninstalled {
         wanted.extend(local.keys().copied());
+        wanted.extend(owned.iter().map(|g| g.appid));
     }
     wanted.retain(|id| !TOOL_APPIDS.contains(id));
-    let info = appinfo::read(&root.join("appcache/appinfo.vdf"), &wanted).unwrap_or_else(|e| {
-        log::warn!("steam appinfo.vdf unreadable, using fallback filters: {e:#}");
+    let layout = appinfo::Layout::of(root);
+    let info = appinfo::read_root(root, &wanted).unwrap_or_else(|e| {
+        log::warn!("steam app cache unreadable, naming games from other sources: {e:#}");
         HashMap::new()
     });
     let art_ctx =
         ArtCtx { cache: root.join("appcache/librarycache"), grid: grid.clone(), icon_dirs: hicolor_app_dirs(ctx) };
+    let mut fallback = names::Fallback::new(ctx, &owned, names::now());
 
     let mut out = Vec::new();
     for m in &manifests {
         let i = info.get(&m.appid);
-        let name = if m.name.is_empty() { i.and_then(|i| i.name.clone()).unwrap_or_default() } else { m.name.clone() };
-        if name.is_empty() {
-            continue;
-        }
+        let mut name =
+            if m.name.is_empty() { i.and_then(|i| i.name.clone()).unwrap_or_default() } else { m.name.clone() };
         if TOOL_APPIDS.contains(&m.appid) {
             continue;
+        }
+        if name.is_empty() {
+            match fallback.lookup(m.appid) {
+                names::Lookup::Named(n) => name = n.name,
+                names::Lookup::Unknown => {
+                    needs.names.insert(m.appid);
+                    continue;
+                }
+                names::Lookup::NotOnStore => continue,
+            }
         }
         let art = art_ctx.app_art(m.appid);
         if !keep_app(m.appid, &name, i, art.cover.is_some()) {
@@ -500,23 +589,105 @@ fn scan_root(ctx: &ScanContext, root: &Path) -> anyhow::Result<Vec<ScannedGame>>
     }
 
     if ctx.config.include_uninstalled {
-        let mut ids: Vec<u32> = local.keys().copied().filter(|id| !installed_ids.contains(id)).collect();
+        let owned_by_id: HashMap<u32, &names::OwnedGame> = owned.iter().map(|g| (g.appid, g)).collect();
+        let mut ids: Vec<u32> = local
+            .keys()
+            .chain(owned_by_id.keys())
+            .copied()
+            .filter(|id| !installed_ids.contains(id) && !TOOL_APPIDS.contains(id))
+            .collect::<HashSet<u32>>()
+            .into_iter()
+            .collect();
         ids.sort_unstable();
+        let mut t = Tally::default();
         for id in ids {
-            let Some(i) = info.get(&id) else { continue };
-            if i.kind.as_deref() != Some("game") || TOOL_APPIDS.contains(&id) {
-                continue;
-            }
-            let Some(name) = i.name.clone() else { continue };
+            let i = info.get(&id);
+            let (name, src) = match i {
+                // Steam's app cache knows the app: its type decides (as always).
+                Some(i) => {
+                    if i.kind.as_deref() != Some("game") {
+                        t.not_game_type += 1;
+                        continue;
+                    }
+                    match &i.name {
+                        Some(n) => (n.clone(), names::NameSource::AppInfo),
+                        None => match fallback.lookup(id) {
+                            names::Lookup::Named(n) => (n.name, n.source),
+                            _ => {
+                                t.unnamed += 1;
+                                continue;
+                            }
+                        },
+                    }
+                }
+                None => match fallback.lookup(id) {
+                    names::Lookup::Named(n) => {
+                        match n.kind.as_deref() {
+                            Some("game") => {}
+                            Some(_) => {
+                                t.not_game_type += 1;
+                                continue;
+                            }
+                            None if names::non_game_name(&n.name) => {
+                                t.not_game_name += 1;
+                                continue;
+                            }
+                            None => {}
+                        }
+                        (n.name, n.source)
+                    }
+                    names::Lookup::NotOnStore => {
+                        t.not_on_store += 1;
+                        continue;
+                    }
+                    names::Lookup::Unknown => {
+                        t.unnamed += 1;
+                        needs.names.insert(id);
+                        continue;
+                    }
+                },
+            };
+            t.named(src);
             let mut g = ScannedGame::new(Source::Steam, id.to_string(), name);
             g.installed = false;
             g.launch = Some(LaunchSpec::Steam { appid: id });
             g.art = art_ctx.app_art(id);
-            g.platform = platform_for(id, Some(i), &compat);
-            apply_info(&mut g, Some(i));
-            apply_local(&mut g, local.get(&id));
+            g.platform = platform_for(id, i, &compat);
+            apply_info(&mut g, i);
+            match (local.get(&id), owned_by_id.get(&id)) {
+                (Some(l), _) => apply_local(&mut g, Some(l)),
+                (None, Some(o)) => {
+                    t.owned_only += 1;
+                    g.playtime_secs = (o.playtime_mins > 0).then_some(o.playtime_mins * 60);
+                    g.last_played = o.last_played;
+                }
+                (None, None) => {}
+            }
             out.push(g);
         }
+        let owned_part = if owned.is_empty() {
+            String::new()
+        } else {
+            format!(", {} owned games ({} never started here)", owned.len(), t.owned_only)
+        };
+        log::info!(
+            "steam: {} apps in the account's list{owned_part}; {} not-installed games listed (names: {} from Steam's app cache ({}), \
+             {} from Steam's desktop shortcuts, {} from the store name cache, {} from the owned-games list); \
+             skipped {} that aren't games by type, {} DLC / tools / soundtracks by name, {} unknown to the \
+             Steam store, {} without a name yet{}",
+            local.len(),
+            t.listed(),
+            t.by_appinfo,
+            layout.label(),
+            t.by_desktop,
+            t.by_store,
+            t.by_owned,
+            t.not_game_type,
+            t.not_game_name,
+            t.not_on_store,
+            t.unnamed,
+            if needs.names.is_empty() { "" } else { " (asking the Steam store in the background)" },
+        );
     }
 
     if let Some(u) = &user {

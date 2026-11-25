@@ -17,6 +17,10 @@ AUTOSTART="$HOME/.config/autostart/lodestar-controller.desktop"
 SESSION_FILE="/usr/share/wayland-sessions/lodestar.desktop"
 SESSION_BIN="/usr/local/bin/lodestar-session"
 DOC_DIR="$HOME/.local/share/doc/lodestar"
+# AppStream metadata (software centres). The desktop entry keeps its name lodestar.desktop: the
+# window's app id is "lodestar", which is how Wayland desktops find its icon and menu entry.
+METAINFO_DIR="$HOME/.local/share/metainfo"
+METAINFO="io.github.Dormant_Hero.Lodestar.metainfo.xml"
 
 DESKTOP_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || true)
 [ -n "$DESKTOP_DIR" ] && [ "$DESKTOP_DIR" != "$HOME" ] || DESKTOP_DIR="$HOME/Desktop"
@@ -29,7 +33,7 @@ for a in "$@"; do
     --no-shortcut) want_shortcut=0 ;;
     --uninstall)
       rm -f "$BIN_DIR/lodestar" "$APP_DIR/lodestar.desktop" "$APP_DIR/lodestar-controller.desktop" \
-            "$ICON_DIR/lodestar.svg" "$AUTOSTART" "$SHORTCUT"
+            "$ICON_DIR/lodestar.svg" "$AUTOSTART" "$SHORTCUT" "$METAINFO_DIR/$METAINFO"
       rm -rf "$DOC_DIR"
       rm -f "$HOME"/.local/share/icons/hicolor/*/apps/lodestar.png
       if [ -e "$SESSION_FILE" ] || [ -e "$SESSION_BIN" ]; then
@@ -93,6 +97,8 @@ for f in LICENSE LICENSE.md LICENSE-MIT LICENSE-APACHE COPYING; do
 done
 sed "s|@BIN@|$EXEC_BIN|g" packaging/lodestar.desktop > "$APP_DIR/lodestar.desktop"
 sed "s|@BIN@|$EXEC_BIN|g" packaging/lodestar-controller.desktop > "$APP_DIR/lodestar-controller.desktop"
+mkdir -p "$METAINFO_DIR"
+install -m 644 "packaging/$METAINFO" "$METAINFO_DIR/$METAINFO"
 "$BIN_DIR/lodestar" --export-icons "$HOME/.local/share/icons/hicolor" >/dev/null || true
 if [ "$want_shortcut" = 1 ] && [ -d "$DESKTOP_DIR" ]; then
   install -m 755 "$APP_DIR/lodestar.desktop" "$SHORTCUT"

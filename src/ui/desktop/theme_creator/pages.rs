@@ -3,6 +3,7 @@
 //! theme file; and the export window.
 
 use super::super::Pal;
+use super::super::dialogs::{Buttons, footer};
 use super::files::{self, Asset};
 use super::ops::Layer;
 use super::validate::Level;
@@ -1205,18 +1206,16 @@ pub fn export_window(
             ui.add_space(6.0);
             ui.label(RichText::new(format!("Saved as {}", p.display())).size(12.5).color(pal.accent));
         }
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            if super::super::dialogs::primary_button(ui, "Save as .zip…", pal, !e.started || e.done.is_some()).clicked()
-            {
-                e.request = Some(());
-                e.started = true;
-                e.done = None;
-            }
-            if ui.add(egui::Button::new("Close").min_size(vec2(80.0, 30.0))).clicked() {
-                keep = false;
-            }
-        });
+        let buttons = Buttons::primary("Save as .zip…", !e.started || e.done.is_some()).cancel("Close");
+        let f = footer(ui, pal, buttons, |_| {});
+        if f.primary {
+            e.request = Some(());
+            e.started = true;
+            e.done = None;
+        }
+        if f.cancel {
+            keep = false;
+        }
     });
     keep && !close
 }

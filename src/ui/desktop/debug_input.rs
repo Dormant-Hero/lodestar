@@ -219,7 +219,9 @@ impl DesktopUi {
     /// top bar's Sort, Group by and quick preset drop-downs), random (the random game pick),
     /// achievements-all (the page's Achievements with Show all open; made-up progress with
     /// LODESTAR_FAKE_ACHIEVEMENTS), settings-achievements[-checking|-signedin|-error],
-    /// theme-creator[:<theme>[:<option>…]] (the theme creator; a built-in theme is copied first).
+    /// theme-creator[:<theme>[:<option>…]] (the theme creator; a built-in theme is copied first),
+    /// update (Lodestar's own "What's new in <version>", made up with LODESTAR_FAKE_UPDATE),
+    /// update-check (menu → Check for updates…, answered by LODESTAR_FAKE_UPDATE).
     fn open_debug_target(&mut self, ctx: &egui::Context, st: &mut AppState, what: String, id: GameId) {
         if let Some(rest) = what.strip_prefix("theme-creator") {
             // theme-creator[:<theme>[:<option>…]] (theme_creator.rs `CreatorDlg::debug`).
@@ -271,6 +273,11 @@ impl DesktopUi {
         } else if let Some(path) = what.strip_prefix("whatsnew-export:") {
             self.dlg.whats_new = true;
             self.dlg.changelog_export_to = Some(std::path::PathBuf::from(path));
+        } else if what == "update" {
+            // "What's new in <version>" of Lodestar's own update (with LODESTAR_FAKE_UPDATE).
+            st.update.show_notes = true;
+        } else if what == "update-check" {
+            st.check_updates_from_menu();
         } else if what == "appmenu-add" {
             self.open_add_menu = true;
         } else if what == "menu-controller" {

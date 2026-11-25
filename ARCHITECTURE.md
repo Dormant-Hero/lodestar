@@ -48,7 +48,7 @@ the module path is the parent's name followed by the part (for example `launch::
 | App core | `app`, `*_app` | `AppState`, the frame loop, polling background work; `edit_app`, `art_app`, `romm_app` … are the `AppState` methods for one area each |
 | Data model | `model`, `library`, `library_collections`, `db`, `search` | `Game`, `GameId`, `Source`, metadata; the in-memory library with its collections and filtered views; the SQLite store; fuzzy search |
 | Configuration | `config`, `config_menu_button` | `~/.config/lodestar/config.toml` (serde, lenient: an invalid value drops only itself) and the standard paths (`Paths`, `LODESTAR_HOME`) |
-| Finding games | `scan::*` | One scanner per library (Steam, Heroic, Lutris, Bottles, Faugus, itch, Minecraft, Moonlight, Wine-prefix stores, desktop entries, ROM folders, RomM, add-ons) |
+| Finding games | `scan::*`, `steam_names*` | One scanner per library (Steam, Heroic, Lutris, Bottles, Faugus, itch, Minecraft, Moonlight, Wine-prefix stores, desktop entries, ROM folders, RomM, add-ons); `steam_names` looks up, in the background, the names of Steam games Steam's files don't name and the owned-games list (user's Web API key), which the Steam scanner reads from the cache |
 | Emulation | `emulation::*`, `scan::emulation*` | Consoles, built-in emulator definitions, detecting emulators, BIOS / firmware, several ROMs per game, the ROM hash database |
 | Launching | `launch::*`, `client_launch`, `game_options*` | Resolving a game into a command, spawning it, tracking the session through `/proc`, keeping store clients out of sight (`launch::hygiene`), scripts; game options turn switches into environment variables and wrappers |
 | Artwork and metadata | `art*`, `metadata*`, `igdb`, `images*` | Artwork sources and the artwork engine, online metadata (Steam, IGDB, SteamGridDB, Wikipedia, ProtonDB), and the image cache (decode workers, disk thumbnails, GPU texture LRU) |
@@ -63,6 +63,7 @@ the module path is the parent's name followed by the part (for example `launch::
 | Desktop UI | `ui::desktop::*` | Top bar, explorer sidebar, grid / list / details views, dialogs, Settings, Add-ons, editors |
 | Controller UI | `ui::controller::*` | Collections → Games → Details through the theme renderer, side menus, on-screen keyboard, the in-game menu |
 | Desktop integration | `tray`, `tray_app`, `winctl`, `launch::winhide*`, `instance`, `main_window` | Tray icon (StatusNotifierItem over D-Bus), hiding windows, one instance per library, remembering the window's size and position |
+| Updates | `update`, `update_app`, `ui::desktop::update_ui`, `ui::controller::update` | Lodestar's own updates: a daily check of GitHub's latest release (background thread, off in screenshot runs), and for the AppImage the checked download (size, SHA-256, AppImage magic, only this repository's release files) that replaces the file, `<name>.old` kept until the next start, and the restart (`exec` of the new AppImage) |
 | Other sources | `cloud*`, `romm*`, `addons::*` | Cloud gaming entries, the user's RomM server, external add-ons (one process per call, JSON on stdin / stdout, never loaded in-process) |
 
 Tests sit next to the code: either `#[cfg(test)] mod tests` at the end of a file, or a sibling `*_tests.rs`
@@ -148,4 +149,6 @@ The binary re-executes itself under `xvfb-run`, so no window appears on screen. 
 `lodestar --help` lists the rest. `LODESTAR_HOME` keeps the config, library and caches in one folder, so a test
 never touches a real setup.
 
-Packaging: `./install.sh` installs into `~/.local`, and `./packaging/make-appimage.sh` builds an AppImage.
+Packaging: `./install.sh` installs into `~/.local`, and `./packaging/make-appimage.sh` builds an AppImage with
+update information (`gh-releases-zsync`) and its `.zsync`. Both install the AppStream metadata
+(`packaging/io.github.Dormant_Hero.Lodestar.metainfo.xml`).

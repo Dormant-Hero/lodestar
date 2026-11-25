@@ -5,7 +5,7 @@
 
 use super::super::Pal;
 use super::super::add::{Pick, PickKind};
-use super::super::dialogs::{hint_text, modal, plain_button, primary_button};
+use super::super::dialogs::{Buttons, button_row, footer, hint_text, modal};
 use super::{Section, card_frame, kind_chip};
 use crate::app::AppState;
 use crate::theme::catalog::install::{self, Progress, Report};
@@ -647,24 +647,14 @@ fn theme_card(ui: &mut Ui, st: &mut AppState, t: &mut Themes, th: &InstalledThem
                         body.push_str(" You can install or import it again any time.");
                     }
                     hint_text(ui, &body, pal);
-                    ui.horizontal(|ui| {
-                        if ui
-                            .add_enabled(
-                                !busy,
-                                egui::Button::new(RichText::new("Remove").color(egui::Color32::WHITE).strong())
-                                    .fill(pal.danger)
-                                    .min_size(vec2(90.0, 28.0)),
-                            )
-                            .on_disabled_hover_text(BUSY)
-                            .clicked()
-                        {
-                            t.confirm_remove = None;
-                            t.start_remove(st, th.key.clone(), th.name.clone());
-                        }
-                        if plain_button(ui, "Cancel").clicked() {
-                            t.confirm_remove = None;
-                        }
-                    });
+                    let buttons = Buttons::primary("Remove", !busy).danger().disabled_hint(BUSY).cancel("Cancel");
+                    let f = button_row(ui, pal, buttons, |_| {});
+                    if f.primary {
+                        t.start_remove(st, th.key.clone(), th.name.clone());
+                    }
+                    if f.primary || f.cancel {
+                        t.confirm_remove = None;
+                    }
                 });
             if std::mem::take(&mut t.confirm_scroll) {
                 ui.scroll_to_cursor(Some(Align::Max));
@@ -775,10 +765,7 @@ pub(super) fn report_window(ctx: &egui::Context, st: &mut AppState, t: &mut Them
                     Err(e) => line(ui, "!", pal.danger, e, pal.danger),
                 }
             }
-            ui.add_space(12.0);
-            if primary_button(ui, "Close", pal, true).clicked() {
-                close = true;
-            }
+            close = footer(ui, pal, Buttons::primary("Close", true), |_| {}).primary;
             return;
         }
         match &reports[0] {
@@ -839,6 +826,8 @@ pub(super) fn report_window(ctx: &egui::Context, st: &mut AppState, t: &mut Them
                     }
                 }
                 ui.add_space(12.0);
+                let page = if rep.controller { "Controller themes" } else { "Desktop themes" };
+                hint_text(ui, &format!("It's listed under {page}."), pal);
                 let in_use = if rep.controller {
                     st.config.controller.theme == rep.key
                 } else {
@@ -849,16 +838,11 @@ pub(super) fn report_window(ctx: &egui::Context, st: &mut AppState, t: &mut Them
                     (false, false) => "Use this theme",
                     (false, true) => "Use it in controller mode",
                 };
-                ui.horizontal(|ui| {
-                    if primary_button(ui, label, pal, !in_use).clicked() {
-                        use_it = Some((rep.key.clone(), rep.controller));
-                    }
-                    if plain_button(ui, "Close").clicked() {
-                        close = true;
-                    }
-                });
-                let page = if rep.controller { "Controller themes" } else { "Desktop themes" };
-                hint_text(ui, &format!("It's listed under {page}."), pal);
+                let f = footer(ui, pal, Buttons::primary(label, !in_use).cancel("Close"), |_| {});
+                if f.primary {
+                    use_it = Some((rep.key.clone(), rep.controller));
+                }
+                close = f.cancel;
             }
             Err(e) => {
                 let title = if from_list { "Couldn't install the theme" } else { "Couldn't add the theme" };
@@ -873,10 +857,7 @@ pub(super) fn report_window(ctx: &egui::Context, st: &mut AppState, t: &mut Them
                     "Choose a Playnite theme's .pthm package, its folder, or the theme.yaml inside it."
                 };
                 hint_text(ui, hint, pal);
-                ui.add_space(10.0);
-                if plain_button(ui, "Close").clicked() {
-                    close = true;
-                }
+                close = footer(ui, pal, Buttons::default().cancel("Close"), |_| {}).cancel;
             }
         }
     });

@@ -1,5 +1,26 @@
 # Lodestar changelog
 
+## 0.17.1 — 25 November 2026
+
+### Updates
+- **Lodestar updates itself** when you run it as an AppImage: it tells you when a new version is out, shows what's
+  new, and installs it in one click (the download is checked before it replaces anything; your library and
+  settings stay as they are). Updater apps such as Gear Lever can update it too.
+- **You decide**: switch automatic checks off in Settings → General → Updates, check whenever you like with menu →
+  Check for updates…, or skip a version you don't want.
+
+### Steam
+- **Works with the new Steam beta**: Steam games keep their details, and games you haven't installed show again.
+- Steam games you haven't installed now show even when Steam's own files don't name them; Lodestar looks their names
+  up in the background.
+- With your Steam Web API key (Settings → Libraries → Steam, or Settings → Achievements), Lodestar lists every Steam
+  game you own, including ones you never started on this PC.
+- With several Steam accounts on one PC, Lodestar uses the account that owns your installed games.
+
+### Dialogs
+- **Every dialog has its buttons in the same place**: the main button at the bottom right next to Cancel, other
+  actions on the left, with room under them. In their own windows the buttons are never cut off, at any size.
+
 ## 0.17.0 — 24 November 2026
 
 **First public release (alpha).**

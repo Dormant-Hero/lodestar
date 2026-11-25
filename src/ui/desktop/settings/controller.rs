@@ -1,6 +1,7 @@
 //! Settings → Controller: controller mode's theme, the menu button, videos and sounds.
 
 use super::*;
+use crate::ui::desktop::dialogs::button_row;
 
 /// Settings → Controller → Menu button: "Lodestar's menu button", the combination (a preset,
 /// the one in use, or "Record…" on the pad) and what the choice means; the names are the
@@ -98,19 +99,20 @@ fn combo_recorder(ui: &mut Ui, st: &mut AppState, start: bool, pal: &Pal) -> boo
         Some(Step::Took(take)) => {
             let v = crate::ui::controller::combo::take_verdict(take);
             hint_text(ui, &format!("{}: {}", v.heading, v.text), pal);
-            ui.horizontal(|ui| {
-                if v.usable && primary_button(ui, "Use this combination", pal, true).clicked() {
-                    st.config.controller.menu_combo = take.combo;
-                    ch = true;
-                    next = None;
-                }
+            let buttons = if v.usable { Buttons::primary("Use this combination", true) } else { Buttons::default() };
+            let f = button_row(ui, pal, buttons.cancel("Cancel"), |ui| {
                 if ui.button("Try again").clicked() {
                     next = Some(Step::Waiting);
                 }
-                if ui.button("Cancel").clicked() {
-                    next = None;
-                }
             });
+            if f.primary {
+                st.config.controller.menu_combo = take.combo;
+                ch = true;
+                next = None;
+            }
+            if f.cancel {
+                next = None;
+            }
         }
     }
     ui.data_mut(|d| match next {

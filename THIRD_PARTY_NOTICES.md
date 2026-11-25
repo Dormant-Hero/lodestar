@@ -30,6 +30,7 @@ notices" below.
 | ROM identification database (`assets/emulation/romdb.bin`: game names, regions, years, serials and CRC checksums per console) | Converted from Playnite's emulation databases by `scripts/gen-romdb.py`. Playnite built them from the public DAT files of No-Intro, Redump, GameTDB and the libretro-database project. | Playnite: MIT (notice below). The DAT groups publish their lists freely; libretro-database is CC BY-SA 4.0. The DAT groups do not state redistribution terms for their lists in one place. |
 | Playnite's default Desktop and Fullscreen themes (`assets/playnite/default-theme.bin`: their resource dictionaries, derived styles and views, which imported Playnite themes inherit every file they don't ship from) | Playnite's open-source default themes (`Themes/Desktop/Default`, `Themes/Fullscreen/Default`), comments removed, compressed by `tools/gen-playnite-defaults.py` | MIT, Copyright (c) 2020 Josef Nemec (notice below) |
 | The "Top Bar" controller layout (`assets/themes/top-bar.toml`, called "Playnite Classic" before 0.16.3) | Lodestar's own drawing, arranged after Playnite's default Fullscreen theme (`Views/Main.xaml`, `Views/GameDetails.xaml`, `DerivedStyles/ListGameItemStyle.xaml`: bar heights, positions, focus look) | MIT, Copyright (c) 2020 Josef Nemec (notice below) |
+| Steam app cache format (how Steam's sharded `appcache/appinfo/appinfo_XX.vdf` files are laid out) | Lodestar's own reader, written from the format description in SteamDB's SteamAppInfo (its README and parser) | Facts only, no code copied. SteamAppInfo: MIT, Copyright (c) 2020 SteamDB (notice below). |
 | Emulator knowledge (where emulators are installed, how they start games, folder names of ROM collections) | Written for Lodestar from the emulators' own documentation, Flathub manifests, Playnite's emulator definitions and ES-DE's find rules | Facts only, no files copied. Playnite and ES-DE: MIT (notices below). |
 | BIOS / firmware list (file names, checksums and regions used to check BIOS files) | Collected for Lodestar from libretro's `System.dat` (libretro-database), DuckStation's and Batocera's BIOS lists and the emulators' documentation | Facts only, no files copied. libretro-database: CC BY-SA 4.0 |
 | Controller mappings (SDL_GameControllerDB) | Built in by the `gilrs` library | zlib licence (notice under "Extra notices") |
@@ -83,6 +84,20 @@ Copyright (c) 2014 Alec Lofquist
 (The MIT licence text is the one under "Licence texts" below.)
 ```
 
+### SteamAppInfo (SteamDB)
+
+Lodestar reads the sharded app cache of newer Steam clients following the format description in
+SteamDB's SteamAppInfo (https://github.com/xPaw/SteamAppInfo): facts only, no SteamAppInfo
+files are included.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2020 SteamDB
+
+(The MIT licence text is the one under "Licence texts" below.)
+```
+
 ### The Rust standard library
 
 Every Rust program contains parts of the Rust standard library: MIT OR Apache-2.0, Copyright
@@ -96,7 +111,8 @@ it. Their content belongs to them and their contributors.
 
 | Service | What Lodestar asks it | Site |
 | --- | --- | --- |
-| Steam store | game details, artwork | https://store.steampowered.com |
+| Steam store | game details, artwork, names of Steam games the Steam client's files don't name | https://store.steampowered.com |
+| Steam Web API (with your own key) | the list of Steam games you own | https://steamcommunity.com/dev |
 | SteamGridDB | artwork | https://www.steamgriddb.com |
 | IGDB (Twitch) | game details, artwork | https://www.igdb.com |
 | GOG | artwork | https://www.gog.com |
@@ -114,11 +130,11 @@ not affiliated with or endorsed by any of them.
 
 ## Rust libraries built into Lodestar
 
-271 libraries, grouped by licence. Where a library offers a choice ("A OR B"), any of the
+273 libraries, grouped by licence. Where a library offers a choice ("A OR B"), any of the
 offered licences may be used; Lodestar takes the permissive ones (for self_cell: Apache-2.0,
 not GPL-2.0).
 
-### MIT OR Apache-2.0 (156)
+### MIT OR Apache-2.0 (158)
 
 - **accesskit** 0.25.2 — Copyright (c) The AccessKit contributors — https://github.com/AccessKit/accesskit
 - **ahash** 0.8.12 — Copyright (c) 2018 Tom Kaitchuck — https://github.com/tkaitchuck/ahash
@@ -140,6 +156,7 @@ not GPL-2.0).
 - **color** 0.3.3 — Copyright (c) the color developers — https://github.com/linebender/color
 - **colorchoice** 1.0.5 — Copyright (c) Individual contributors — https://github.com/rust-cli/anstyle.git
 - **core_detect** 1.0.0 — Copyright (c) 2017-2020 The Rust Project Developers — https://github.com/thomcc/core_detect
+- **cpufeatures** 0.2.17 — Copyright (c) 2020-2025 The RustCrypto Project Developers — https://github.com/RustCrypto/utils
 - **crc32fast** 1.5.5 — Copyright (c) 2018 Sam Rijs, Alex Crichton and contributors — https://github.com/srijs/rust-crc32fast
 - **crossbeam-channel** 0.5.17 — Copyright (c) 2019 The Crossbeam Project Developers; copyright protection under copyright law or other applicable laws.; Copyright (c) 2009 The Go Authors. All rights reserved. — https://github.com/crossbeam-rs/crossbeam
 - **crossbeam-queue** 0.3.14 — Copyright (c) 2019 The Crossbeam Project Developers — https://github.com/crossbeam-rs/crossbeam
@@ -242,6 +259,7 @@ not GPL-2.0).
 - **serde_core** 1.0.229 — Copyright (c) Erick Tryzelaar, David Tolnay — https://github.com/serde-rs/serde
 - **serde_json** 1.0.154 — Copyright (c) the serde_json developers — https://github.com/serde-rs/json
 - **serde_spanned** 1.1.3 — Copyright Individual contributors; Copyright (c) Individual contributors — https://github.com/toml-rs/toml
+- **sha2** 0.10.9 — Copyright (c) 2006-2009 Graydon Hoare; Copyright (c) 2009-2013 Mozilla Foundation; Copyright (c) 2016 Artyom Pavlov — https://github.com/RustCrypto/hashes
 - **signal-hook-registry** 1.4.8 — Copyright (c) 2017 tokio-jsonrpc developers — https://github.com/vorner/signal-hook
 - **simdutf8** 0.1.5 — Copyright (c) Hans Kratz — https://github.com/rusticstuff/simdutf8
 - **simplecss** 0.2.2 — Copyright (c) 2018 Reizner Evgeniy — https://github.com/linebender/simplecss
@@ -2318,7 +2336,7 @@ s:calloop-wayland-source@0.3.0 s:calloop-wayland-source@0.4.1 b:cc@1.11.3 s:cfg-
 o:cgl@0.3.2 o:clipboard-win@5.4.3 o:codespan-reporting@0.13.1 s:color@0.3.3 s:color_quant@1.1.0
 s:colorchoice@1.0.5 o:combine@4.6.9 o:concurrent-queue@2.5.0 o:cookie@0.18.2 o:cookie_store@0.22.1
 o:core-foundation@0.9.4 o:core-foundation-sys@0.8.7 o:core-graphics@0.23.2 o:core-graphics-types@0.1.3
-s:core_detect@1.0.0 s:crc32fast@1.5.5 s:crossbeam-channel@0.5.17 s:crossbeam-queue@0.3.14
+s:core_detect@1.0.0 s:cpufeatures@0.2.17 s:crc32fast@1.5.5 s:crossbeam-channel@0.5.17 s:crossbeam-queue@0.3.14
 s:crossbeam-utils@0.8.23 o:crunchy@0.2.4 s:crypto-common@0.1.7 s:cursor-icon@1.2.0 s:data-url@0.3.2
 o:deranged@0.5.9 s:digest@0.10.7 s:dirs@7.0.0 s:dirs-sys@0.5.0 o:dispatch@0.2.0 o:dispatch2@0.3.1
 o:displaydoc@0.2.7 s:dlib@0.5.3 b:document-features@0.2.12 s:downcast-rs@1.2.1 s:dpi@0.1.2 s:ecolor@0.37.0
@@ -2368,9 +2386,9 @@ s:ring@0.17.14 s:roxmltree@0.21.2 o:rsqlite-vfs@0.2.0 s:rusqlite@0.43.0 o:rustc-
 o:rustc_version@0.4.1 s:rustix@0.38.44 s:rustix@1.1.6 s:rustls@0.23.46 s:rustls-pki-types@1.16.0
 s:rustls-webpki@0.103.17 b:rustversion@1.0.23 o:same-file@1.0.6 s:scoped-tls@1.0.1 s:scopeguard@1.2.0
 s:self_cell@1.3.0 o:semver@1.0.28 o:send_wrapper@0.6.0 s:serde@1.0.229 s:serde_core@1.0.229
-b:serde_derive@1.0.229 s:serde_json@1.0.154 b:serde_repr@0.1.21 s:serde_spanned@1.1.3 b:shlex@2.0.1
-s:signal-hook-registry@1.4.8 s:simd-adler32@0.3.10 o:simd_cesu8@1.2.0 s:simdutf8@0.1.5 s:simplecss@0.2.2
-s:siphasher@1.0.4 s:skrifa@0.44.0 s:slab@0.4.12 o:slotmap@1.1.1 s:smallvec@1.16.6
+b:serde_derive@1.0.229 s:serde_json@1.0.154 b:serde_repr@0.1.21 s:serde_spanned@1.1.3 s:sha2@0.10.9
+b:shlex@2.0.1 s:signal-hook-registry@1.4.8 s:simd-adler32@0.3.10 o:simd_cesu8@1.2.0 s:simdutf8@0.1.5
+s:simplecss@0.2.2 s:siphasher@1.0.4 s:skrifa@0.44.0 s:slab@0.4.12 o:slotmap@1.1.1 s:smallvec@1.16.6
 s:smithay-client-toolkit@0.19.2 s:smithay-client-toolkit@0.20.0 s:smithay-clipboard@0.7.3 s:smol_str@0.2.2
 s:socket2@0.6.5 o:sqlite-wasm-rs@0.6.3 o:stable_deref_trait@1.2.1 s:static_assertions@1.1.0 s:strict-num@0.1.1
 s:subtle@2.6.1 s:svgtypes@0.16.2 s:symphonia@0.5.5 s:symphonia-bundle-flac@0.5.5 s:symphonia-bundle-mp3@0.5.5

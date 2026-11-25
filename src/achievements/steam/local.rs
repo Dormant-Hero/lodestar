@@ -87,7 +87,7 @@ fn files_in(root: &Path, appid: u32) -> Files {
     let stats = root.join("appcache/stats");
     let schema = file(stats.join(format!("UserGameStatsSchema_{appid}.bin")));
     let active: Option<u32> =
-        crate::scan::steam::active_user(root).and_then(|d| d.file_name()?.to_str()?.parse().ok()).filter(|a| *a != 0);
+        crate::scan::steam::main_user(root).and_then(|d| d.file_name()?.to_str()?.parse().ok()).filter(|a| *a != 0);
     // The active account's file, else the newest one of any account on this machine.
     let mut account = active;
     let mut user_stats = active.and_then(|a| file(stats.join(format!("UserGameStats_{a}_{appid}.bin"))));

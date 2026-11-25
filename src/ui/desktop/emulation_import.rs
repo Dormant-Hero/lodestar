@@ -3,7 +3,7 @@
 //! left out) and rescans. The preview runs on a helper thread.
 
 use super::add::{Pick, PickKind, short_path};
-use super::dialogs::{hint_text, modal, plain_button, primary_button, title};
+use super::dialogs::{Buttons, body_height, footer, hint_text, modal, title};
 use super::emulation_ui::catalog;
 use super::{Action, Pal};
 use crate::app::AppState;
@@ -227,11 +227,7 @@ pub(super) fn show(
     let mut out = None;
     let screen = ctx.content_rect();
     let width = (screen.width() - 64.0).clamp(600.0, 860.0);
-    let table_h = if super::own_window::in_own_window(ctx) {
-        (screen.height() - 244.0).max(160.0)
-    } else {
-        (screen.height() - 330.0).clamp(160.0, 460.0)
-    };
+    let in_main = (screen.height() - 330.0).clamp(160.0, 460.0);
     let home = st.paths.home.clone();
     let cat = catalog::catalog(ctx);
     let (_, x) = modal(ctx, "ls_roms_import", pal, width, |ui| {
@@ -284,67 +280,64 @@ pub(super) fn show(
                 ui.label(RichText::new(t).size(12.5).color(pal.dim));
             }
         });
+        let table_h = body_height(ui, in_main);
         rom_table(ui, d, cat.as_deref(), pal, &home, table_h);
-        ui.add_space(10.0);
-        // ---- footer
+        // ---- footer: the list tools on the left
         let n = d.checked();
-        // The primary button first on the left, as in every dialog; the list tools on the right.
-        ui.horizontal(|ui| {
-            // Nothing found: the folder can still be added (a scan with the right console,
-            // or emulators set up later, finds its games).
-            let empty = d.rows.is_empty() && d.shown_for.is_some();
-            let label = match n {
-                _ if empty => "Add folder".to_string(),
-                0 => "Import".to_string(),
-                1 => "Import 1 game".to_string(),
-                n => format!("Import {n} games"),
-            };
-            let ready = (n > 0 || empty) && d.folder.is_some() && !d.looking();
-            let resp = primary_button(ui, &label, pal, ready).on_disabled_hover_text("Tick the games to add");
-            let resp =
-                if empty { resp.on_hover_text("Save it as a ROM folder; its games show after a scan") } else { resp };
-            if resp.clicked()
-                && let Some(folder) = d.folder.clone()
+        // Nothing found: the folder can still be added (a scan with the right console, or
+        // emulators set up later, finds its games).
+        let empty = d.rows.is_empty() && d.shown_for.is_some();
+        let label = match n {
+            _ if empty => "Add folder".to_string(),
+            0 => "Import".to_string(),
+            1 => "Import 1 game".to_string(),
+            n => format!("Import {n} games"),
+        };
+        let ready = (n > 0 || empty) && d.folder.is_some() && !d.looking();
+        let mut buttons = Buttons::primary(&label, ready).cancel("Cancel").disabled_hint("Tick the games to add");
+        if empty {
+            buttons = buttons.hint("Save it as a ROM folder; its games show after a scan");
+        }
+        let f = footer(ui, pal, buttons, |ui| {
+            let any = !d.rows.is_empty();
+            if ui.add_enabled(any, egui::Button::new("Select all").min_size(vec2(0.0, 30.0))).clicked() {
+                d.rows.iter_mut().for_each(|r| r.checked = true);
+            }
+            if ui.add_enabled(any, egui::Button::new("Select none").min_size(vec2(0.0, 30.0))).clicked() {
+                d.rows.iter_mut().for_each(|r| r.checked = false);
+            }
+            if ui
+                .add(egui::Button::new(RichText::new("Set up emulation…").color(pal.accent)).frame(false))
+                .on_hover_text("Settings → Emulation: emulators, BIOS, ROM folders")
+                .clicked()
             {
-                let cfg = &mut st.config.emulation;
-                let existing = cfg.rom_folders.values().find(|rf| rf.path == folder).map(|rf| rf.exclude.clone());
-                let exclude = merged_exclusions(&d.rows, &folder, &existing.unwrap_or_default());
-                // A folder that was found automatically becomes the user's: scanned once,
-                // under its new id (its games move over, playtime and all).
-                let auto = catalog::LibFacts::compute(&st.library.games, 0).auto_roots.values().any(|p| *p == folder);
-                let cfg = &mut st.config.emulation;
-                super::emulation_ui::save_rom_folder(cfg, &folder, &d.platform, exclude);
-                if auto && !cfg.ignored_folders.contains(&folder) {
-                    cfg.ignored_folders.push(folder.clone());
-                }
-                st.save_config();
-                st.rescan();
-                let what =
-                    if empty { "the folder".to_string() } else { label.trim_start_matches("Import ").to_string() };
-                st.notify(format!("Adding {what} from {}", short_path(&folder, &home, 40)));
+                out = Some(Action::Settings(super::settings::Tab::Emulation));
                 close = true;
             }
-            if plain_button(ui, "Cancel").clicked() {
-                close = true;
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let any = !d.rows.is_empty();
-                if ui
-                    .add(egui::Button::new(RichText::new("Set up emulation…").color(pal.accent)).frame(false))
-                    .on_hover_text("Settings → Emulation: emulators, BIOS, ROM folders")
-                    .clicked()
-                {
-                    out = Some(Action::Settings(super::settings::Tab::Emulation));
-                    close = true;
-                }
-                if ui.add_enabled(any, egui::Button::new("Select none").min_size(vec2(0.0, 30.0))).clicked() {
-                    d.rows.iter_mut().for_each(|r| r.checked = false);
-                }
-                if ui.add_enabled(any, egui::Button::new("Select all").min_size(vec2(0.0, 30.0))).clicked() {
-                    d.rows.iter_mut().for_each(|r| r.checked = true);
-                }
-            });
         });
+        if f.primary
+            && let Some(folder) = d.folder.clone()
+        {
+            let cfg = &mut st.config.emulation;
+            let existing = cfg.rom_folders.values().find(|rf| rf.path == folder).map(|rf| rf.exclude.clone());
+            let exclude = merged_exclusions(&d.rows, &folder, &existing.unwrap_or_default());
+            // A folder that was found automatically becomes the user's: scanned once, under its
+            // new id (its games move over, playtime and all).
+            let auto = catalog::LibFacts::compute(&st.library.games, 0).auto_roots.values().any(|p| *p == folder);
+            let cfg = &mut st.config.emulation;
+            super::emulation_ui::save_rom_folder(cfg, &folder, &d.platform, exclude);
+            if auto && !cfg.ignored_folders.contains(&folder) {
+                cfg.ignored_folders.push(folder.clone());
+            }
+            st.save_config();
+            st.rescan();
+            let what = if empty { "the folder".to_string() } else { label.trim_start_matches("Import ").to_string() };
+            st.notify(format!("Adding {what} from {}", short_path(&folder, &home, 40)));
+            close = true;
+        }
+        if f.cancel {
+            close = true;
+        }
     });
     // The backdrop / Esc closes, except while the folder picker is up.
     if close || (x && d.pick.is_none()) {

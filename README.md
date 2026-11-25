@@ -49,6 +49,13 @@ Playnite-style desktop mode and a fullscreen controller mode for the couch.
 Allow executing, or `chmod +x`) and open it. It runs on any distro with glibc 2.39 or newer (Fedora 40+,
 Ubuntu 24.04+, Arch, …). [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) adds it to your app menu.
 
+**Updates:** the AppImage keeps itself up to date. Once a day Lodestar asks GitHub whether a newer release is out
+(nothing else is sent) and offers to install it: it shows what's new, downloads the new AppImage, checks it against
+the release's checksum and puts it in place of the old one, then restarts when you say so. You can switch the daily
+check off (Settings → General → Updates), check yourself with menu → Check for updates…, or skip a version. Gear
+Lever and other AppImage updaters can update it too. Installed with `install.sh`, Lodestar only tells you that a
+new version is out.
+
 **From source** (Rust stable, see [Build](#build)):
 
 ```bash
@@ -77,7 +84,11 @@ and settings stay in `~/.local/share/lodestar` and `~/.config/lodestar`).
 APPIMAGETOOL=~/.local/bin/appimagetool ./packaging/make-appimage.sh
 ```
 
-builds `dist/Lodestar-<version>-x86_64.AppImage` (needs [appimagetool](https://github.com/AppImage/appimagetool)).
+builds `dist/Lodestar-<version>-x86_64.AppImage` and `dist/Lodestar-<version>-x86_64.AppImage.zsync` (needs
+[appimagetool](https://github.com/AppImage/appimagetool)). To publish a release, attach **both** files to a GitHub
+release named after the tag (`v<version>`) and publish it as a normal release, not a pre-release: Lodestar's
+updater and AppImage updaters only look at the newest normal release. Add the version's `<release>` to
+`packaging/io.github.Dormant_Hero.Lodestar.metainfo.xml` first.
 
 ## Use
 

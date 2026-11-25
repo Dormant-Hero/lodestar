@@ -3,7 +3,7 @@
 //! Emulation page lives in `emulation_ui.rs`. Edits `st.config` in place
 //! and saves (debounced) through `st.save_config()`.
 
-use super::dialogs::{hint_text, modal, primary_button};
+use super::dialogs::{Buttons, body_height, footer, hint_text, modal};
 use super::{DesktopUi, Pal};
 use crate::app::AppState;
 use crate::config::StartMode;
@@ -123,16 +123,12 @@ impl DesktopUi {
         let fam = self.fonts.bold.clone();
         let in_library: Vec<(Source, usize)> =
             self.counts.sources.iter().filter_map(|&(k, n)| Some((k.as_source()?, n))).collect();
-        // Taller in a tall window (the Libraries list is long), never taller than it. In its own
-        // window: all of the window's height but the title and the Done row.
-        let body_h = if super::own_window::in_own_window(ctx) {
-            (ctx.content_rect().height() - 132.0).max(200.0)
-        } else {
-            (ctx.content_rect().height() - 260.0).clamp(300.0, 640.0)
-        };
+        // Taller in a tall window (the Libraries list is long), never taller than it.
+        let in_main = (ctx.content_rect().height() - 260.0).clamp(300.0, 640.0);
         let (_, close) = modal(ctx, "ls_settings", &pal, 760.0, |ui| {
             ui.label(RichText::new("Settings").family(fam.clone()).size(20.0).strong().color(pal.text));
             ui.add_space(10.0);
+            let body_h = body_height(ui, in_main);
             ui.horizontal_top(|ui| {
                 // tabs
                 ui.allocate_ui_with_layout(
@@ -180,12 +176,7 @@ impl DesktopUi {
                         });
                 });
             });
-            ui.add_space(10.0);
-            ui.separator();
-            ui.horizontal(|ui| {
-                if primary_button(ui, "Done", &pal, true).clicked() {
-                    keep = false;
-                }
+            let f = footer(ui, &pal, Buttons::primary("Done", true), |ui| {
                 if d.scan_changed {
                     let label = if st.scan.running { "Scanning…" } else { "Rescan now" };
                     if ui.add_enabled(!st.scan.running, egui::Button::new(label).min_size(vec2(100.0, 30.0))).clicked()
@@ -197,6 +188,9 @@ impl DesktopUi {
                     ui.label(RichText::new("Library settings changed — rescan to apply.").size(12.0).color(pal.dim));
                 }
             });
+            if f.primary {
+                keep = false;
+            }
         });
         if changed {
             self.mark_config_dirty();

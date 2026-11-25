@@ -145,12 +145,14 @@ impl App {
             failed_launches: Default::default(),
             non_play_sessions: Default::default(),
             edit_bg: Default::default(),
+            steam_names: Default::default(),
             switch_prompt: None,
             switch: Default::default(),
             game_opts: Default::default(),
             running: Default::default(),
             shell: Default::default(),
             romm: Default::default(),
+            update: Default::default(),
             paths,
             config,
             db,
@@ -160,6 +162,8 @@ impl App {
         st.init_shell(opts.screenshot.is_none(), instance);
         st.apply_launcher_settings();
         st.init_game_options();
+        // Lodestar's own updates: the daily check (never in screenshot runs).
+        st.init_updates(opts.screenshot.is_none());
         // A theme named in the config that isn't there (deleted, typo): say so once, for the
         // mode it shows in first (the other one's message would be a stale toast by then).
         let problem = if mode == Mode::Controller {
@@ -384,7 +388,7 @@ impl App {
         navs
     }
 
-    fn draw_toasts(&self, ctx: &egui::Context) {
+    fn draw_toasts(&mut self, ctx: &egui::Context) {
         if self.st.toasts.is_empty() {
             return;
         }
@@ -411,11 +415,17 @@ impl App {
                 .fold(0.0f32, f32::max)
         });
         let screen_w = ctx.content_rect().width();
-        let width = toast_width(widest, screen_w);
+        // Buttons on toasts: desktop mode only (controller mode says where to go instead).
+        let buttons = !controller && self.st.toasts.iter().any(|t| t.action.is_some());
+        // Room for the button next to the text.
+        let width = toast_width(widest + if buttons { TOAST_BUTTON_ROOM } else { 0.0 }, screen_w);
+        let label = self.st.update.button_label();
+        let (accent, accent_text) = (pal.accent.to_egui(), pal.accent_text.to_egui());
+        let mut clicked = None;
         egui::Area::new(egui::Id::unique("lodestar_toasts"))
             .anchor(align, offset)
             .order(egui::Order::Foreground)
-            .interactable(false)
+            .interactable(buttons)
             .show(ctx, |ui| {
                 for t in &self.st.toasts {
                     egui::Frame::new()
@@ -424,14 +434,36 @@ impl App {
                         .inner_margin(egui::Margin::symmetric(TOAST_PAD_X as i8, 10))
                         .show(ui, |ui| {
                             ui.set_width(width);
-                            ui.add(
-                                egui::Label::new(egui::RichText::new(&t.text).color(pal.text.to_egui()).size(SIZE))
-                                    .wrap(),
-                            );
+                            let text = egui::RichText::new(&t.text).color(pal.text.to_egui()).size(SIZE);
+                            match t.action.filter(|_| buttons) {
+                                Some(a) => {
+                                    // The text on the left, the button at the right edge.
+                                    ui.horizontal(|ui| {
+                                        let b =
+                                            egui::Button::new(egui::RichText::new(label).color(accent_text).strong())
+                                                .fill(accent);
+                                        ui.allocate_ui(
+                                            egui::vec2((ui.available_width() - TOAST_BUTTON_ROOM).max(80.0), 0.0),
+                                            |ui| ui.add(egui::Label::new(text).wrap()),
+                                        );
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                            if ui.add(b).clicked() {
+                                                clicked = Some(a);
+                                            }
+                                        });
+                                    });
+                                }
+                                None => {
+                                    ui.add(egui::Label::new(text).wrap());
+                                }
+                            }
                         });
                     ui.add_space(6.0);
                 }
             });
+        if let Some(a) = clicked {
+            self.st.toast_action(a);
+        }
     }
 
     /// `LODESTAR_SCREENSHOT_HIDE=1` (screenshot runs): hide the window the way the tray does once
@@ -705,6 +737,8 @@ pub(crate) fn is_wayland(env: impl Fn(&str) -> Option<std::ffi::OsString>) -> bo
 }
 
 const TOAST_PAD_X: f32 = 14.0;
+/// Width kept next to a toast's text for its button ("Update", "Restart now").
+const TOAST_BUTTON_ROOM: f32 = 110.0;
 
 /// Minimum wall-clock time a screenshot waits after the last injected key / busy state.
 const SCREENSHOT_MIN_SETTLE: Duration = Duration::from_millis(700);

@@ -30,7 +30,7 @@ fn list(root: &Path) -> StatsDir {
     let mut out = StatsDir::default();
     let Ok(rd) = std::fs::read_dir(root.join("appcache/stats")) else { return out };
     let active: Option<u32> =
-        crate::scan::steam::active_user(root).and_then(|d| d.file_name()?.to_str()?.parse().ok()).filter(|a| *a != 0);
+        crate::scan::steam::main_user(root).and_then(|d| d.file_name()?.to_str()?.parse().ok()).filter(|a| *a != 0);
     // appid → (is the active account's, stamp, path)
     let mut users: HashMap<u32, (bool, Stamp, PathBuf)> = HashMap::new();
     for e in rd.flatten() {

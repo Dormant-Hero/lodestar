@@ -225,16 +225,14 @@ pub(super) fn rom_folders(ui: &mut Ui, st: &mut AppState, p: &mut EmuPage, pal: 
                     console_combo(ui, "ls_emu_add_folder_pf", &mut f.platform, "Detect from folder names", 260.0);
                 });
                 hint_text(ui, "Detect: the folder's own name, else each sub-folder's name (ps1, ps2, gc …).", pal);
-                ui.horizontal(|ui| {
-                    if primary_button(ui, "Add folder", pal, true).clicked() {
-                        add_folder(&mut st.config.emulation, &f.path, &f.platform);
-                        scan = true;
-                        keep = false;
-                    }
-                    if plain_button(ui, "Cancel").clicked() {
-                        keep = false;
-                    }
-                });
+                let clicked = button_row(ui, pal, Buttons::primary("Add folder", true).cancel("Cancel"), |_| {});
+                if clicked.primary {
+                    add_folder(&mut st.config.emulation, &f.path, &f.platform);
+                    scan = true;
+                }
+                if clicked.primary || clicked.cancel {
+                    keep = false;
+                }
             });
             if keep {
                 p.add_folder = Some(f);

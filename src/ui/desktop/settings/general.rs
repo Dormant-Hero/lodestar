@@ -1,4 +1,4 @@
-//! Settings → General: start-up, scripts around games, what happens while playing, store clients.
+//! Settings → General: start-up, updates, scripts around games, what happens while playing, store clients.
 
 use super::*;
 
@@ -11,6 +11,9 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
         ch |= ui.radio_value(&mut c.start_mode, StartMode::Desktop, "Desktop mode").changed();
         ch |= ui.radio_value(&mut c.start_mode, StartMode::Controller, "Controller mode").changed();
     });
+    ui.add_space(8.0);
+    heading(ui, "Updates", pal);
+    ch |= crate::ui::desktop::update_ui::settings_section(ui, st, pal);
     ui.add_space(8.0);
     heading(ui, "While playing", pal);
     // Wayland lets a window minimise itself (KWin honours it), but there is no way for it to

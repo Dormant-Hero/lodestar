@@ -88,17 +88,17 @@ pub(super) fn args_panel(ui: &mut Ui, st: &mut AppState, p: &mut EmuPage, e: &Ca
     );
     hint_text(ui, ARGS_HELP, pal);
     let mut save = None;
-    ui.horizontal(|ui| {
-        if primary_button(ui, "Save", pal, true).clicked() {
-            save = Some(text.trim().to_string());
-        }
+    let f = button_row(ui, pal, Buttons::primary("Save", true).cancel("Close"), |ui| {
         if plain_button(ui, "Use the profile's").clicked() {
             save = Some(String::new());
         }
-        if plain_button(ui, "Close").clicked() {
-            p.emu_panel = None;
-        }
     });
+    if f.primary {
+        save = Some(text.trim().to_string());
+    }
+    if f.cancel {
+        p.emu_panel = None;
+    }
     if let Some(args) = save {
         let cfg = &mut st.config.emulation;
         let mut x = catalog::entry_for(&e.emu, cfg);

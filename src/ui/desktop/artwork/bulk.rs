@@ -202,24 +202,21 @@ pub(crate) fn bulk_dialog(
         if running {
             ui.label(RichText::new("An artwork download is already running.").size(12.5).color(pal.danger));
         }
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            let ok = !running && needing > 0 && !slots.is_empty() && !chosen.is_empty();
-            if primary_button(ui, "Download", pal, ok).clicked() {
-                // All available sources ticked: let the backend use its own order (empty).
-                let all = chosen.len() == infos.iter().filter(|s| s.available).count();
-                let opts = BulkOptions {
-                    slots: slots.clone(),
-                    only_missing: d.only_missing,
-                    sources: if all { vec![] } else { chosen.clone() },
-                };
-                st.bulk_art(ids.to_vec(), opts);
-                out = BulkOutcome::Close;
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = BulkOutcome::Close;
-            }
-        });
+        let ok = !running && needing > 0 && !slots.is_empty() && !chosen.is_empty();
+        let f = footer(ui, pal, Buttons::primary("Download", ok).cancel("Cancel"), |_| {});
+        if f.primary {
+            // All available sources ticked: let the backend use its own order (empty).
+            let all = chosen.len() == infos.iter().filter(|s| s.available).count();
+            let opts = BulkOptions {
+                slots: slots.clone(),
+                only_missing: d.only_missing,
+                sources: if all { vec![] } else { chosen.clone() },
+            };
+            st.bulk_art(ids.to_vec(), opts);
+        }
+        if f.primary || f.cancel {
+            out = BulkOutcome::Close;
+        }
     });
     if close && matches!(out, BulkOutcome::Keep) {
         out = BulkOutcome::Close;

@@ -49,7 +49,7 @@ fn scan_done_keeps_ui_edits_made_during_the_scan() {
     // The user stars A while the message is in flight.
     st.scan.running = true;
     st.toggle_favorite(id);
-    st.bg_tx.send(BgMsg::ScanDone { report: ScanReport::default(), added: 1 }).unwrap();
+    st.bg_tx.send(BgMsg::ScanDone { report: ScanReport::default(), added: 1, only: None }).unwrap();
     st.poll_background();
     assert!(!st.scan.running);
     assert!(st.library.get(id).unwrap().favorite, "favourite reverted by ScanDone");
@@ -73,9 +73,31 @@ fn new_games_count_survives_a_partial_reload_and_skips_excluded_ones() {
     Db::open(&st.paths.db_file()).unwrap().merge_scan(&games, &[Source::Lutris]).unwrap();
     st.bg_tx.send(BgMsg::ScanPartial { per_source: vec![], total: 3, elapsed: Duration::ZERO }).unwrap();
     st.poll_background();
-    st.bg_tx.send(BgMsg::ScanDone { report: ScanReport::default(), added: 2 }).unwrap();
+    st.bg_tx.send(BgMsg::ScanDone { report: ScanReport::default(), added: 2, only: None }).unwrap();
     st.poll_background();
     assert_eq!(st.scan.last.as_ref().unwrap().added, 1, "B is new; the Proton entry doesn't count");
+}
+
+/// A rescan of Steam alone (after the Steam name lookup) keeps the other libraries' counts.
+#[test]
+fn rescan_of_one_library_keeps_the_other_counts() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut st = AppState::for_test(dir.path());
+    st.scan.last = Some(ScanSummary {
+        total: 30,
+        added: 0,
+        per_source: vec![(Source::Steam, 10, None), (Source::Lutris, 20, None)],
+        elapsed: Duration::from_millis(80),
+    });
+    st.scan.running = true;
+    let mut report = ScanReport::default();
+    report.per_source.push((Source::Steam, crate::scan::SourceReport { found: 25, ..Default::default() }));
+    st.bg_tx.send(BgMsg::ScanDone { report, added: 0, only: Some(vec![Source::Steam]) }).unwrap();
+    st.poll_background();
+    let last = st.scan.last.as_ref().unwrap();
+    assert_eq!(last.per_source, vec![(Source::Steam, 25, None), (Source::Lutris, 20, None)]);
+    assert_eq!(last.total, 45);
+    assert_eq!(last.elapsed, Duration::from_millis(80));
 }
 
 #[test]

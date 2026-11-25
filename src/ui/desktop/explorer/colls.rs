@@ -3,7 +3,7 @@
 //! filter that updates by itself). Rename / move / delete from a collection's right-click menu;
 //! deleting and removing games can be undone. Stored with `library::user`.
 
-use super::super::dialogs::{modal, plain_button, primary_button, title};
+use super::super::dialogs::{Buttons, footer, modal, title};
 use super::super::{Action, DesktopUi, Facet, LibSel, Pal, artwork};
 use super::nav::Entry;
 use super::{row, section_games};
@@ -327,16 +327,14 @@ impl DesktopUi {
                 state.store(ui.ctx(), r.id);
             }
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                let valid = !d.name.trim().is_empty();
-                if primary_button(ui, ok, &pal, valid).clicked() || (enter && valid) {
-                    done = Some(true);
-                }
-                if plain_button(ui, "Cancel").clicked() {
-                    done = Some(false);
-                }
-            });
+            let valid = !d.name.trim().is_empty();
+            let f = footer(ui, &pal, Buttons::primary(ok, valid).cancel("Cancel"), |_| {});
+            if f.primary || (enter && valid) {
+                done = Some(true);
+            }
+            if f.cancel {
+                done = Some(false);
+            }
         });
         if close {
             done = Some(false);

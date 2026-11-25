@@ -4,7 +4,7 @@
 //! again). Edit → Installation of that game can take it out again.
 
 use super::super::Pal;
-use super::super::dialogs::{hint_text, modal, plain_button, title};
+use super::super::dialogs::{Buttons, footer, hint_text, modal, title};
 use crate::app::AppState;
 use crate::model::GameId;
 use egui::RichText;
@@ -103,8 +103,7 @@ pub(crate) fn show(ctx: &egui::Context, st: &mut AppState, pal: &Pal, fam: &egui
                 }
             }
         });
-        ui.add_space(10.0);
-        if plain_button(ui, "Cancel").clicked() {
+        if footer(ui, pal, Buttons::default().cancel("Cancel"), |_| {}).cancel {
             keep = false;
         }
     });

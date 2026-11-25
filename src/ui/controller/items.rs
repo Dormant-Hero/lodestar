@@ -28,6 +28,7 @@ impl ControllerUi {
             v.push(Item::value(format!("Show hidden games ({hidden})"), on(self.show_hidden), Act::ToggleShowHidden));
         }
         v.push(Item::action("Settings", Act::SettingsMenu));
+        v.push(Self::update_item(st));
         v.push(Item::action("About Lodestar", Act::Credits));
         for p in super::power::menu_items(&c.power, super::power::has_tool) {
             v.push(Item::action(p.label(), Act::PowerAsk(p)));

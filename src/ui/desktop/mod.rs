@@ -46,6 +46,7 @@ mod style;
 mod theme_creator;
 mod topbar;
 mod undo;
+pub(crate) mod update_ui;
 mod view;
 mod viewer;
 mod whats_new_ui;

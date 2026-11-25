@@ -117,6 +117,10 @@ impl DesktopUi {
             if ui.button("Changelog…").clicked() {
                 self.push(Action::WhatsNew);
             }
+            if ui.button("Check for updates…").on_hover_text("Ask GitHub now whether a newer Lodestar is out").clicked()
+            {
+                st.check_updates_from_menu();
+            }
             if ui.button("About Lodestar…").clicked() {
                 self.push(Action::About);
             }

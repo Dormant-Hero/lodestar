@@ -10,7 +10,7 @@
 use super::add::{Pick, PickKind};
 use super::artwork::{self, ArtDlg, ArtOutcome};
 use super::details::format_size;
-use super::dialogs::{hint_text, modal, plain_button, primary_button};
+use super::dialogs::{Buttons, body_height, footer, hint_text, modal};
 use super::{Pal, platform_label};
 use crate::app::AppState;
 use crate::art::ArtSlot;
@@ -739,12 +739,7 @@ impl super::DesktopUi {
 
         let screen = ctx.content_rect();
         let width = (screen.width() - 64.0).clamp(560.0, 880.0);
-        // In its own window the body takes all the height the window gives it.
-        let body_h = if super::own_window::in_own_window(ctx) {
-            (screen.height() - 170.0).max(240.0)
-        } else {
-            (screen.height() - 190.0).clamp(240.0, 600.0)
-        };
+        let in_main = (screen.height() - 190.0).clamp(240.0, 600.0);
         // Settings over the artwork editor (in the main window, or in its own window while this
         // one waits behind a veil).
         let covered = self.dlg.settings.is_some();
@@ -752,6 +747,7 @@ impl super::DesktopUi {
         let mut save = false;
         let (_, close) = modal(ctx, "ls_edit_dlg", &pal, width, |ui| {
             edit_header(ui, st, d, &pal, &fam);
+            let body_h = body_height(ui, in_main);
             // The body has the same height on every tab, so the dialog doesn't jump.
             if d.tab == Tab::Media && d.id.is_some() {
                 ui.allocate_ui_with_layout(
@@ -789,9 +785,6 @@ impl super::DesktopUi {
                         }
                     });
             }
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(4.0);
             let (footer_save, footer_out) = edit_footer(ui, st, d, game.as_ref(), &pal);
             save = footer_save;
             if let Some(o) = footer_out {
@@ -903,8 +896,8 @@ fn edit_header(ui: &mut Ui, st: &mut AppState, d: &mut EditDlg, pal: &Pal, fam: 
     ui.add_space(12.0);
 }
 
-/// Save / Cancel with a note beside them, and Download metadata… with the lookup's status.
-/// Returns (Save clicked, what else to do).
+/// Download metadata… with the lookup's status on the left; Cancel and Save on the right, with a
+/// note beside them. Returns (Save clicked, what else to do).
 fn edit_footer(
     ui: &mut Ui,
     st: &mut AppState,
@@ -912,66 +905,58 @@ fn edit_footer(
     game: Option<&Game>,
     pal: &Pal,
 ) -> (bool, Option<EditOutcome>) {
-    let mut save = false;
     let mut out = None;
     let problem = d.problem();
-    // Save first on the left, like every dialog's primary button; the lookup on the right.
-    ui.horizontal(|ui| {
-        let label = if d.id.is_some() { "Save" } else { "Add game" };
-        let r = primary_button(ui, label, pal, problem.is_none());
-        if r.clicked() {
-            save = true;
+    let note: Option<(String, egui::Color32)> = if let Some(p) = problem.as_deref().or(d.error.as_deref()) {
+        // A missing name isn't a mistake yet: say it quietly.
+        let quiet = d.name.text.trim().is_empty() && d.error.is_none();
+        Some((p.to_string(), if quiet { pal.dim } else { pal.danger }))
+    } else if let Some(other) = d.duplicate_hint(st) {
+        Some((format!("Already in your library: {other}"), pal.dim))
+    } else if d.id.is_none() && !d.actions.iter().any(|a| a.play) && d.template.launch.is_none() {
+        Some(("No Play action yet (Actions tab)".to_string(), pal.dim))
+    } else {
+        None
+    };
+    let label = if d.id.is_some() { "Save" } else { "Add game" };
+    let f = footer(ui, pal, Buttons::primary(label, problem.is_none()).cancel("Cancel"), |ui| {
+        let can_look = !d.name.text.trim().is_empty() && !d.lookup_busy();
+        if ui
+            .add_enabled(can_look, egui::Button::new("Download metadata…").min_size(vec2(0.0, 30.0)))
+            .on_hover_text(
+                "Look the game up online by the name (and platform) above. What it finds \
+                 replaces details looked up before; your own values stay. Nothing is \
+                 saved until Save.",
+            )
+            .clicked()
+        {
+            d.start_lookup(st, game, None);
         }
-        if plain_button(ui, "Cancel").clicked() {
-            out = Some(EditOutcome::Close);
-        }
-        let note: Option<(String, egui::Color32)> = if let Some(p) = problem.as_deref().or(d.error.as_deref()) {
-            // A missing name isn't a mistake yet: say it quietly.
-            let quiet = d.name.text.trim().is_empty() && d.error.is_none();
-            Some((p.to_string(), if quiet { pal.dim } else { pal.danger }))
-        } else if let Some(other) = d.duplicate_hint(st) {
-            Some((format!("Already in your library: {other}"), pal.dim))
-        } else if d.id.is_none() && !d.actions.iter().any(|a| a.play) && d.template.launch.is_none() {
-            Some(("No Play action yet (Actions tab)".to_string(), pal.dim))
-        } else {
-            None
-        };
-        // The note beside Save and the lookup's status beside its button share the
-        // room between them.
-        if let Some((text, col)) = note {
-            let w = (ui.available_width() - 160.0) * 0.5;
+        // The lookup's status and the note beside Cancel share the room between them.
+        let half = ui.available_width() * 0.5;
+        if let Some((text, bad, settings)) = d.lookup_status() {
+            if d.lookup_busy() {
+                lazy_spinner(ui, 14.0, pal.accent);
+            }
+            let col = if bad { pal.danger } else { pal.dim };
             ui.scope(|ui| {
-                ui.set_max_width(w.max(60.0));
+                ui.set_max_width(half);
+                ui.add(egui::Label::new(RichText::new(text).size(12.5).color(col)).truncate());
+            });
+            if settings && ui.link("Settings…").clicked() {
+                out = Some(EditOutcome::OpenSettings);
+            }
+        }
+        if let Some((text, col)) = note {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add(egui::Label::new(RichText::new(text).size(12.5).color(col)).truncate());
             });
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let can_look = !d.name.text.trim().is_empty() && !d.lookup_busy();
-            if ui
-                .add_enabled(can_look, egui::Button::new("Download metadata…").min_size(vec2(0.0, 30.0)))
-                .on_hover_text(
-                    "Look the game up online by the name (and platform) above. What it finds \
-                     replaces details looked up before; your own values stay. Nothing is \
-                     saved until Save.",
-                )
-                .clicked()
-            {
-                d.start_lookup(st, game, None);
-            }
-            // Right to left: the status text, then "Settings…", then the spinner.
-            if let Some((text, bad, settings)) = d.lookup_status() {
-                let col = if bad { pal.danger } else { pal.dim };
-                ui.add(egui::Label::new(RichText::new(text).size(12.5).color(col)).truncate());
-                if settings && ui.link("Settings…").clicked() {
-                    out = Some(EditOutcome::OpenSettings);
-                }
-                if d.lookup_busy() {
-                    lazy_spinner(ui, 14.0, pal.accent);
-                }
-            }
-        });
     });
-    (save, out)
+    if f.cancel {
+        out = Some(EditOutcome::Close);
+    }
+    (f.primary, out)
 }
 
 #[cfg(test)]

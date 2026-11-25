@@ -8,7 +8,7 @@ mod browse;
 pub(crate) mod themes;
 
 use super::add::{Pick, PickKind};
-use super::dialogs::{hint_text, modal, plain_button, primary_button};
+use super::dialogs::{Buttons, body_height, button_row, footer, hint_text, modal};
 use super::{DesktopUi, Pal};
 use crate::addons::{AddonInfo, AddonKind, SettingField, SettingKind};
 use crate::app::AppState;
@@ -168,11 +168,7 @@ impl DesktopUi {
         let mut config_changed = poll_pick(st, d);
         let mut out = AddonsOutcome::Keep;
         let fam = self.fonts.bold.clone();
-        let max_h = if super::own_window::in_own_window(ctx) {
-            (ctx.content_rect().height() - 168.0).max(240.0)
-        } else {
-            (ctx.content_rect().height() - 220.0).clamp(300.0, 560.0)
-        };
+        let in_main = (ctx.content_rect().height() - 220.0).clamp(300.0, 560.0);
         let (_, close) = modal(ctx, "ls_addons", &pal, 940.0, |ui| {
             ui.horizontal(|ui| {
                 paint_icon(
@@ -201,11 +197,15 @@ impl DesktopUi {
             };
             hint_text(ui, intro, &pal);
             ui.add_space(12.0);
+            let max_h = body_height(ui, in_main);
             ui.horizontal_top(|ui| {
                 ui.allocate_ui_with_layout(vec2(190.0, max_h), Layout::top_down_justified(Align::Min), |ui| {
                     ui.set_width(190.0);
                     ui.set_min_height(max_h);
-                    tree(ui, st, d, &pal);
+                    // Scrolls in a short window.
+                    egui::ScrollArea::vertical().id_salt("ls_addons_tree").max_height(max_h).show(ui, |ui| {
+                        tree(ui, st, d, &pal);
+                    });
                 });
                 ui.add_space(14.0);
                 ui.vertical(|ui| {
@@ -241,12 +241,7 @@ impl DesktopUi {
                     }
                 });
             });
-            ui.add_space(10.0);
-            ui.separator();
-            ui.horizontal(|ui| {
-                if primary_button(ui, "Done", &pal, true).clicked() {
-                    out = AddonsOutcome::Close;
-                }
+            let f = footer(ui, &pal, Buttons::primary("Done", true), |ui| {
                 if d.library_changed {
                     let label = if st.scan.running { "Scanning…" } else { "Rescan now" };
                     if ui.add_enabled(!st.scan.running, egui::Button::new(label).min_size(vec2(100.0, 30.0))).clicked()
@@ -262,6 +257,9 @@ impl DesktopUi {
                     );
                 }
             });
+            if f.primary {
+                out = AddonsOutcome::Close;
+            }
         });
         themes::report_window(ctx, st, &mut d.themes, &pal);
         if config_changed {
@@ -813,20 +811,19 @@ fn enable_prompt(ui: &mut Ui, st: &mut AppState, d: &mut AddonsDlg, c: &Card, pa
                     .color(pal.dim),
             );
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                if primary_button(ui, "Switch on", pal, true).clicked() {
-                    if let Err(e) = st.db.kv_set(&ack_key(&c.id), &perms_fingerprint(c.info)) {
-                        log::warn!("remembering that add-on {} was allowed: {e:#}", c.id);
-                    }
-                    set_enabled(st, &c.id, true);
-                    ch = true;
-                    d.confirm_enable = None;
-                    mark_library_change_kind(d, m.kind);
+            let f = button_row(ui, pal, Buttons::primary("Switch on", true).cancel("Cancel"), |_| {});
+            if f.primary {
+                if let Err(e) = st.db.kv_set(&ack_key(&c.id), &perms_fingerprint(c.info)) {
+                    log::warn!("remembering that add-on {} was allowed: {e:#}", c.id);
                 }
-                if plain_button(ui, "Cancel").clicked() {
-                    d.confirm_enable = None;
-                }
-            });
+                set_enabled(st, &c.id, true);
+                ch = true;
+                d.confirm_enable = None;
+                mark_library_change_kind(d, m.kind);
+            }
+            if f.cancel {
+                d.confirm_enable = None;
+            }
         });
     ch
 }

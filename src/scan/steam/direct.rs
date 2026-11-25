@@ -221,7 +221,7 @@ pub fn direct_launch(ctx: &ScanContext, appid: u32) -> Result<DirectLaunch> {
         bail!("install dir {} is missing", install.display());
     }
     let wanted: HashSet<u32> = [appid].into();
-    let infos = appinfo::read(&root.path.join("appcache/appinfo.vdf"), &wanted).context("reading appinfo.vdf")?;
+    let infos = appinfo::read_root(&root.path, &wanted).context("reading Steam's app cache")?;
     let info = infos.get(&appid).ok_or_else(|| anyhow!("app {appid} not in Steam's app cache"))?;
 
     let compat = compat_tools(&root.path);

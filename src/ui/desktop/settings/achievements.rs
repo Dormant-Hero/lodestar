@@ -115,8 +115,9 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
     heading(ui, "Steam Web API key (optional)", pal);
     hint_text(
         ui,
-        "Only needed for games Steam hasn't synced to this computer yet. Your Steam profile's Game details \
-         must be public for it to work.",
+        "Shows achievements of games Steam hasn't synced to this computer yet, and lets Lodestar list every \
+         Steam game you own, including ones you never started on this PC. Your Steam profile's Game details \
+         may need to be public for it to work.",
         pal,
     );
     if crate::ui::desktop::dialogs::link_text(ui, "Get a key on steamcommunity.com", STEAM_KEY_URL, pal) {

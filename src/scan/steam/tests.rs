@@ -28,21 +28,22 @@ fn copy_tree(src: &Path, dst: &Path, home: &Path) {
     }
 }
 
-fn appinfo_file() -> Vec<u8> {
+fn appinfo_apps() -> Vec<(u32, Vec<N>)> {
     use testgen::common;
-    testgen::build(
-        vec![
-            (10, vec![common("Game Ten (appinfo name)", "Game", "windows,linux")]),
-            (30, vec![common("Thirty", "game", "windows")]),
-            (500, vec![common("Some Tool", "Tool", "linux")]),
-            (60, vec![common("Wallpaper App", "Application", "windows")]),
-            (61, vec![common("Coverless App", "Application", "windows")]),
-            (70, vec![common("Seventy", "Game", "windows")]),
-            (71, vec![common("Seventy DLC", "DLC", "windows")]),
-            (12, vec![N::O("common", vec![s("name", "Unrelated"), s("type", "game")])]),
-        ],
-        true,
-    )
+    vec![
+        (10, vec![common("Game Ten (appinfo name)", "Game", "windows,linux")]),
+        (30, vec![common("Thirty", "game", "windows")]),
+        (500, vec![common("Some Tool", "Tool", "linux")]),
+        (60, vec![common("Wallpaper App", "Application", "windows")]),
+        (61, vec![common("Coverless App", "Application", "windows")]),
+        (70, vec![common("Seventy", "Game", "windows")]),
+        (71, vec![common("Seventy DLC", "DLC", "windows")]),
+        (12, vec![N::O("common", vec![s("name", "Unrelated"), s("type", "game")])]),
+    ]
+}
+
+fn appinfo_file() -> Vec<u8> {
+    testgen::build(appinfo_apps(), true)
 }
 
 fn shortcuts_file() -> Vec<u8> {
@@ -111,6 +112,7 @@ impl Fx {
             data_dir: Default::default(),
             addons: Default::default(),
             emulation: crate::config::EmulationConfig::detect_nothing(),
+            steam_names: Default::default(),
         }
     }
 }
@@ -244,6 +246,7 @@ fn no_steam_is_ok_empty() {
         data_dir: Default::default(),
         addons: Default::default(),
         emulation: crate::config::EmulationConfig::detect_nothing(),
+        steam_names: Default::default(),
     };
     assert!(scan(&ctx).unwrap().is_empty());
     assert!(direct_launch(&ctx, 10).is_err());
@@ -448,4 +451,214 @@ fn unmounted_library_keeps_games_and_user_data() {
     let g = db.get(thirty.id).unwrap().unwrap();
     assert!(g.installed && g.favorite);
     assert_eq!(g.added, thirty.added);
+}
+
+#[test]
+fn the_account_that_owns_the_installed_games_is_used_not_just_the_most_recent_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Steam");
+    for account in ["111", "222"] {
+        std::fs::create_dir_all(root.join("userdata").join(account).join("config")).unwrap();
+    }
+    let base = 76_561_197_960_265_728u64;
+    let m = |appid: u32, owner: u64| Manifest {
+        appid,
+        name: format!("Game {appid}"),
+        installdir: String::new(),
+        state_flags: 4,
+        size_on_disk: None,
+        last_played: None,
+        last_owner: Some(base + owner),
+        library: root.clone(),
+    };
+    // Two of three installed games belong to account 222 (say, the main one; 111 logged in last).
+    let manifests = [m(1, 222), m(2, 222), m(3, 111)];
+    assert!(library_owner(&root, &manifests).unwrap().ends_with("userdata/222"));
+    // An owner without a userdata folder on this PC isn't chosen.
+    let elsewhere = [m(1, 333), m(2, 333), m(3, 111)];
+    assert!(library_owner(&root, &elsewhere).unwrap().ends_with("userdata/111"));
+    // No owners recorded: nothing to go on (the caller falls back to the most recent user).
+    let unknown: Vec<Manifest> = manifests
+        .iter()
+        .cloned()
+        .map(|mut x| {
+            x.last_owner = None;
+            x
+        })
+        .collect();
+    assert_eq!(library_owner(&root, &unknown), None);
+}
+
+#[test]
+fn a_manifest_reads_its_owner() {
+    let text = r#""AppState" { "appid" "10" "name" "X" "StateFlags" "4" "LastOwner" "76561197960266727" }"#;
+    let m = parse_manifest(text, Path::new("/lib")).unwrap();
+    assert_eq!(m.last_owner, Some(76_561_197_960_266_727));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Newer Steam clients: the sharded app cache, and apps no app cache describes
+// ---------------------------------------------------------------------------------------------
+
+/// The app cache as shard files (Steam beta, November 2026): the same games and details.
+#[test]
+fn sharded_app_cache_gives_the_same_library() {
+    let fx = Fx::new();
+    let before = scan(&fx.ctx(true)).unwrap();
+    std::fs::remove_file(fx.root().join("appcache/appinfo.vdf")).unwrap();
+    testgen::write_shards(&fx.root().join("appcache/appinfo"), appinfo_apps());
+    let after = scan(&fx.ctx(true)).unwrap();
+    assert_eq!(after, before);
+    let ten = by_id(&after, "10").unwrap();
+    assert_eq!(ten.meta.developer.as_deref(), Some("Dev Studio"));
+    assert_eq!(ten.meta.genres, vec!["RPG", "Action"]);
+    assert_eq!(by_id(&after, "70").unwrap().name, "Seventy");
+    assert!(by_id(&after, "71").is_none());
+}
+
+const MORE_APPS: &str = r#""UserLocalConfigStore"
+{
+	"Software" { "Valve" { "Steam" { "apps" {
+		"10" { "Playtime" "125" }
+		"30" { "Playtime" "2" }
+		"70" { "LastPlayed" "1600000000" "Playtime" "600" }
+		"71" { "Playtime" "1" }
+		"80" { "Playtime" "5" }
+		"81" { "Playtime" "0" }
+		"82" { "Playtime" "0" }
+		"83" { "Playtime" "0" }
+		"84" { "Playtime" "0" }
+		"85" { "Playtime" "0" }
+		"1493710" { "Playtime" "0" }
+	} } } }
+}
+"#;
+
+/// A home whose Steam has no app cache Lodestar can read, with the other name sources.
+fn no_appinfo_fixture() -> (Fx, tempfile::TempDir) {
+    use super::names::*;
+    let fx = Fx::new();
+    std::fs::remove_file(fx.root().join("appcache/appinfo.vdf")).unwrap();
+    std::fs::write(fx.root().join("userdata/12345/config/localconfig.vdf"), MORE_APPS).unwrap();
+    // Steam's desktop shortcuts.
+    let apps = fx.home.join(".local/share/applications");
+    std::fs::create_dir_all(&apps).unwrap();
+    let entry = |file: &str, name: &str, id: u32| {
+        std::fs::write(
+            apps.join(file),
+            format!("[Desktop Entry]\nName={name}\nExec=steam steam://rungameid/{id}\nType=Application\n"),
+        )
+        .unwrap();
+    };
+    entry("Seventy.desktop", "Seventy", 70);
+    entry("OST.desktop", "Eighty-Three Original Soundtrack", 83);
+    // The background job's caches.
+    let cache = tempfile::tempdir().unwrap();
+    let now = now();
+    let store = |name: Option<&str>, kind: Option<&str>| StoreName {
+        name: name.map(str::to_string),
+        kind: kind.map(str::to_string),
+        checked: now - 60,
+    };
+    let mut names = NameCache::default();
+    names.apps.insert(71, store(Some("Seventy DLC"), Some("dlc")));
+    names.apps.insert(80, store(Some("Eighty"), Some("game")));
+    names.apps.insert(81, store(None, None)); // the store doesn't know it (a tool / server)
+    names.apps.insert(84, store(None, None));
+    names.apps.get_mut(&84).unwrap().checked = now - RECHECK_SECS - 1; // … but asked long ago
+    names.apps.insert(85, store(Some("Eighty-Five Demo"), Some("demo")));
+    save_names(cache.path(), &names).unwrap();
+    let mut owned = OwnedCache::default();
+    owned.accounts.insert(
+        12345,
+        OwnedList {
+            fetched: now,
+            games: vec![
+                OwnedGame { appid: 10, name: "Game Ten".into(), playtime_mins: 1, last_played: None },
+                OwnedGame { appid: 70, name: "Seventy (owned)".into(), playtime_mins: 1, last_played: None },
+                OwnedGame { appid: 90, name: "Ninety".into(), playtime_mins: 30, last_played: Some(1_650_000_000) },
+            ],
+        },
+    );
+    // Another account's list is not this library's.
+    owned.accounts.insert(
+        999,
+        OwnedList { fetched: now, games: vec![OwnedGame { appid: 95, name: "Not Mine".into(), ..Default::default() }] },
+    );
+    save_owned(cache.path(), &owned).unwrap();
+    (fx, cache)
+}
+
+fn ctx_with_cache(fx: &Fx, cache: &Path) -> ScanContext {
+    ScanContext { steam_names: names::Shared::new(cache.to_path_buf()), ..fx.ctx(true) }
+}
+
+#[test]
+fn without_app_cache_names_come_from_shortcuts_and_caches() {
+    let (fx, cache) = no_appinfo_fixture();
+    let ctx = ctx_with_cache(&fx, cache.path());
+    let games = scan(&ctx).unwrap();
+    let ids: Vec<&str> = games.iter().map(|g| g.source_id.as_str()).collect();
+
+    // Installed games as always (names from their manifests).
+    assert!(by_id(&games, "10").unwrap().installed);
+    // From Steam's desktop shortcut, with the account's playtime.
+    let s70 = by_id(&games, "70").unwrap();
+    assert_eq!(s70.name, "Seventy");
+    assert!(!s70.installed);
+    assert_eq!(s70.playtime_secs, Some(36_000));
+    assert_eq!(s70.launch, Some(LaunchSpec::Steam { appid: 70 }));
+    // From the store name cache.
+    assert_eq!(by_id(&games, "80").unwrap().name, "Eighty");
+    // Owned but never started here: from the owned-games list, with Steam's playtime.
+    let s90 = by_id(&games, "90").unwrap();
+    assert_eq!(s90.name, "Ninety");
+    assert!(!s90.installed);
+    assert_eq!(s90.playtime_secs, Some(1800));
+    assert_eq!(s90.last_played, Some(1_650_000_000));
+    // Left out: DLC and demo by store type, a soundtrack by name, apps the store doesn't
+    // know, a tool id, apps nobody names yet, another account's games.
+    for gone in ["71", "85", "83", "81", "1493710", "82", "84", "95"] {
+        assert!(!ids.contains(&gone), "{gone}: {ids:?}");
+    }
+    // No game twice (installed, the account's list and the owned list overlap).
+    let unique: HashSet<&str> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+    // What the background job should ask the store about: unnamed, or not known a week ago.
+    assert_eq!(ctx.steam_names.needs.lock().names, [82, 84].into());
+}
+
+#[test]
+fn without_app_cache_or_caches_only_named_games_show() {
+    let (fx, _cache) = no_appinfo_fixture();
+    let ctx = fx.ctx(true); // no cache folder at all
+    let games = scan(&ctx).unwrap();
+    let ids: Vec<&str> = games.iter().map(|g| g.source_id.as_str()).collect();
+    assert!(ids.contains(&"70"), "named by its desktop shortcut: {ids:?}");
+    for gone in ["80", "90", "71", "83"] {
+        assert!(!ids.contains(&gone), "{gone}: {ids:?}");
+    }
+    assert_eq!(ctx.steam_names.needs.lock().names, [71, 80, 81, 82, 84, 85].into());
+    // Owned games are only looked at with "include not installed".
+    let ctx = ScanContext { config: ScanConfig { include_uninstalled: false, ..ScanConfig::default() }, ..ctx };
+    let games = scan(&ctx).unwrap();
+    assert!(games.iter().all(|g| g.installed || g.source_id == "40"), "{games:?}");
+    assert!(ctx.steam_names.needs.lock().names.is_empty());
+}
+
+/// With an app cache, the apps it describes are decided by it exactly as before; the caches
+/// only add what it doesn't know.
+#[test]
+fn app_cache_decides_what_it_knows() {
+    let (fx, cache) = no_appinfo_fixture();
+    std::fs::write(fx.root().join("appcache/appinfo.vdf"), appinfo_file()).unwrap();
+    let mut names = names::load_names(cache.path());
+    names.apps.insert(71, names::StoreName { name: Some("Seventy DLC".into()), kind: Some("game".into()), checked: 1 });
+    names::save_names(cache.path(), &names).unwrap();
+    let games = scan(&ctx_with_cache(&fx, cache.path())).unwrap();
+    assert_eq!(by_id(&games, "70").unwrap().name, "Seventy");
+    assert_eq!(by_id(&games, "70").unwrap().platform.as_deref(), Some("windows"));
+    assert!(by_id(&games, "71").is_none(), "appinfo.vdf says DLC");
+    assert_eq!(by_id(&games, "80").unwrap().name, "Eighty");
+    assert_eq!(by_id(&games, "90").unwrap().name, "Ninety");
 }

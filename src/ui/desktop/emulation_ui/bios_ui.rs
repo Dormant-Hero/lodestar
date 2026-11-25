@@ -144,20 +144,16 @@ fn setup_confirm(ui: &mut Ui, c: &Catalog, info: &catalog::BiosInfo, home: &Path
             hint_text(ui, "RPCS3 opens its own window while it installs the firmware; close it when it's done.", pal);
         }
         ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            let go = if info.plan.len() == 1 { "Go" } else { "Set up" };
-            let go = match info.plan.as_slice() {
-                [bios::Step::Copy { .. }] => "Copy",
-                [bios::Step::SwitchFirmware { .. }] | [bios::Step::Ps3Firmware { .. }] => "Install",
-                _ => go,
-            };
-            if primary_button(ui, go, pal, true).clicked() {
-                out = Some(true);
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = Some(false);
-            }
-        });
+        let go = if info.plan.len() == 1 { "Go" } else { "Set up" };
+        let go = match info.plan.as_slice() {
+            [bios::Step::Copy { .. }] => "Copy",
+            [bios::Step::SwitchFirmware { .. }] | [bios::Step::Ps3Firmware { .. }] => "Install",
+            _ => go,
+        };
+        let f = button_row(ui, pal, Buttons::primary(go, true).cancel("Cancel"), |_| {});
+        if f.primary || f.cancel {
+            out = Some(f.primary);
+        }
     });
     out
 }
@@ -478,21 +474,23 @@ fn confirm_box(
             );
         }
         ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            if replace {
-                if primary_button(ui, "Replace", pal, true).clicked() {
-                    out = Some(Some(true));
-                }
-                if conflicts.len() < t.missing.len() && plain_button(ui, "Copy only the new ones").clicked() {
+        let f = button_row(
+            ui,
+            pal,
+            Buttons::primary(if replace { "Replace" } else { "Copy" }, true).cancel("Cancel"),
+            |ui| {
+                if replace && conflicts.len() < t.missing.len() && plain_button(ui, "Copy only the new ones").clicked()
+                {
                     out = Some(Some(false));
                 }
-            } else if primary_button(ui, "Copy", pal, true).clicked() {
-                out = Some(Some(false));
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = Some(None);
-            }
-        });
+            },
+        );
+        if f.primary {
+            out = Some(Some(replace));
+        }
+        if f.cancel {
+            out = Some(None);
+        }
     });
     out
 }
@@ -536,14 +534,15 @@ fn firmware_confirm(
             }
         }
         ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, if replace { "Replace" } else { "Install" }, pal, true).clicked() {
-                out = Some(true);
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = Some(false);
-            }
-        });
+        let f = button_row(
+            ui,
+            pal,
+            Buttons::primary(if replace { "Replace" } else { "Install" }, true).cancel("Cancel"),
+            |_| {},
+        );
+        if f.primary || f.cancel {
+            out = Some(f.primary);
+        }
     });
     out
 }

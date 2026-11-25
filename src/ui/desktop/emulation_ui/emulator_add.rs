@@ -146,24 +146,23 @@ pub(super) fn add_form(ui: &mut Ui, st: &mut AppState, p: &mut EmuPage, cat: Opt
     }
     let ready = f.program.is_some() && !f.name.trim().is_empty() && (!f.follows.is_empty() || !f.platforms.is_empty());
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        let why = if f.program.is_none() {
-            "Choose its program first"
-        } else if f.name.trim().is_empty() {
-            "Give it a name"
-        } else {
-            "Tick the consoles it runs"
-        };
-        if primary_button(ui, "Add emulator", pal, ready).on_disabled_hover_text(why).clicked() {
-            let found: Vec<String> = cat.map(|c| c.emus.iter().map(|e| e.emu.id.clone()).collect()).unwrap_or_default();
-            add_emulator(&mut st.config.emulation, f, &found);
-            ch = true;
-            close = true;
-        }
-        if plain_button(ui, "Cancel").clicked() {
-            close = true;
-        }
-    });
+    let why = if f.program.is_none() {
+        "Choose its program first"
+    } else if f.name.trim().is_empty() {
+        "Give it a name"
+    } else {
+        "Tick the consoles it runs"
+    };
+    let clicked =
+        button_row(ui, pal, Buttons::primary("Add emulator", ready).disabled_hint(why).cancel("Cancel"), |_| {});
+    if clicked.primary {
+        let found: Vec<String> = cat.map(|c| c.emus.iter().map(|e| e.emu.id.clone()).collect()).unwrap_or_default();
+        add_emulator(&mut st.config.emulation, f, &found);
+        ch = true;
+    }
+    if clicked.primary || clicked.cancel {
+        close = true;
+    }
     if close {
         p.add_emu = None;
     }

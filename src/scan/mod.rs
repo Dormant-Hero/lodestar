@@ -51,6 +51,9 @@ pub struct ScanContext {
     pub addons: crate::config::AddonsConfig,
     /// Emulation settings (emulators, ROM folders; for the emulation scanner and registry).
     pub emulation: crate::config::EmulationConfig,
+    /// Lodestar's cache of Steam app names / owned games, and what the Steam scanner found
+    /// missing (see scan/steam/names.rs).
+    pub steam_names: steam::names::Shared,
 }
 
 impl ScanContext {
@@ -74,6 +77,7 @@ impl ScanContext {
             data_dir: crate::config::Paths::detect().data_dir,
             addons: cfg.addons.clone(),
             emulation: cfg.emulation.clone(),
+            steam_names: steam::names::Shared::new(crate::config::Paths::detect().cache_dir),
         }
     }
 
@@ -105,6 +109,8 @@ pub struct ScanReport {
     pub per_source: Vec<(Source, SourceReport)>,
     pub duplicates_dropped: usize,
     pub elapsed: Duration,
+    /// Steam apps the scanner couldn't name (for the background name lookup).
+    pub steam_needs: steam::names::Needs,
 }
 
 type ScanFn = fn(&ScanContext) -> anyhow::Result<Vec<ScannedGame>>;
@@ -192,6 +198,7 @@ pub fn run_all(ctx: &ScanContext) -> ScanReport {
         report.duplicates_dropped += before - report.games.len();
     }
     report.elapsed = t0.elapsed();
+    report.steam_needs = ctx.steam_names.needs.lock().clone();
     report
 }
 

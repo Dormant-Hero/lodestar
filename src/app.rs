@@ -45,6 +45,15 @@ pub struct Toast {
     pub text: String,
     pub error: bool,
     pub until: Instant,
+    /// A button on the toast (desktop mode).
+    pub action: Option<ToastAction>,
+}
+
+/// What a toast's button does (`AppState::toast_action`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToastAction {
+    /// Lodestar's own update: "What's new" / Restart now (update_app.rs).
+    Update,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -80,6 +89,8 @@ enum BgMsg {
     ScanDone {
         report: ScanReport,
         added: usize,
+        /// A rescan of some libraries only (the others weren't scanned).
+        only: Option<Vec<Source>>,
     },
     /// The built-in scanners' games are merged; library add-ons (which may take up to their
     /// timeout) are still running. The UI reloads so new games show without waiting for them.
@@ -197,12 +208,16 @@ pub struct AppState {
     /// Games running while Lodestar comes and goes: adopting them, closing while one plays
     /// (running_app.rs).
     pub(crate) running: crate::running_app::RunningState,
+    /// Steam name / owned-games lookups after scans (steam_names_app.rs).
+    pub steam_names: crate::steam_names_app::SteamNamesState,
     /// Games kept out of the library as not games (exclude_app.rs).
     pub excl: crate::exclude_app::ExclState,
     /// The system tray, hiding the window, later starts of the GUI (tray_app.rs).
     pub(crate) shell: crate::tray_app::ShellState,
     /// RomM server: sync, test, downloads (romm_app.rs).
     pub romm: crate::romm_app::RommState,
+    /// Lodestar's own updates (update_app.rs).
+    pub update: crate::update_app::UpdateState,
 }
 
 /// After a game ends, only the Home button reaches Lodestar for this long.
@@ -434,7 +449,19 @@ impl AppState {
     // ----- library -----
 
     pub fn rescan(&mut self) {
-        self.romm_on_rescan();
+        self.rescan_only(None);
+    }
+
+    /// Rescan some libraries only (the Steam name lookup found names): the others keep their
+    /// games. Desktop entries should come along with a store, so its shortcuts dedupe.
+    pub(crate) fn rescan_sources(&mut self, sources: &[Source]) {
+        self.rescan_only(Some(sources.to_vec()));
+    }
+
+    fn rescan_only(&mut self, only: Option<Vec<Source>>) {
+        if only.is_none() {
+            self.romm_on_rescan();
+        }
         if self.scan.running {
             self.rescan_queued = true;
             return;
@@ -444,7 +471,14 @@ impl AppState {
         let tx = self.bg_tx.clone();
         let ctx = self.ctx.clone();
         let db_path = self.paths.db_file();
-        let scan_ctx = ScanContext::from_config(&self.config);
+        let mut scan_ctx = ScanContext::from_config(&self.config);
+        if let Some(keep) = &only {
+            for s in Source::ALL.iter().filter(|s| !keep.contains(s)) {
+                if !scan_ctx.config.disabled_sources.iter().any(|k| k == s.key()) {
+                    scan_ctx.config.disabled_sources.push(s.key().to_string());
+                }
+            }
+        }
         std::thread::Builder::new()
             .name("scan".into())
             .spawn(move || {
@@ -491,7 +525,7 @@ impl AppState {
                         report.elapsed,
                         report.duplicates_dropped
                     );
-                    Ok(BgMsg::ScanDone { report, added: stats.added })
+                    Ok(BgMsg::ScanDone { report, added: stats.added, only })
                 })()
                 .unwrap_or_else(|e| BgMsg::ScanFailed(format!("{e:#}")));
                 let _ = tx.send(msg);
@@ -589,7 +623,17 @@ impl AppState {
     }
 
     fn push_toast_for(&mut self, text: String, error: bool, shown: Duration) {
-        self.toasts.push(Toast { text, error, until: Instant::now() + shown });
+        self.toasts.push(Toast { text, error, until: Instant::now() + shown, action: None });
+        self.trim_toasts();
+    }
+
+    /// A toast with a button (`action`), shown for `shown`.
+    pub(crate) fn push_toast_with(&mut self, text: String, action: Option<ToastAction>, shown: Duration) {
+        self.toasts.push(Toast { text, error: false, until: Instant::now() + shown, action });
+        self.trim_toasts();
+    }
+
+    fn trim_toasts(&mut self) {
         if self.toasts.len() > 4 {
             self.toasts.remove(0);
         }
@@ -641,9 +685,11 @@ impl AppState {
         self.poll_store();
         self.poll_romm();
         self.poll_emulator_dirs();
+        self.poll_steam_names();
+        self.poll_updates();
         while let Ok(msg) = self.bg_rx.try_recv() {
             match msg {
-                BgMsg::ScanDone { report, added } => self.scan_done(&report, added),
+                BgMsg::ScanDone { report, added, only } => self.scan_done(&report, added, only),
                 BgMsg::ScanPartial { per_source, total, elapsed } => {
                     self.reload_library();
                     self.scan.addons_pending = true;
@@ -703,7 +749,7 @@ impl AppState {
     }
 
     /// A library scan finished: show the new library and start what follows a scan.
-    fn scan_done(&mut self, report: &ScanReport, added: usize) {
+    fn scan_done(&mut self, report: &ScanReport, added: usize, only: Option<Vec<Source>>) {
         self.scan.running = false;
         self.scan.addons_pending = false;
         let known = self
@@ -716,12 +762,36 @@ impl AppState {
         self.reload_library();
         // New rows that a "Not a game" rule keeps out don't count as new games.
         let added = if added == 0 { 0 } else { self.library.games.iter().filter(|g| !known.contains(&g.id)).count() };
-        self.scan.last = Some(ScanSummary {
+        let mut summary = ScanSummary {
             total: report.games.len(),
             added,
             per_source: report.per_source.iter().map(|(s, r)| (*s, r.found, r.error.clone())).collect(),
             elapsed: report.elapsed,
-        });
+        };
+        // One library rescanned: the other libraries' rows of the last full scan stay.
+        if only.is_some()
+            && let Some(old) = &self.scan.last
+        {
+            let mut rows = old.per_source.clone();
+            let mut total = old.total;
+            for row in &summary.per_source {
+                match rows.iter_mut().find(|r| r.0 == row.0) {
+                    Some(r) => {
+                        total = (total + row.1).saturating_sub(r.1);
+                        *r = row.clone();
+                    }
+                    None => {
+                        total += row.1;
+                        rows.push(row.clone());
+                    }
+                }
+            }
+            summary.total = total;
+            summary.per_source = rows;
+            summary.elapsed = old.elapsed;
+            summary.added += old.added;
+        }
+        self.scan.last = Some(summary);
         if added > 0 && self.scan_count > 0 {
             self.notify(format!("{added} new game{} found", if added == 1 { "" } else { "s" }));
         }
@@ -734,6 +804,7 @@ impl AppState {
         self.images.forget_failed();
         self.queue_metadata();
         self.auto_art_after_scan();
+        self.steam_names_after_scan(&report.steam_needs);
         self.run_queued_rescan();
     }
 
@@ -1006,12 +1077,14 @@ impl AppState {
             failed_launches: Default::default(),
             non_play_sessions: Default::default(),
             edit_bg: Default::default(),
+            steam_names: Default::default(),
             switch_prompt: None,
             switch: Default::default(),
             game_opts: Default::default(),
             running: Default::default(),
             shell: Default::default(),
             romm: Default::default(),
+            update: Default::default(),
             paths,
             config,
             db,

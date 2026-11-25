@@ -30,6 +30,7 @@ notices" below.
 | ROM identification database (`assets/emulation/romdb.bin`: game names, regions, years, serials and CRC checksums per console) | Converted from Playnite's emulation databases by `scripts/gen-romdb.py`. Playnite built them from the public DAT files of No-Intro, Redump, GameTDB and the libretro-database project. | Playnite: MIT (notice below). The DAT groups publish their lists freely; libretro-database is CC BY-SA 4.0. The DAT groups do not state redistribution terms for their lists in one place. |
 | Playnite's default Desktop and Fullscreen themes (`assets/playnite/default-theme.bin`: their resource dictionaries, derived styles and views, which imported Playnite themes inherit every file they don't ship from) | Playnite's open-source default themes (`Themes/Desktop/Default`, `Themes/Fullscreen/Default`), comments removed, compressed by `tools/gen-playnite-defaults.py` | MIT, Copyright (c) 2020 Josef Nemec (notice below) |
 | The "Top Bar" controller layout (`assets/themes/top-bar.toml`, called "Playnite Classic" before 0.16.3) | Lodestar's own drawing, arranged after Playnite's default Fullscreen theme (`Views/Main.xaml`, `Views/GameDetails.xaml`, `DerivedStyles/ListGameItemStyle.xaml`: bar heights, positions, focus look) | MIT, Copyright (c) 2020 Josef Nemec (notice below) |
+| Steam app cache format (how Steam's sharded `appcache/appinfo/appinfo_XX.vdf` files are laid out) | Lodestar's own reader, written from the format description in SteamDB's SteamAppInfo (its README and parser) | Facts only, no code copied. SteamAppInfo: MIT, Copyright (c) 2020 SteamDB (notice below). |
 | Emulator knowledge (where emulators are installed, how they start games, folder names of ROM collections) | Written for Lodestar from the emulators' own documentation, Flathub manifests, Playnite's emulator definitions and ES-DE's find rules | Facts only, no files copied. Playnite and ES-DE: MIT (notices below). |
 | BIOS / firmware list (file names, checksums and regions used to check BIOS files) | Collected for Lodestar from libretro's `System.dat` (libretro-database), DuckStation's and Batocera's BIOS lists and the emulators' documentation | Facts only, no files copied. libretro-database: CC BY-SA 4.0 |
 | Controller mappings (SDL_GameControllerDB) | Built in by the `gilrs` library | zlib licence (notice under "Extra notices") |
@@ -83,6 +84,20 @@ Copyright (c) 2014 Alec Lofquist
 (The MIT licence text is the one under "Licence texts" below.)
 ```
 
+### SteamAppInfo (SteamDB)
+
+Lodestar reads the sharded app cache of newer Steam clients following the format description in
+SteamDB's SteamAppInfo (https://github.com/xPaw/SteamAppInfo): facts only, no SteamAppInfo
+files are included.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2020 SteamDB
+
+(The MIT licence text is the one under "Licence texts" below.)
+```
+
 ### The Rust standard library
 
 Every Rust program contains parts of the Rust standard library: MIT OR Apache-2.0, Copyright
@@ -96,7 +111,8 @@ it. Their content belongs to them and their contributors.
 
 | Service | What Lodestar asks it | Site |
 | --- | --- | --- |
-| Steam store | game details, artwork | https://store.steampowered.com |
+| Steam store | game details, artwork, names of Steam games the Steam client's files don't name | https://store.steampowered.com |
+| Steam Web API (with your own key) | the list of Steam games you own | https://steamcommunity.com/dev |
 | SteamGridDB | artwork | https://www.steamgriddb.com |
 | IGDB (Twitch) | game details, artwork | https://www.igdb.com |
 | GOG | artwork | https://www.gog.com |

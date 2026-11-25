@@ -10,7 +10,7 @@
 
 use super::Pal;
 use super::add::{Pick, PickKind, short_path};
-use super::dialogs::{hint_text, modal, plain_button, primary_button};
+use super::dialogs::{Buttons, button_row, footer, hint_text, modal, plain_button, primary_button};
 use super::settings::SettingsDlg;
 use crate::app::AppState;
 use crate::emulation::bios::{BiosFile, BiosState, PackageKind};
@@ -932,8 +932,7 @@ fn flatpak_chooser(ctx: &egui::Context, st: &AppState, p: &mut EmuPage, filter: 
                         }
                     });
             });
-        ui.add_space(8.0);
-        if plain_button(ui, "Cancel").clicked() {
+        if footer(ui, pal, Buttons::default().cancel("Cancel"), |_| {}).cancel {
             out = Chooser::Cancel;
         }
     });
@@ -1126,15 +1125,13 @@ pub(super) fn allow_prompt(ctx: &egui::Context, st: &mut AppState, pal: &Pal) {
         if !path.is_empty() {
             hint_text(ui, &path, pal);
         }
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, "Allow and play", pal, true).clicked() {
-                answer = Some(true);
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                answer = Some(false);
-            }
-        });
+        let f = footer(ui, pal, Buttons::primary("Allow and play", true).cancel("Cancel"), |_| {});
+        if f.primary {
+            answer = Some(true);
+        }
+        if f.cancel {
+            answer = Some(false);
+        }
     });
     if close && answer.is_none() {
         answer = Some(false);

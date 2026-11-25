@@ -5,7 +5,7 @@
 
 use super::Pal;
 use super::add::{Pick, PickKind};
-use super::dialogs::{hint_text, link_text, modal, plain_button, primary_button};
+use super::dialogs::{Buttons, footer, hint_text, link_text, modal};
 use crate::app::AppState;
 use crate::model::GameId;
 use crate::ui::widgets::lazy_spinner;
@@ -330,21 +330,21 @@ pub(super) fn folder_prompt(ctx: &egui::Context, st: &mut AppState, pal: &Pal) {
         );
         ui.add_space(4.0);
         hint_text(ui, "Asked once; change it later in Settings → Libraries → RomM server → More options.", pal);
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, &format!("Use {shown}"), pal, !picking).clicked() {
-                answer = Some(Some(suggest.clone()));
-            }
+        let use_it = format!("Use {shown}");
+        let f = footer(ui, pal, Buttons::primary(&use_it, !picking).cancel("Cancel"), |ui| {
             if ui
                 .add_enabled(!picking, egui::Button::new("Choose another folder…").min_size(vec2(80.0, 30.0)))
                 .clicked()
             {
                 choose = true;
             }
-            if plain_button(ui, "Cancel").clicked() {
-                answer = Some(None);
-            }
         });
+        if f.primary {
+            answer = Some(Some(suggest.clone()));
+        }
+        if f.cancel {
+            answer = Some(None);
+        }
     });
     if choose {
         st.romm.ask = None;

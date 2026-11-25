@@ -92,6 +92,31 @@ pub trait Net: Send + Sync {
         let _ = headers;
         self.get(url, None, limit)
     }
+    /// GET one URL without following redirects, streaming a 200 body into `out` (at most
+    /// `limit` bytes, `progress` told the bytes so far) — big downloads (Lodestar's own update).
+    /// A redirect comes back with its `Location`. Transports without streaming (test fakes)
+    /// answer from [`Net::get`].
+    fn download(
+        &self,
+        url: &str,
+        out: &mut dyn std::io::Write,
+        limit: u64,
+        progress: &mut dyn FnMut(u64),
+    ) -> Result<Download, String> {
+        let r = self.get(url, None, limit)?;
+        if r.status == 200 {
+            out.write_all(&r.body).map_err(|e| format!("write: {e}"))?;
+            progress(r.body.len() as u64);
+        }
+        Ok(Download { status: r.status, location: None })
+    }
+}
+
+/// What [`Net::download`] got: the status, and where a redirect points.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Download {
+    pub status: u16,
+    pub location: Option<String>,
 }
 
 fn read_body(resp: &mut ureq::http::Response<ureq::Body>, limit: u64) -> Result<Vec<u8>, String> {
@@ -100,6 +125,9 @@ fn read_body(resp: &mut ureq::http::Response<ureq::Body>, limit: u64) -> Result<
 
 pub struct UreqNet {
     agent: ureq::Agent,
+    /// For [`Net::download`]: no redirects followed (the caller checks each hop), no overall
+    /// time limit (a big file on a slow line), but every read must make progress.
+    download_agent: std::sync::OnceLock<ureq::Agent>,
 }
 
 impl UreqNet {
@@ -111,7 +139,7 @@ impl UreqNet {
             .http_status_as_error(false)
             .max_redirects(5)
             .build();
-        UreqNet { agent: ureq::Agent::new_with_config(cfg) }
+        UreqNet { agent: ureq::Agent::new_with_config(cfg), download_agent: std::sync::OnceLock::new() }
     }
 }
 
@@ -140,6 +168,49 @@ impl Net for UreqNet {
         let headers = limit_headers(resp.headers());
         let body = if status == 200 { read_body(&mut resp, limit)? } else { Vec::new() };
         Ok(HttpResponse { status, body, headers })
+    }
+
+    fn download(
+        &self,
+        url: &str,
+        out: &mut dyn std::io::Write,
+        limit: u64,
+        progress: &mut dyn FnMut(u64),
+    ) -> Result<Download, String> {
+        check_allowed(url)?;
+        let agent = self.download_agent.get_or_init(|| {
+            let cfg = ureq::Agent::config_builder()
+                .timeout_connect(Some(Duration::from_secs(10)))
+                .timeout_recv_response(Some(Duration::from_secs(30)))
+                .timeout_per_read(Some(Duration::from_secs(30)))
+                .user_agent(USER_AGENT)
+                .http_status_as_error(false)
+                .max_redirects(0)
+                .build();
+            ureq::Agent::new_with_config(cfg)
+        });
+        let mut resp = agent.get(url).call().map_err(|e| e.to_string())?;
+        let status = resp.status().as_u16();
+        if (300..400).contains(&status) {
+            let location = resp.headers().get("location").and_then(|v| v.to_str().ok()).map(str::to_string);
+            return Ok(Download { status, location });
+        }
+        if status != 200 {
+            return Ok(Download { status, location: None });
+        }
+        let mut reader = resp.body_mut().with_config().limit(limit).reader();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut got = 0u64;
+        loop {
+            let n = std::io::Read::read(&mut reader, &mut buf).map_err(|e| e.to_string())?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n]).map_err(|e| format!("write: {e}"))?;
+            got += n as u64;
+            progress(got);
+        }
+        Ok(Download { status, location: None })
     }
 
     fn head(&self, url: &str) -> Result<u16, String> {

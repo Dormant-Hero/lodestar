@@ -25,7 +25,6 @@ pub(crate) enum PathTarget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Extra {
     None,
-    Paths(PathTarget),
     /// Extra .desktop folders and the ignore list.
     Desktop,
     /// "Manage add-ons…".
@@ -34,6 +33,8 @@ enum Extra {
     Emulation,
     /// RomM server: address, token, Test connection (romm_ui.rs).
     Romm,
+    /// Extra Steam libraries and the optional Steam Web API key.
+    Steam,
 }
 
 struct Row {
@@ -61,12 +62,7 @@ const GROUPS: &[Group] = &[
         title: "Stores",
         hint: None,
         rows: &[
-            row(
-                Source::Steam,
-                "Steam",
-                "Steam client libraries, owned games from its local data",
-                Extra::Paths(PathTarget::SteamRoots),
-            ),
+            row(Source::Steam, "Steam", "Steam client libraries, owned games from its local data", Extra::Steam),
             row(Source::Epic, "Epic Games", "Heroic, Legendary", Extra::None),
             row(Source::Gog, "GOG", "Heroic", Extra::None),
             row(Source::Amazon, "Amazon Games", "Heroic, nile", Extra::None),
@@ -383,8 +379,10 @@ fn expanded_row(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, extra: Extr
     let mut c = Changes::default();
     ui.spacing_mut().item_spacing.y = 4.0;
     match extra {
-        Extra::Paths(t) => {
-            c.scan |= paths_block(ui, st, d, t, pal);
+        Extra::Steam => {
+            c.scan |= paths_block(ui, st, d, PathTarget::SteamRoots, pal);
+            ui.add_space(8.0);
+            c.config |= steam_key_block(ui, st, pal);
         }
         Extra::Desktop => {
             c.scan |= paths_block(ui, st, d, PathTarget::DesktopDirs, pal);
@@ -421,6 +419,40 @@ fn expanded_row(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, extra: Extr
         Extra::None => {}
     }
     c
+}
+
+const STEAM_KEY_URL: &str = "https://steamcommunity.com/dev/apikey";
+
+/// The optional Steam Web API key (the same one as in Settings → Achievements).
+fn steam_key_block(ui: &mut Ui, st: &mut AppState, pal: &Pal) -> bool {
+    ui.label(RichText::new("Steam Web API key (optional)").size(13.0).strong().color(pal.text));
+    hint_text(
+        ui,
+        "Lets Lodestar list every Steam game you own, including ones you never started on this PC. \
+         Achievements use the same key.",
+        pal,
+    );
+    if super::dialogs::link_text(ui, "Get a key on steamcommunity.com", STEAM_KEY_URL, pal) {
+        st.open_url(STEAM_KEY_URL);
+    }
+    let w = (ui.available_width() - 200.0).clamp(160.0, 340.0);
+    let ch = super::sources_ui::value_field(
+        ui,
+        "Web API key",
+        &mut st.config.achievements.steam_web_api_key,
+        "optional",
+        Some(&mut false),
+        w,
+    );
+    let status = if st.steam_names.running {
+        Some("Asking Steam for your games…".to_string())
+    } else {
+        st.steam_names.status.clone()
+    };
+    if let Some(s) = status.filter(|_| crate::config::secret(&st.config.achievements.steam_web_api_key).is_some()) {
+        hint_text(ui, &s, pal);
+    }
+    ch
 }
 
 fn row_separator(ui: &mut Ui, pal: &Pal) {

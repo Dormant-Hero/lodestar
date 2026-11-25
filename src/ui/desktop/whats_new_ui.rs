@@ -4,7 +4,7 @@
 //! Saving never blocks the UI: the desktop's save dialog and the write run on a helper thread
 //! (like the file pickers in `add.rs`); the result comes back as a toast.
 
-use super::dialogs::{modal, plain_button, primary_button, title};
+use super::dialogs::{Buttons, footer, modal, plain_button, title};
 use super::{DesktopUi, Pal};
 use crate::app::AppState;
 use crate::ui::whats_new::export::Format;
@@ -190,11 +190,7 @@ fn whats_new_dialog(
                 whats_new::show(ui, CHANGELOG, pal.text, pal.dim, pal.accent);
             },
         );
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, "Close", pal, true).clicked() {
-                keep = false;
-            }
+        let f = footer(ui, pal, Buttons::primary("Close", true), |ui| {
             let menu = export_button(ui, pal, saving);
             if open_menu {
                 egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&menu));
@@ -220,6 +216,9 @@ fn whats_new_dialog(
                 }
             });
         });
+        if f.primary {
+            keep = false;
+        }
     });
     (keep && !close, export)
 }

@@ -357,6 +357,11 @@ pub struct Config {
     pub romm: RommConfig,
     /// Achievements on game pages (Settings → Achievements).
     pub achievements: AchievementsConfig,
+    /// Ask GitHub once a day whether a newer Lodestar is out (Settings → General → Updates).
+    pub check_updates: bool,
+    /// The release the user chose to skip ("Skip this version"): automatic checks don't announce
+    /// it; a newer one is announced again.
+    pub skipped_update: Option<String>,
 }
 
 /// Achievements (achievements/mod.rs). Keys are kept like the other secrets (the config file is
@@ -692,6 +697,8 @@ impl Default for Config {
             emulation: EmulationConfig::default(),
             romm: RommConfig::default(),
             achievements: AchievementsConfig::default(),
+            check_updates: true,
+            skipped_update: None,
         }
     }
 }

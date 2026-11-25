@@ -8,6 +8,9 @@ use crate::ui::widgets::mix;
 use egui::{Color32, Id, Key, RichText, Ui, vec2};
 use std::path::PathBuf;
 
+mod footer;
+pub(crate) use footer::{Buttons, body_height, button_row, footer};
+
 #[derive(Default)]
 pub(crate) struct Dialogs {
     pub launch: Option<LaunchDlg>,
@@ -28,6 +31,8 @@ pub(crate) struct Dialogs {
     pub credits: Option<super::credits::CreditsDlg>,
     /// "What's new" (the built-in changelog).
     pub whats_new: bool,
+    /// "What's new in <version>": Lodestar's own update (update_ui.rs).
+    pub update: bool,
     /// Changelog → Export… save dialog still running (kept when the changelog closes).
     pub changelog_save: Option<super::whats_new_ui::ChangelogSave>,
     /// Testing hook (`whatsnew-export:<path>`): write the changelog here, no dialog.
@@ -66,6 +71,7 @@ impl Dialogs {
             || self.remove.is_some()
             || self.remove_missing.is_some()
             || self.about
+            || self.update
             || self.credits.is_some()
             || self.settings.is_some()
             || self.art.is_some()
@@ -77,6 +83,9 @@ impl Dialogs {
             || self.viewer.is_some()
     }
 }
+
+/// Padding inside a dialog drawn over the main window.
+const MODAL_PAD: i8 = 20;
 
 /// Standard modal look: window fill, rounded, padded; `width` fixed. In the dialog's own window
 /// (own_window.rs) it fills that window instead (its full width) and closes the same ways.
@@ -94,7 +103,7 @@ pub(crate) fn modal<R>(
         .fill(pal.surface)
         .stroke(egui::Stroke::new(1.0, pal.border))
         .corner_radius(10)
-        .inner_margin(egui::Margin::same(20))
+        .inner_margin(egui::Margin::same(MODAL_PAD))
         .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: Color32::from_black_alpha(120) });
     let resp =
         egui::Modal::new(Id::unique(id)).frame(frame).backdrop_color(Color32::from_black_alpha(140)).show(ctx, |ui| {
@@ -416,8 +425,11 @@ impl DesktopUi {
             self.dlg.remove = None;
         }
         if self.dlg.about {
-            let (keep, credits) = about_dialog(ctx, st, &pal, &fam);
-            self.dlg.about = keep && !credits;
+            let (keep, credits, update) = about_dialog(ctx, st, &pal, &fam);
+            self.dlg.about = keep && !credits && !update;
+            if update {
+                st.update.show_notes = true;
+            }
             if credits {
                 self.dlg.credits = Some(super::credits::CreditsDlg::default());
             }
@@ -515,6 +527,13 @@ impl DesktopUi {
                 self.push(super::Action::Addons(section));
             }
         }
+        // Lodestar's own update (asked for by a toast, Settings or About): over everything else.
+        if std::mem::take(&mut st.update.show_notes) {
+            self.dlg.update = true;
+        }
+        if self.dlg.update && !super::update_ui::update_dialog(ctx, st, &pal, &fam) {
+            self.dlg.update = false;
+        }
         // Closed windows forgotten (sizes remembered); the main window's veil while one is open.
         self.own_end(ctx, st);
         // Last: it answers a Play click and sits on top of whatever is open.
@@ -535,27 +554,23 @@ fn prompt_dialog(ctx: &egui::Context, st: &mut AppState, pal: &Pal, fam: &egui::
         ui.label(RichText::new(&p.body).color(pal.text));
         ui.add_space(4.0);
         hint_text(ui, &p.hint, pal);
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            let r = primary_button(ui, p.primary, pal, true);
-            // Enter accepts, but not a held one (key repeat) from the Play that opened this.
-            let enter = ui.input(|i| {
-                i.events
-                    .iter()
-                    .any(|e| matches!(e, egui::Event::Key { key: Key::Enter, pressed: true, repeat: false, .. }))
-            });
-            if r.clicked() || enter {
-                answer = Some(PromptAnswer::Primary);
-            }
+        let f = footer(ui, pal, Buttons::primary(p.primary, true).cancel(p.cancel), |ui| {
             if let Some(alt) = p.alt
                 && plain_button(ui, alt).clicked()
             {
                 answer = Some(PromptAnswer::Alt);
             }
-            if plain_button(ui, p.cancel).clicked() {
-                answer = Some(PromptAnswer::Cancel);
-            }
         });
+        // Enter accepts, but not a held one (key repeat) from the Play that opened this.
+        let enter = ui.input(|i| {
+            i.events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Enter, pressed: true, repeat: false, .. }))
+        });
+        if f.primary || enter {
+            answer = Some(PromptAnswer::Primary);
+        }
+        if f.cancel {
+            answer = Some(PromptAnswer::Cancel);
+        }
     });
     if close && answer.is_none() {
         answer = Some(PromptAnswer::Cancel);
@@ -620,7 +635,6 @@ fn launch_dialog(ctx: &egui::Context, st: &mut AppState, d: &mut LaunchDlg, pal:
                 }
             })
             .inner;
-        ui.add_space(14.0);
         keep = launch_buttons(ui, st, d, pal, ok);
     });
     keep && !close
@@ -765,34 +779,33 @@ fn custom_command(ui: &mut Ui, st: &AppState, d: &mut LaunchDlg, pal: &Pal) {
     });
 }
 
-/// Save (when the preview is `ok`), Cancel and Clear. Returns whether the dialog stays open.
+/// Clear, then Cancel and Save (when the preview is `ok`). Returns whether the dialog stays open.
 fn launch_buttons(ui: &mut Ui, st: &mut AppState, d: &mut LaunchDlg, pal: &Pal, ok: bool) -> bool {
     let mut keep = true;
-    ui.horizontal(|ui| {
-        if primary_button(ui, "Save", pal, ok).on_disabled_hover_text("Fix the problem above to save").clicked() {
-            st.set_launch_override(d.id, Some(d.current()));
-            save_game_options(st, d.id, d.opts.clone());
+    let buttons = Buttons::primary("Save", ok).cancel("Cancel").disabled_hint("Fix the problem above to save");
+    let f = footer(ui, pal, buttons, |ui| {
+        let can_clear = d.had_override || d.had_opts || !d.current().is_empty() || !d.opts.is_default();
+        if ui
+            .add_enabled(
+                can_clear,
+                egui::Button::new(RichText::new("Clear").color(pal.danger)).min_size(vec2(80.0, 30.0)),
+            )
+            .on_hover_text("Remove Lodestar's launch customisation for this game (options and text)")
+            .clicked()
+        {
+            st.set_launch_override(d.id, None);
+            save_game_options(st, d.id, Default::default());
             keep = false;
         }
-        if plain_button(ui, "Cancel").clicked() {
-            keep = false;
-        }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let can_clear = d.had_override || d.had_opts || !d.current().is_empty() || !d.opts.is_default();
-            if ui
-                .add_enabled(
-                    can_clear,
-                    egui::Button::new(RichText::new("Clear").color(pal.danger)).min_size(vec2(80.0, 30.0)),
-                )
-                .on_hover_text("Remove Lodestar's launch customisation for this game (options and text)")
-                .clicked()
-            {
-                st.set_launch_override(d.id, None);
-                save_game_options(st, d.id, Default::default());
-                keep = false;
-            }
-        });
     });
+    if f.primary {
+        st.set_launch_override(d.id, Some(d.current()));
+        save_game_options(st, d.id, d.opts.clone());
+        keep = false;
+    }
+    if f.cancel {
+        keep = false;
+    }
     keep
 }
 
@@ -889,25 +902,21 @@ fn rename_dialog(ctx: &egui::Context, st: &mut AppState, d: &mut RenameDlg, pal:
             state.store(ui.ctx(), r.id);
         }
         let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        ui.add_space(12.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, "Save", pal, !d.text.trim().is_empty()).clicked()
-                || (enter && !d.text.trim().is_empty())
-            {
-                let name = if d.text.trim() == d.original { None } else { Some(d.text.clone()) };
-                st.rename(d.id, name);
+        let valid = !d.text.trim().is_empty();
+        let f = footer(ui, pal, Buttons::primary("Save", valid).cancel("Cancel"), |ui| {
+            if ui.button("Reset to original").clicked() {
+                st.rename(d.id, None);
                 keep = false;
             }
-            if plain_button(ui, "Cancel").clicked() {
-                keep = false;
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Reset to original").clicked() {
-                    st.rename(d.id, None);
-                    keep = false;
-                }
-            });
         });
+        if f.primary || (enter && valid) {
+            let name = if d.text.trim() == d.original { None } else { Some(d.text.clone()) };
+            st.rename(d.id, name);
+            keep = false;
+        }
+        if f.cancel {
+            keep = false;
+        }
     });
     keep && !close
 }
@@ -1025,19 +1034,17 @@ fn tags_dialog(ctx: &egui::Context, st: &mut AppState, d: &mut TagsDlg, pal: &Pa
             d.tags.push(t);
             d.input.clear();
         }
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, "Save", pal, true).clicked() || save_on_enter {
-                if !d.input.trim().is_empty() {
-                    d.add_input();
-                }
-                st.set_tags(d.id, d.tags.clone());
-                keep = false;
+        let f = footer(ui, pal, Buttons::primary("Save", true).cancel("Cancel"), |_| {});
+        if f.primary || save_on_enter {
+            if !d.input.trim().is_empty() {
+                d.add_input();
             }
-            if plain_button(ui, "Cancel").clicked() {
-                keep = false;
-            }
-        });
+            st.set_tags(d.id, d.tags.clone());
+            keep = false;
+        }
+        if f.cancel {
+            keep = false;
+        }
     });
     keep && !close
 }
@@ -1061,31 +1068,35 @@ fn remove_dialog(ctx: &egui::Context, st: &mut AppState, id: GameId, pal: &Pal, 
             )
         };
         ui.label(RichText::new(text).color(pal.text));
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            let b = egui::Button::new(RichText::new("Remove").color(Color32::WHITE).strong())
-                .fill(pal.danger)
-                .min_size(vec2(90.0, 30.0));
-            if ui.add(b).clicked() {
-                st.remove_game(id);
-                keep = false;
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                keep = false;
-            }
-        });
+        let f = footer(ui, pal, Buttons::primary("Remove", true).danger().cancel("Cancel"), |_| {});
+        if f.primary {
+            st.remove_game(id);
+        }
+        if f.primary || f.cancel {
+            keep = false;
+        }
     });
     keep && !close
 }
 
-/// (keep it open, Credits clicked).
-fn about_dialog(ctx: &egui::Context, st: &AppState, pal: &Pal, fam: &egui::FontFamily) -> (bool, bool) {
+/// (keep it open, Credits clicked, the update line clicked).
+fn about_dialog(ctx: &egui::Context, st: &AppState, pal: &Pal, fam: &egui::FontFamily) -> (bool, bool, bool) {
     let mut keep = true;
     let mut credits = false;
+    let mut update = false;
     let (_, close) = modal(ctx, "ls_about_dlg", pal, 400.0, |ui| {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Lodestar").family(fam.clone()).size(26.0).strong().color(pal.text));
             ui.label(RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION"))).color(pal.dim));
+            if let Some(text) = super::update_ui::about_line(&st.update) {
+                ui.add_space(4.0);
+                if ui
+                    .add(egui::Button::new(RichText::new(text).color(pal.accent_text).strong()).fill(pal.accent))
+                    .clicked()
+                {
+                    update = true;
+                }
+            }
             ui.add_space(8.0);
             ui.label(RichText::new("A fast game library and controller-mode frontend for Linux.").color(pal.text));
             ui.add_space(6.0);
@@ -1094,22 +1105,17 @@ fn about_dialog(ctx: &egui::Context, st: &AppState, pal: &Pal, fam: &egui::FontF
             );
             ui.label(RichText::new(format!("Config: {}", st.paths.config_file().display())).size(11.5).color(pal.dim));
             ui.label(RichText::new(format!("Library: {}", st.paths.db_file().display())).size(11.5).color(pal.dim));
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                // Centre the two buttons (vertical_centered only centres single widgets).
-                let w = 80.0 * 2.0 + ui.spacing().item_spacing.x;
-                ui.add_space(((ui.available_width() - w) / 2.0).max(0.0));
-                if plain_button(ui, "Credits").on_hover_text("Thanks, data sources and open-source licences").clicked()
-                {
-                    credits = true;
-                }
-                if plain_button(ui, "Close").clicked() {
-                    keep = false;
-                }
-            });
         });
+        let f = footer(ui, pal, Buttons::default().cancel("Close"), |ui| {
+            if plain_button(ui, "Credits").on_hover_text("Thanks, data sources and open-source licences").clicked() {
+                credits = true;
+            }
+        });
+        if f.cancel {
+            keep = false;
+        }
     });
-    (keep && !close, credits)
+    (keep && !close, credits, update)
 }
 
 #[cfg(test)]

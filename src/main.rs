@@ -40,6 +40,8 @@ mod romm_app;
 mod running_app;
 mod scan;
 mod search;
+mod steam_names;
+mod steam_names_app;
 mod store_app;
 #[cfg(test)]
 mod test_support;
@@ -47,6 +49,8 @@ mod theme;
 mod tray;
 mod tray_app;
 mod ui;
+mod update;
+mod update_app;
 mod winctl;
 
 use app::{LaunchOptions, Mode};
@@ -169,6 +173,13 @@ fn run_window(paths: Paths, config: Config, opts: LaunchOptions, size: Option<[f
     );
     // A library add-on may still be answering a scan: it doesn't outlive the app.
     addons::run::kill_running();
+    // "Restart now" after an update: this process becomes the new AppImage.
+    if result.is_ok()
+        && let Some(appimage) = update::take_restart()
+    {
+        let e = update::exec_restart(&appimage);
+        eprintln!("lodestar: couldn't start the updated Lodestar ({}): {e}", appimage.display());
+    }
     if let Err(e) = result {
         eprintln!("lodestar: {e}");
         std::process::exit(1);

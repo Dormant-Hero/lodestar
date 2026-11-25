@@ -98,6 +98,14 @@ pub enum Act {
     CloseMenu,
     /// Quick menu → About Lodestar (credits.rs).
     Credits,
+    /// Quick menu → Update Lodestar (update.rs): its page, Update now, cancel, restart.
+    Update,
+    /// Quick menu → Check for updates (no newer version known yet).
+    CheckUpdates,
+    UpdateSkip,
+    UpdateNow,
+    UpdateCancel,
+    UpdateRestart,
     /// A text block of a reading page (About): selectable so ↑ / ↓ scroll, does nothing.
     Read,
     /// Copy this text to the clipboard (an install command).
@@ -208,6 +216,8 @@ pub enum MenuKind {
     Settings,
     /// About Lodestar (credits).
     Credits,
+    /// "What's new in <version>": Lodestar's own update.
+    Update,
     /// A confirmation (power items).
     Confirm,
     InGame,

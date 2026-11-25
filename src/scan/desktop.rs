@@ -668,6 +668,7 @@ pub(crate) mod test_support {
             data_dir: Default::default(),
             addons: Default::default(),
             emulation: crate::config::EmulationConfig::detect_nothing(),
+            steam_names: Default::default(),
         }
     }
 }

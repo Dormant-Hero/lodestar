@@ -8,7 +8,7 @@
 
 use super::Pal;
 use super::add::background;
-use super::dialogs::{hint_text, modal, plain_button, primary_button, title};
+use super::dialogs::{Buttons, footer, hint_text, modal, title};
 use crate::app::AppState;
 use crate::cloud::{self, Entry, Found, Open, Service};
 use crate::model::GameId;
@@ -410,32 +410,30 @@ pub(crate) fn cloud_dialog(
                 });
         }
 
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            let blocked = !dups.is_empty() && !d.allow_dup;
-            let ok = !d.name.trim().is_empty() && d.url().is_some() && !blocked;
-            let r = primary_button(ui, "Add", pal, ok).on_disabled_hover_text(if blocked {
-                "Choose what to do about the copy above"
-            } else if svc == Service::Other {
-                "Fill in the name and the web address"
-            } else {
-                "Fill in the name"
-            });
-            if r.clicked() {
-                let link = Some(d.link.trim().to_string()).filter(|l| !l.is_empty());
-                match st.add_cloud_game(cloud::NewCloudGame { name: d.name.trim().to_string(), entry: d.entry(), link })
-                {
-                    Some(id) => out = CloudOutcome::Added(id),
-                    None => d.error = Some("Couldn't add the game".into()),
-                }
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = CloudOutcome::Close;
-            }
+        let blocked = !dups.is_empty() && !d.allow_dup;
+        let ok = !d.name.trim().is_empty() && d.url().is_some() && !blocked;
+        let buttons = Buttons::primary("Add", ok).cancel("Cancel").disabled_hint(if blocked {
+            "Choose what to do about the copy above"
+        } else if svc == Service::Other {
+            "Fill in the name and the web address"
+        } else {
+            "Fill in the name"
+        });
+        let f = footer(ui, pal, buttons, |ui| {
             if let Some(e) = &d.error {
                 ui.label(RichText::new(e).size(12.5).color(pal.danger));
             }
         });
+        if f.primary {
+            let link = Some(d.link.trim().to_string()).filter(|l| !l.is_empty());
+            match st.add_cloud_game(cloud::NewCloudGame { name: d.name.trim().to_string(), entry: d.entry(), link }) {
+                Some(id) => out = CloudOutcome::Added(id),
+                None => d.error = Some("Couldn't add the game".into()),
+            }
+        }
+        if f.cancel {
+            out = CloudOutcome::Close;
+        }
     });
     d.take_link();
     if close && matches!(out, CloudOutcome::Keep) {

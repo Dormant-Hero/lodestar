@@ -1,7 +1,7 @@
 //! Not-a-game cleanup and bulk edits on a multi-selection: the "…and everything
 //! named like this" pattern dialog and "Game options for N games…".
 
-use super::dialogs::{hint_text, modal, plain_button, primary_button, title};
+use super::dialogs::{Buttons, footer, hint_text, modal, title};
 use super::{DesktopUi, Pal, games_word};
 use crate::app::AppState;
 use crate::config::ExcludeRule;
@@ -188,23 +188,21 @@ fn exclude_like_dialog(
         if usable && !this {
             ui.label(RichText::new(format!("“{name}” itself isn't matched by this.")).size(12.0).color(pal.fav));
         }
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            let label = if n > 0 {
-                format!("Remove {}", if n == 1 { "1 entry".into() } else { format!("{n} entries") })
-            } else {
-                "Add rule".into()
-            };
-            let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-            if (primary_button(ui, &label, pal, usable).clicked() || (enter && usable && !broad)) && out.is_none() {
-                out = Some(true);
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = Some(false);
-            }
-        });
-        ui.add_space(2.0);
+        ui.add_space(6.0);
         hint_text(ui, "Rules are listed in Settings → Libraries → Hidden & excluded.", pal);
+        let label = if n > 0 {
+            format!("Remove {}", if n == 1 { "1 entry".into() } else { format!("{n} entries") })
+        } else {
+            "Add rule".into()
+        };
+        let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        let f = footer(ui, pal, Buttons::primary(&label, usable).cancel("Cancel"), |_| {});
+        if f.primary || (enter && usable && !broad) {
+            out = Some(true);
+        }
+        if f.cancel {
+            out = Some(false);
+        }
     });
     if close && out.is_none() {
         out = Some(false);
@@ -266,8 +264,6 @@ fn bulk_options_dialog(
             },
         );
         ui.add_space(8.0);
-        ui.separator();
-        ui.add_space(4.0);
         if d.patch.is_empty() {
             hint_text(ui, "Nothing changed yet.", pal);
         } else {
@@ -276,21 +272,18 @@ fn bulk_options_dialog(
                     .wrap(),
             );
         }
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            if primary_button(ui, "Save", pal, !d.patch.is_empty()).clicked() {
-                let changed = st.apply_game_options_patch(&d.ids, &d.patch);
-                if changed == 0 {
-                    st.notify("Nothing to change: the games already had these options");
-                } else {
-                    st.notify(format!("Game options saved for {}", games_word(changed)));
-                }
-                keep = false;
+        let f = footer(ui, pal, Buttons::primary("Save", !d.patch.is_empty()).cancel("Cancel"), |_| {});
+        if f.primary {
+            let changed = st.apply_game_options_patch(&d.ids, &d.patch);
+            if changed == 0 {
+                st.notify("Nothing to change: the games already had these options");
+            } else {
+                st.notify(format!("Game options saved for {}", games_word(changed)));
             }
-            if plain_button(ui, "Cancel").clicked() {
-                keep = false;
-            }
-        });
+        }
+        if f.primary || f.cancel {
+            keep = false;
+        }
     });
     keep && !close
 }

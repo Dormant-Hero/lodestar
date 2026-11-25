@@ -177,6 +177,25 @@ pub(crate) fn in_own_window(ctx: &egui::Context) -> bool {
     ctx.viewport_id() != ViewportId::ROOT
 }
 
+/// Where a dialog filling its window draws, and that drawing's layer (a confirmation over it
+/// inside the window is on another layer).
+#[derive(Clone, Copy)]
+struct Filled {
+    layer: egui::LayerId,
+    body: egui::Rect,
+}
+
+fn filled_key(ctx: &egui::Context) -> Id {
+    Id::unique("ls_own_window_filled").with(ctx.viewport_id())
+}
+
+/// The content area of the dialog filling this window, when `ui` draws that dialog: its footer
+/// goes at the bottom of it (dialogs/footer.rs).
+pub(crate) fn filled_body(ui: &egui::Ui) -> Option<egui::Rect> {
+    let f = ui.data(|d| d.get_temp::<Filled>(filled_key(ui.ctx())))?;
+    (f.layer == ui.layer_id()).then_some(f.body)
+}
+
 /// The dialog's content filling its window: same padding as the modal, the window's full width,
 /// nothing behind it. Closes like the modal: Esc (when nothing sits on top inside the window)
 /// or the window's close button.
@@ -195,14 +214,19 @@ pub(crate) fn fill_window<R>(
         .show(ctx, |ui| {
             ui.painter().rect_filled(rect, 0.0, pal.surface);
             let body = rect.shrink(20.0);
-            ui.scope_builder(
-                egui::UiBuilder::new().max_rect(body).layout(egui::Layout::top_down(egui::Align::Min)),
-                |ui| {
-                    ui.set_width(body.width());
-                    add(ui)
-                },
-            )
-            .inner
+            let key = filled_key(ctx);
+            ui.data_mut(|d| d.insert_temp(key, Filled { layer: ui.layer_id(), body }));
+            let r = ui
+                .scope_builder(
+                    egui::UiBuilder::new().max_rect(body).layout(egui::Layout::top_down(egui::Align::Min)),
+                    |ui| {
+                        ui.set_width(body.width());
+                        add(ui)
+                    },
+                )
+                .inner;
+            ui.data_mut(|d| d.remove::<Filled>(key));
+            r
         })
         .inner;
     let on_top = ctx.memory(|m| m.top_modal_layer().is_some()) || egui::Popup::is_any_open(ctx);
@@ -429,9 +453,8 @@ impl DesktopUi {
                     if in_own_window(ctx) { "Close it to go on here." } else { "Close it to use the library again." };
                 super::dialogs::hint_text(ui, hint, &pal);
                 ui.add_space(10.0);
-                if super::dialogs::primary_button(ui, "Show it", &pal, true).clicked() {
-                    show = true;
-                }
+                let buttons = super::dialogs::Buttons::primary("Show it", true);
+                show = super::dialogs::button_row(ui, &pal, buttons, |_| {}).primary;
             });
         // A click beside the card (or Esc in the main window) brings the window back too.
         if show || resp.should_close() {

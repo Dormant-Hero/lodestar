@@ -8,7 +8,7 @@
 //! `st.art_state`); downloads and searches run in the background and arrive through
 //! `st.art_state`. The native file picker runs on its own thread and is polled.
 
-use super::dialogs::{hint_text, modal, plain_button, primary_button, title};
+use super::dialogs::{Buttons, body_height, footer, hint_text, modal, title};
 use super::{DesktopUi, Pal};
 use crate::app::AppState;
 use crate::art::{ArtSlot, BulkOptions, Candidate, SourceInfo};
@@ -298,17 +298,14 @@ pub(crate) fn art_dialog(
     let screen = ctx.content_rect();
     let width = (screen.width() - 80.0).clamp(560.0, 900.0);
     // Short windows: the body scrolls instead of the dialog running off the screen.
-    let body_h = (screen.height() - if super::own_window::in_own_window(ctx) { 140.0 } else { 200.0 }).max(200.0);
+    let in_main = (screen.height() - 200.0).max(200.0);
     let (_, close) = modal(ctx, "ls_art_dlg", pal, width, |ui| {
         title(ui, "Edit artwork", Some(&d.name), pal, fam);
+        let body_h = body_height(ui, in_main);
         out = art_editor(ui, st, d, pal, fam, body_h);
-        ui.add_space(12.0);
-        // On the left, like every dialog's primary button.
-        ui.horizontal(|ui| {
-            if primary_button(ui, "Done", pal, true).clicked() {
-                out = ArtOutcome::Close;
-            }
-        });
+        if footer(ui, pal, Buttons::primary("Done", true), |_| {}).primary {
+            out = ArtOutcome::Close;
+        }
     });
     if d.debug_close && !d.debug_pick && d.debug_input.is_none() && !d.debug_reset && st.art_state.applying.is_empty() {
         out = ArtOutcome::Close;

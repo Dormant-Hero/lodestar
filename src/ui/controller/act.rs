@@ -251,6 +251,15 @@ impl ControllerUi {
                 self.menus.pop();
             }
             Act::Credits => self.open_credits(now),
+            Act::Update => self.open_update(st, now),
+            Act::CheckUpdates => st.check_updates_from_menu(),
+            Act::UpdateSkip => {
+                st.skip_update();
+                self.menus.pop();
+            }
+            Act::UpdateNow => st.start_update(),
+            Act::UpdateCancel => st.cancel_update(),
+            Act::UpdateRestart => st.restart_after_update(),
             Act::CopyText(t) => {
                 st.ctx().copy_text(t.clone());
                 st.notify("Copied. Paste it in a terminal.");

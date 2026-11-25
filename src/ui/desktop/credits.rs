@@ -2,7 +2,7 @@
 //! open-source libraries by licence and (folded away) every notice and licence text. The content
 //! comes from the embedded THIRD_PARTY_NOTICES.md (`crate::ui::credits`).
 
-use super::dialogs::{modal, plain_button, primary_button, title};
+use super::dialogs::{Buttons, footer, modal, plain_button, title};
 use super::{DesktopUi, Pal};
 use crate::app::AppState;
 use crate::ui::credits::{self as data, NOTICES};
@@ -41,16 +41,15 @@ impl DesktopUi {
                     ui.set_max_width(690.0);
                     body(ui, &pal, expand, &mut open_url);
                 });
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                if primary_button(ui, "Close", &pal, true).clicked() {
-                    keep = false;
-                }
+            let f = footer(ui, &pal, Buttons::primary("Close", true), |ui| {
                 if plain_button(ui, "Copy all").on_hover_text("Every notice and licence text, as plain text").clicked()
                 {
                     copy = true;
                 }
             });
+            if f.primary {
+                keep = false;
+            }
         });
         if copy {
             ctx.copy_text(data::readable().to_string());

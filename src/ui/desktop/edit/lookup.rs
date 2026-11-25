@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::metadata::{Candidate, FetchResult, Pick};
+use crate::ui::desktop::dialogs::plain_button;
 
 /// Where the dialog's lookup is.
 #[derive(Clone, Debug, Default)]
@@ -246,17 +247,14 @@ pub(super) fn pick_dialog(
                 }
             }
         });
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
+        let f = footer(ui, pal, Buttons::default().cancel("Cancel"), |ui| {
             if plain_button(ui, "None of these").on_hover_text("Keep only what the other sources found").clicked() {
                 out = PickOutcome::NoneOfThese;
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if plain_button(ui, "Cancel").clicked() {
-                    out = PickOutcome::Cancel;
-                }
-            });
         });
+        if f.cancel {
+            out = PickOutcome::Cancel;
+        }
     });
     if close && matches!(out, PickOutcome::Keep) {
         out = PickOutcome::Cancel;

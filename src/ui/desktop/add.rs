@@ -5,7 +5,7 @@
 //! Nothing here blocks the UI thread: the native file dialog, detecting a picked program and
 //! listing Proton builds all run on helper threads; folder scans run in `AppState`.
 
-use super::dialogs::{hint_text, modal, plain_button, primary_button, title};
+use super::dialogs::{Buttons, footer, hint_text, modal, title};
 use super::{DesktopUi, Pal};
 use crate::addgame::{DupMatch, DupReason, ImportCandidate, ImportSource, ProgramInfo, ProgramKind, ProtonVersion};
 use crate::app::AppState;
@@ -422,42 +422,48 @@ fn program_dialog(
                 program_form(ui, st, d, &info, pal, &home, &mut out);
             }
         }
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            if let Stage::Ready(info) = &d.stage {
-                let blocked = !d.dups.is_empty() && !d.allow_dup;
-                let launch = d.launch();
-                let ok = !d.name.trim().is_empty() && launch.is_some() && !blocked;
-                let r = primary_button(ui, "Add", pal, ok);
-                let r = if blocked {
-                    r.on_disabled_hover_text("Choose what to do about the copy above")
-                } else {
-                    r.on_disabled_hover_text("Fill in the name (and Proton for Windows programs)")
-                };
-                if r.clicked() {
-                    match st.add_game(d.new_game(info)) {
-                        Some(id) => out = ProgramOutcome::Added(id),
-                        None => d.error = Some("Couldn't add the game".into()),
-                    }
-                }
-                if ui
+        let ready = match &d.stage {
+            Stage::Ready(info) => Some(info.clone()),
+            _ => None,
+        };
+        let blocked = !d.dups.is_empty() && !d.allow_dup;
+        let buttons = if ready.is_some() {
+            let ok = !d.name.trim().is_empty() && d.launch().is_some() && !blocked;
+            Buttons::primary("Add", ok).disabled_hint(if blocked {
+                "Choose what to do about the copy above"
+            } else {
+                "Fill in the name (and Proton for Windows programs)"
+            })
+        } else if matches!(d.stage, Stage::Failed(..)) {
+            Buttons::primary("Choose another…", true)
+        } else {
+            Buttons::default()
+        };
+        let f = footer(ui, pal, buttons.cancel("Cancel"), |ui| {
+            if let Some(info) = &ready
+                && ui
                     .add(egui::Button::new("Edit details…").min_size(vec2(0.0, 30.0)))
                     .on_hover_text("Open Edit game details with this program filled in")
                     .clicked()
-                {
-                    out = ProgramOutcome::EditDetails(Box::new(d.new_game(info)));
-                }
-            }
-            if matches!(d.stage, Stage::Failed(..)) && primary_button(ui, "Choose another…", pal, true).clicked() {
-                d.stage = Stage::Picking(Pick::start(ui.ctx(), PickKind::File, "Choose a game", None));
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = ProgramOutcome::Close;
+            {
+                out = ProgramOutcome::EditDetails(Box::new(d.new_game(info)));
             }
             if let Some(e) = &d.error {
                 ui.label(RichText::new(e).size(12.5).color(pal.danger));
             }
         });
+        if f.primary {
+            match &ready {
+                Some(info) => match st.add_game(d.new_game(info)) {
+                    Some(id) => out = ProgramOutcome::Added(id),
+                    None => d.error = Some("Couldn't add the game".into()),
+                },
+                None => d.stage = Stage::Picking(Pick::start(ui.ctx(), PickKind::File, "Choose a game", None)),
+            }
+        }
+        if f.cancel {
+            out = ProgramOutcome::Close;
+        }
     });
     // Esc closes, but not while a file dialog is open (it would come back to nothing).
     let picking = matches!(d.stage, Stage::Picking(_)) || d.prefix_pick.is_some();
@@ -704,30 +710,23 @@ fn import_dialog(
         }
         ui.add_space(10.0);
         let proton_ok = find_buttons(ui, st, d, pal, needs_proton);
-        // The finishing buttons on a row of their own, the primary one first on the left as in
-        // every other dialog (the row above is for finding games).
-        ui.add_space(6.0);
+        // The finishing buttons on a row of their own (the row above is for finding games).
         let n_checked = d.checked().count();
-        ui.horizontal(|ui| {
-            let label = if n_checked == 0 {
-                "Add games".to_string()
-            } else {
-                format!("Add {n_checked} game{}", if n_checked == 1 { "" } else { "s" })
-            };
-            if primary_button(ui, &label, pal, n_checked > 0 && proton_ok)
-                .on_disabled_hover_text(if n_checked == 0 {
-                    "Tick the games to add"
-                } else {
-                    "Windows programs need Proton"
-                })
-                .clicked()
-            {
-                out = ImportOutcome::Added(add_checked(st, d));
-            }
-            if plain_button(ui, "Cancel").clicked() {
-                out = ImportOutcome::Close;
-            }
-        });
+        let label = if n_checked == 0 {
+            "Add games".to_string()
+        } else {
+            format!("Add {n_checked} game{}", if n_checked == 1 { "" } else { "s" })
+        };
+        let buttons = Buttons::primary(&label, n_checked > 0 && proton_ok)
+            .cancel("Cancel")
+            .disabled_hint(if n_checked == 0 { "Tick the games to add" } else { "Windows programs need Proton" });
+        let f = footer(ui, pal, buttons, |_| {});
+        if f.primary {
+            out = ImportOutcome::Added(add_checked(st, d));
+        }
+        if f.cancel {
+            out = ImportOutcome::Close;
+        }
     });
     if matches!(out, ImportOutcome::Close) || (close && matches!(out, ImportOutcome::Keep)) {
         let picking = d.browse.is_some() || d.folder.is_some();

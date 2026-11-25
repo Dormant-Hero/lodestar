@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata: what software centres, Gear Lever and AppImage catalogues show about Lodestar.
+     Installed as usr/share/metainfo/ in the AppImage and ~/.local/share/metainfo/ by install.sh.
+     Add a <release> for every version (newest first). Check with: appstreamcli validate <this file> -->
+<component type="desktop-application">
+  <id>io.github.Dormant_Hero.Lodestar</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Lodestar</name>
+  <summary>A game launcher for your whole library, from desk to couch</summary>
+  <developer id="io.github.dormant_hero">
+    <name>Dormant-Hero</name>
+  </developer>
+  <description>
+    <p>
+      Lodestar puts every game you own in one fast library: Steam, Heroic (Epic, GOG, Amazon), Lutris, Bottles,
+      itch, emulated consoles, cloud gaming and the programs you add yourself. It finds them on its own, fills in
+      covers, artwork and descriptions, and starts each game the right way.
+    </p>
+    <p>
+      At the desk it looks like a tidy game library window. On the couch it turns into a full-screen, themeable
+      controller mode that works entirely with a gamepad.
+    </p>
+    <ul>
+      <li>Finds the games of your stores and launchers automatically, with a manual way to add anything else</li>
+      <li>Emulation: detects installed emulators, recognises your ROMs and checks BIOS files</li>
+      <li>Controller mode with themes, including a visual theme creator</li>
+      <li>Play time, completion status, favourites, tags, collections and statistics</li>
+      <li>Keeps store launchers out of sight while you play</li>
+      <li>One small program: idle means no CPU, nothing to install alongside it</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">lodestar.desktop</launchable>
+  <provides>
+    <binary>lodestar</binary>
+  </provides>
+  <url type="homepage">https://github.com/Dormant-Hero/lodestar</url>
+  <url type="bugtracker">https://github.com/Dormant-Hero/lodestar/issues</url>
+  <url type="vcs-browser">https://github.com/Dormant-Hero/lodestar</url>
+  <categories>
+    <category>Game</category>
+  </categories>
+  <keywords>
+    <keyword>games</keyword>
+    <keyword>library</keyword>
+    <keyword>launcher</keyword>
+    <keyword>steam</keyword>
+    <keyword>emulation</keyword>
+    <keyword>controller</keyword>
+  </keywords>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>gamepad</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <screenshots>
+    <screenshot type="default">
+      <caption>The game library on the desktop</caption>
+      <image>https://raw.githubusercontent.com/Dormant-Hero/lodestar/main/docs/screenshots/desktop-grid.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A game's page with its details</caption>
+      <image>https://raw.githubusercontent.com/Dormant-Hero/lodestar/main/docs/screenshots/desktop-details.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Controller mode on the couch</caption>
+      <image>https://raw.githubusercontent.com/Dormant-Hero/lodestar/main/docs/screenshots/controller-meridian.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Browsing a console's games in controller mode</caption>
+      <image>https://raw.githubusercontent.com/Dormant-Hero/lodestar/main/docs/screenshots/controller-meridian-games.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The theme creator</caption>
+      <image>https://raw.githubusercontent.com/Dormant-Hero/lodestar/main/docs/screenshots/theme-creator-editing.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.17.1" date="2026-11-25" type="stable">
+      <description>
+        <p>Lodestar updates itself: it tells you when a new version is out, shows what's new and installs it in one
+          click; automatic checks can be switched off and versions skipped.</p>
+        <p>Works with the new Steam beta, lists Steam games you own but haven't installed even when Steam's files
+          don't name them, and gives every dialog its buttons in the same place.</p>
+      </description>
+    </release>
+    <release version="0.17.0" date="2026-11-24" type="stable">
+      <description>
+        <p>The theme creator: make your own controller theme on a live preview of your library, with colour
+          schemes, variants and console pictures, and share it as a .zip.</p>
+      </description>
+    </release>
+  </releases>
+</component>

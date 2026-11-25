@@ -24,6 +24,7 @@ mod power;
 mod prompt;
 pub(crate) mod settings;
 mod sounds;
+mod update;
 mod viewer;
 
 use crate::app::{AppState, Mode};
@@ -118,6 +119,8 @@ pub struct ControllerUi {
     overlay_hidden: bool,
     /// Button prompt style drawn last frame: the quick menu's "Automatic (…)" follows a change.
     prompt_style: Option<crate::input::ButtonStyle>,
+    /// `st.update.generation` the menus were last refreshed for (update.rs).
+    update_gen: u64,
     /// The artwork viewer (details page → Artwork, or the game menu's "View artwork").
     viewer: Option<viewer::CtlViewer>,
     /// Home page, navigation rail and section pages of rail themes (home.rs).
@@ -234,6 +237,7 @@ impl ControllerUi {
             debug_launch: std::env::var("LODESTAR_CONTROLLER_OPEN").ok().filter(|v| !v.is_empty()),
             overlay_hidden: false,
             prompt_style: None,
+            update_gen: 0,
             viewer: None,
             home: Default::default(),
             sys: Default::default(),
@@ -1004,6 +1008,7 @@ impl ControllerUi {
         if self.prompt_style.replace(style).is_some_and(|s| s != style) {
             self.refresh_quick(st);
         }
+        self.refresh_update(st, now);
     }
 
     /// The keyboard's launch-option preview (recomputed only when the text changes).

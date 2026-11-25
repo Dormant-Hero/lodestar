@@ -4,7 +4,7 @@
 //! for themes installed from them.
 
 use super::super::Pal;
-use super::super::dialogs::{hint_text, primary_button};
+use super::super::dialogs::{Buttons, button_row, hint_text, primary_button};
 use super::card_frame;
 use super::kind_chip;
 use super::themes::{Themes, banner, job_line};
@@ -489,19 +489,15 @@ fn confirm_remove_frame(ui: &mut Ui, st: &mut AppState, b: &mut Browse, t: &mut 
                     "Its folder is deleted from Lodestar's themes folder. If it's in use, Lodestar switches back to its own theme. You can install it again any time.",
                     pal,
                 );
-                ui.horizontal(|ui| {
-                    if ui
-                        .add_enabled(!t.busy(), egui::Button::new(RichText::new("Remove").color(egui::Color32::WHITE).strong()).fill(pal.danger).min_size(vec2(90.0, 28.0)))
-                        .on_disabled_hover_text(super::themes::BUSY)
-                        .clicked()
-                    {
-                        b.confirm_remove = None;
-                        t.start_remove(st, key.clone(), name.clone());
-                    }
-                    if ui.button("Cancel").clicked() {
-                        b.confirm_remove = None;
-                    }
-                });
+                let buttons =
+                    Buttons::primary("Remove", !t.busy()).danger().disabled_hint(super::themes::BUSY).cancel("Cancel");
+                let f = button_row(ui, pal, buttons, |_| {});
+                if f.primary {
+                    t.start_remove(st, key.clone(), name.clone());
+                }
+                if f.primary || f.cancel {
+                    b.confirm_remove = None;
+                }
             });
         ui.add_space(8.0);
     }
