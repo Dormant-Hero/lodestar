@@ -564,6 +564,7 @@ pub fn new_element(kind: Kind, view: ViewKind, pal: &Palette, name: String) -> E
             corner_radius: 0.0,
             border_color: None,
             border_width: 0.0,
+            max_width: 0.0,
         },
         Kind::Rating => Element::Rating {
             common: common([0.05, 0.4], [0.0, 0.03]),

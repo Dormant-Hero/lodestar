@@ -848,6 +848,12 @@ impl ControllerUi {
                 v.push(Hint::new(Button::X, if fav { "Unfavourite" } else { "Favourite" }));
                 v.push(Hint::new(Button::Y, "Search"));
                 v.push(Hint::new(Button::Select, "Options"));
+                // LB / RB switch the theme's filter tabs (see `games_nav`); say so unless the
+                // theme draws its own LB / RB pictures beside them.
+                let theme = &st.controller_theme.file;
+                if !theme_tab_keys(theme).is_empty() && !theme_prompts_shoulders(theme) {
+                    v.push(Hint::new(Button::LB, "Tabs"));
+                }
                 v
             }
             Screen::Details => {

@@ -1,11 +1,13 @@
 //! The creator's start: a new theme from a template, one of your themes, or a shared .zip.
 
 use super::super::Pal;
-use super::super::dialogs::{hint_text, primary_button};
+use super::super::dialogs::{Buttons, button_row, hint_text, primary_button};
 use super::files::Template;
 use super::{CreatorDlg, Done, PickFor};
 use crate::app::AppState;
+use crate::theme::catalog::installed;
 use crate::theme::{Palette, ThemeInfo, builtin};
+use crate::ui::widgets::{Icon, icon_button, with_alpha};
 use egui::{RichText, Ui, vec2};
 
 #[derive(Default)]
@@ -20,6 +22,8 @@ pub struct Start {
     user_palettes: std::collections::HashMap<String, Palette>,
     /// Live pictures of the templates.
     thumbs: super::preview::Thumbs,
+    /// The theme (key) whose "Delete?" question is showing.
+    confirm_delete: Option<String>,
 }
 
 fn user_themes(st: &AppState) -> Vec<ThemeInfo> {
@@ -154,7 +158,8 @@ pub fn show(ui: &mut Ui, st: &mut AppState, d: &mut CreatorDlg, pal: &Pal, fam: 
                                     .interact(egui::Sense::click());
                                 if r.clicked() {
                                     if d.start.name.trim().is_empty() || d.start.name.starts_with("My ") {
-                                        d.start.name = format!("My {name}");
+                                        let taken: Vec<&str> = users.iter().map(|u| u.meta.name.as_str()).collect();
+                                        d.start.name = new_theme_name(&name, &taken);
                                     }
                                     d.start.template = Some(tpl);
                                 }
@@ -194,6 +199,7 @@ pub fn show(ui: &mut Ui, st: &mut AppState, d: &mut CreatorDlg, pal: &Pal, fam: 
                 hint_text(ui, "Themes you make or add show here.", pal);
             }
             let mut open = None;
+            let mut delete = None;
             egui::ScrollArea::vertical().id_salt("ls_creator_yours").max_height(ui.available_height() - 80.0).show(
                 ui,
                 |ui| {
@@ -216,8 +222,19 @@ pub fn show(ui: &mut Ui, st: &mut AppState, d: &mut CreatorDlg, pal: &Pal, fam: 
                                 } else if ui.button("Edit").clicked() {
                                     open = Some(u.key.clone());
                                 }
+                                if icon_button(ui, Icon::Trash, false, 24.0, "Delete this theme").clicked() {
+                                    d.start.confirm_delete = Some(u.key.clone());
+                                }
                             });
                         });
+                        if d.start.confirm_delete.as_deref() == Some(u.key.as_str()) {
+                            let in_use = st.config.controller.theme == u.key || st.config.desktop_theme == u.key;
+                            match confirm_delete(ui, pal, &u.meta.name, in_use) {
+                                Some(true) => delete = Some((u.key.clone(), u.meta.name.clone())),
+                                Some(false) => d.start.confirm_delete = None,
+                                None => {}
+                            }
+                        }
                     }
                 },
             );
@@ -228,6 +245,67 @@ pub fn show(ui: &mut Ui, st: &mut AppState, d: &mut CreatorDlg, pal: &Pal, fam: 
             if let Some(k) = open {
                 d.open_key(st, &k);
             }
+            if let Some((key, name)) = delete {
+                d.start.confirm_delete = None;
+                delete_theme(d, &ctx, st, key, name);
+            }
         });
     });
+}
+
+/// The inline "Delete …?" question under a theme in "Your themes": Some(true) when Delete was
+/// clicked, Some(false) for Cancel, None while it waits.
+fn confirm_delete(ui: &mut Ui, pal: &Pal, name: &str, in_use: bool) -> Option<bool> {
+    let mut answer = None;
+    egui::Frame::new()
+        .fill(with_alpha(pal.danger, 18))
+        .stroke(egui::Stroke::new(1.0, with_alpha(pal.danger, 70)))
+        .corner_radius(6)
+        .inner_margin(egui::Margin::same(10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(format!("Delete “{name}”?")).strong().color(pal.text));
+            let mut body = "Its folder is deleted from Lodestar's themes folder. This can't be undone.".to_string();
+            if in_use {
+                body.push_str(" It's in use, so Lodestar switches back to its own theme.");
+            }
+            hint_text(ui, &body, pal);
+            let f = button_row(ui, pal, Buttons::primary("Delete", true).danger().cancel("Cancel"), |_| {});
+            if f.primary {
+                answer = Some(true);
+            } else if f.cancel {
+                answer = Some(false);
+            }
+        });
+    answer
+}
+
+/// Delete one of the user's themes on a helper thread. A theme in use is swapped for Lodestar's
+/// own first, so nothing is left pointing at a folder that's gone.
+fn delete_theme(d: &mut CreatorDlg, ctx: &egui::Context, st: &mut AppState, key: String, name: String) {
+    if st.config.controller.theme == key {
+        st.set_controller_theme("Lodestar");
+    }
+    if st.config.desktop_theme == key {
+        st.set_desktop_theme("Lodestar");
+    }
+    let themes_dir = st.themes.themes_dir().to_path_buf();
+    d.spawn(ctx, "Deleting the theme…", move || {
+        Done::Deleted(name, installed::remove(&themes_dir, &key).map_err(|e| format!("{e:#}")))
+    });
+}
+
+/// The suggested name for a new theme started from `template`: "My Northline", and for a theme
+/// that is already someone's ("My Northline"), the next free "My Northline 2", "My Northline 3" …
+/// instead of piling up "My My …".
+pub(super) fn new_theme_name(template: &str, taken: &[&str]) -> String {
+    let base = if template.starts_with("My ") { template.to_string() } else { format!("My {template}") };
+    if !taken.contains(&base.as_str()) {
+        return base;
+    }
+    let stem = match base.rsplit_once(' ') {
+        Some((stem, n)) if n.parse::<u32>().is_ok() => stem.to_string(),
+        _ => base.clone(),
+    };
+    (2..).map(|n| format!("{stem} {n}")).find(|c| !taken.contains(&c.as_str())).unwrap_or(base)
 }

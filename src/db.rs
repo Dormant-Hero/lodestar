@@ -135,6 +135,17 @@ impl Db {
                 UPDATE games SET modified = CAST(strftime('%s', 'now') AS INTEGER) WHERE id = NEW.id;
              END;",
         )?;
+        // 0.17.2: a game's id is never handed out again once its row is gone. Art, logs and caches
+        // live in folders named after the id, so a new game given a removed game's id picked up
+        // that game's pictures. SQLite reuses the highest id after a delete; the trigger keeps the
+        // highest id ever used in kv and `NEXT_GAME_ID` starts above it.
+        conn.execute_batch(
+            "CREATE TRIGGER IF NOT EXISTS games_high_id AFTER INSERT ON games FOR EACH ROW
+             BEGIN
+                INSERT INTO kv (key, value) VALUES ('games_high_id', NEW.id)
+                ON CONFLICT(key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), NEW.id);
+             END;",
+        )?;
         // v4: "Not a game" marks and the games brought back from a rule, by
         // source + source id so they outlive the game's row and its renames.
         conn.execute_batch(
@@ -149,6 +160,10 @@ impl Db {
         )?;
         Ok(Db { conn })
     }
+
+    /// The id for a new game: above every id ever used (see the `games_high_id` trigger).
+    const NEXT_GAME_ID: &'static str = "(SELECT MAX(COALESCE((SELECT MAX(id) FROM games), 0), \
+        COALESCE((SELECT CAST(value AS INTEGER) FROM kv WHERE key = 'games_high_id'), 0)) + 1)";
 
     const COLS: &'static str = "id, source, source_id, name, user_name, sort_name, installed, install_dir, \
         launch_json, art_json, user_art_json, fetched_art_json, meta_json, fetched_meta_json, playtime_secs, \
@@ -365,8 +380,11 @@ impl Db {
     /// `add_manual` with a given `source_id` (cloud games keep their service in it).
     pub fn add_manual_as(&mut self, sid: &str, name: &str, launch: LaunchSpec, art: Art) -> Result<GameId> {
         self.conn.execute(
-            "INSERT INTO games (source, source_id, name, sort_name, installed, launch_json, user_art_json, added) \
-             VALUES ('manual', ?1, ?2, ?3, 1, ?4, ?5, ?6)",
+            &format!(
+                "INSERT INTO games (id, source, source_id, name, sort_name, installed, launch_json, user_art_json, \
+                 added) VALUES ({}, 'manual', ?1, ?2, ?3, 1, ?4, ?5, ?6)",
+                Self::NEXT_GAME_ID
+            ),
             params![
                 sid,
                 name,
@@ -635,6 +653,43 @@ impl Db {
         Ok(s.map(|s| json_or_default(&s)).unwrap_or_default())
     }
 
+    /// Every game's id, when it was added, its fetched art and every art path it points at
+    /// (`art::tidy`).
+    pub fn art_rows(&self) -> Result<Vec<crate::art::tidy::ArtRow>> {
+        let mut st = self.conn.prepare("SELECT id, added, art_json, user_art_json, fetched_art_json FROM games")?;
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get::<_, GameId>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        })?;
+        let mut out = vec![];
+        for row in rows {
+            let (id, added, scanned, user, fetched) = row?;
+            let fetched: Art = json_or_default(&fetched);
+            let referenced = [json_or_default::<Art>(&scanned), json_or_default::<Art>(&user), fetched.clone()]
+                .into_iter()
+                .flat_map(|a| [a.cover, a.hero, a.logo, a.icon, a.banner])
+                .flatten()
+                .collect();
+            out.push(crate::art::tidy::ArtRow { id, added, fetched, referenced });
+        }
+        Ok(out)
+    }
+
+    /// Replace a game's fetched art and mark it as never fetched, so the fetcher fills the
+    /// emptied slots again.
+    pub fn reset_fetched_art(&self, id: GameId, art: &Art) -> Result<()> {
+        self.conn.execute(
+            "UPDATE games SET fetched_art_json = ?2, fetched_at = NULL WHERE id = ?1",
+            params![id, serde_json::to_string(art)?],
+        )?;
+        Ok(())
+    }
+
     /// When metadata was last fetched for this game (None = never).
     pub fn fetched_at(&self, id: GameId) -> Result<Option<i64>> {
         Ok(self.conn.query_row("SELECT fetched_at FROM games WHERE id = ?1", [id], |r| r.get(0)).optional()?.flatten())
@@ -871,11 +926,12 @@ fn upsert_scanned(
             stats.updated += 1;
         }
         None => {
-            conn.prepare_cached(
-                "INSERT INTO games (source, source_id, name, sort_name, installed, install_dir, launch_json, \
+            conn.prepare_cached(&format!(
+                "INSERT INTO games (id, source, source_id, name, sort_name, installed, install_dir, launch_json, \
                  art_json, meta_json, playtime_secs, last_played, added, size_bytes, platform, source_launch_options, \
-                 emu_json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
-            )?
+                 emu_json) VALUES ({}, ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
+                Db::NEXT_GAME_ID
+            ))?
             .execute(params![
                 g.source.key(),
                 g.source_id,

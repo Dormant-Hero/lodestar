@@ -1003,6 +1003,11 @@ pub enum Element {
         /// Fraction of screen height.
         #[serde(default, skip_serializing_if = "is_zero")]
         border_width: f32,
+        /// A horizontal stack without a width: the most it may take (fraction of the screen
+        /// width; 0 = no limit). Wider children have their text drawn smaller until they fit,
+        /// so a row of tabs never runs into what sits beside it.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        max_width: f32,
     },
     /// Controller button hints for the current screen ("A Launch  B Back  X Favourite …").
     HelpBar {

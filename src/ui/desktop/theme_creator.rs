@@ -111,6 +111,8 @@ pub(crate) enum Done {
     Captured(Result<String, String>),
     /// A save-as path was picked (None: cancelled).
     SavePath(Option<PathBuf>),
+    /// One of the user's themes was deleted (its name).
+    Deleted(String, Result<(), String>),
     /// Something on a helper thread failed (plain words).
     Failed(String),
 }
@@ -486,6 +488,18 @@ impl CreatorDlg {
                 if ok.len() != 1 || !rest.is_empty() {
                     self.consoles.after_import(ok.len(), rest);
                 }
+            }
+            Done::Deleted(name, r) => {
+                self.start.refresh = true;
+                if let Some(files::Template::Folder(dir)) = &self.start.template
+                    && !dir.exists()
+                {
+                    self.start.template = None;
+                }
+                self.banner = Some(match r {
+                    Ok(()) => Banner { text: format!("Deleted “{name}”."), error: false },
+                    Err(e) => Banner { text: format!("Couldn't delete “{name}”: {e}"), error: true },
+                });
             }
             Done::Failed(e) => self.banner = Some(Banner { text: e, error: true }),
             Done::Captured(Ok(rel)) => {

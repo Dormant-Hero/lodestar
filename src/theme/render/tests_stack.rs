@@ -247,6 +247,46 @@ fn stack_flows_children_and_skips_hidden_ones() {
     assert!(lower.right() <= 0.9 * sw + 1.0);
 }
 
+/// A row of tabs wider than its `max_width` draws its text smaller until it fits, right
+/// to left as well as left to right; one that fits is drawn as it is.
+#[test]
+fn a_row_wider_than_its_max_width_shrinks_its_text_to_fit() {
+    let row = |name: &str, x: f32, y: f32, origin: f32, max: f32| {
+        format!(
+            "[[games.elements]]\ntype = \"stack\"\ndirection = \"horizontal\"\npos = [{x:?}, {y:?}]\n\
+             origin = [{origin:?}, 0.5]\ngap = 0.03\nmax_width = {max:?}\n\
+             [[games.elements.children]]\ntype = \"text\"\ntext = \"{name}-All Games\"\n\
+             style = {{ font_size = 0.05 }}\n\
+             [[games.elements.children]]\ntype = \"text\"\ntext = \"{name}-Continue Playing\"\n\
+             style = {{ font_size = 0.05, font = \"bold\" }}\n"
+        )
+    };
+    let src = [row("WIDE", 0.1, 0.2, 0.0, 0.0), row("FIT", 0.1, 0.5, 0.0, 0.3), row("END", 0.9, 0.8, 1.0, 0.3)];
+    let mut rig = Rig::new(&src.join("\n"), vec![game(1, "G")]);
+    let out = rig.frame(0.0, 0);
+    let span = |name: &str| {
+        let a = text_rect(&out, &format!("{name}-All")).expect("first");
+        let b = text_rect(&out, &format!("{name}-Continue")).expect("second");
+        (a, b)
+    };
+    let (wa, wb) = span("WIDE");
+    assert!(wb.right() - wa.left() > 0.3 * 1000.0 + 50.0, "unlimited, it is wider than the others' room");
+    let (fa, fb) = span("FIT");
+    assert!((fa.left() - 100.0).abs() < 1.0 && fb.right() <= 100.0 + 300.0 + 0.5, "{fa:?} {fb:?}");
+    assert!(fb.right() > 100.0 + 300.0 * 0.95, "it uses the room: {fb:?}");
+    assert!(fa.height() < wa.height(), "the text is smaller");
+    // The gap stays as it is.
+    assert!((fb.left() - fa.right() - 0.03 * 500.0).abs() < 1.5, "{fa:?} {fb:?}");
+    let (ea, eb) = span("END");
+    assert!((eb.right() - 900.0).abs() < 1.5 && ea.left() >= 900.0 - 300.0 - 0.5, "{ea:?} {eb:?}");
+    // Room to spare: drawn at its own size.
+    let src = row("ROOMY", 0.1, 0.5, 0.0, 0.9);
+    let mut rig = Rig::new(&src, vec![game(1, "G")]);
+    let out = rig.frame(0.0, 0);
+    let roomy = text_rect(&out, "ROOMY-All").expect("roomy");
+    assert!((roomy.height() - wa.height()).abs() < 0.5, "{roomy:?} {wa:?}");
+}
+
 /// A vertical stack of a fixed height gives a wrapping text the lines that are left.
 #[test]
 fn stack_text_gets_the_room_left() {

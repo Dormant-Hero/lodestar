@@ -74,7 +74,7 @@ pub(crate) struct SettingsDlg {
     pub(super) hidden_page: Option<super::hidden_ui::HiddenPage>,
     /// Libraries → Missing games (`missing_ui.rs`).
     pub(super) missing_page: Option<super::missing_ui::MissingPage>,
-    /// "Manage add-ons…" / "Get more themes in Add-ons" was clicked: close Settings and open
+    /// "Manage add-ons…" / "Get more themes" was clicked: close Settings and open
     /// the Add-ons window on that page.
     pub(super) open_addons: Option<super::addons::Section>,
     show_key: bool,

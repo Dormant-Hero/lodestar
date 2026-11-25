@@ -81,7 +81,9 @@ impl Renderer {
             return;
         };
         let own = [pos_px(common.size[0], f.sw()), pos_px(common.size[1], f.sh())];
-        let Some(lay) = self.stack_layout(f, key, el, own, [None, None]) else {
+        let ts = f.ts;
+        let Some(lay) = self.fitted_layout(f, key, el, own) else {
+            f.ts = ts;
             return;
         };
         let r = Self::text_rect(f, common, lay.size);
@@ -112,6 +114,37 @@ impl Renderer {
         if let Some(s) = saved {
             f.painter = s;
         }
+        f.ts = ts;
+    }
+
+    /// The stack laid out as it is drawn. A horizontal one wider than its `max_width` is laid
+    /// out again with its text smaller (`f.ts`, which the caller puts back once the children
+    /// are drawn): only the text gives way; gaps, padding and pictures keep their size.
+    fn fitted_layout(&mut self, f: &mut Frame, key: usize, el: &Element, own: [Option<f32>; 2]) -> Option<StackLayout> {
+        let mut lay = self.stack_layout(f, key, el, own, [None, None])?;
+        let Element::Stack { direction: Direction::Horizontal, max_width, children, .. } = el else {
+            return Some(lay);
+        };
+        let room = max_width * f.sw();
+        // Text widths don't follow the size exactly (hinting): a second pass catches the rest.
+        for _ in 0..2 {
+            if own[0].is_some() || room <= 0.0 || lay.size.x <= room {
+                break;
+            }
+            let text: f32 = lay
+                .children
+                .iter()
+                .filter(|(i, ..)| matches!(children.get(*i), Some(Element::Text { .. } | Element::DateTime { .. })))
+                .map(|(_, r, _)| r.width())
+                .sum();
+            if text <= 0.0 {
+                break;
+            }
+            let fixed = lay.size.x - text;
+            f.ts *= ((room - fixed) / text).clamp(0.25, 1.0) * 0.995;
+            lay = self.stack_layout(f, key, el, own, [None, None])?;
+        }
+        Some(lay)
     }
 
     /// Lay out a stack whose outer box is `boxed` (definite sizes) within `limit`.

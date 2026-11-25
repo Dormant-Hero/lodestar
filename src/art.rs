@@ -22,6 +22,7 @@ pub mod limits;
 mod limits_tests;
 pub(crate) mod net;
 pub mod sources;
+pub mod tidy;
 mod worker;
 
 use crate::config::MetadataConfig;

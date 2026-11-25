@@ -187,6 +187,7 @@ pub fn run_all(ctx: &ScanContext) -> ScanReport {
         }
     }
     report.duplicates_dropped = dedupe(&mut report.games);
+    report.duplicates_dropped += drop_shortcuts_into_failed(&mut report);
     // RomM games downloaded into a ROM folder are emulated games now.
     report.duplicates_dropped += romm::dedupe_with_emulation(ctx, &mut report.games);
     // Leftover shortcuts into a source that scanned fine but doesn't have the game installed
@@ -200,6 +201,25 @@ pub fn run_all(ctx: &ScanContext) -> ScanReport {
     report.elapsed = t0.elapsed();
     report.steam_needs = ctx.steam_names.needs.lock().clone();
     report
+}
+
+/// Drop shortcuts into a library whose scan failed. They can't be matched to its games, and the
+/// library keeps that source's games from before, so keeping them would list a game twice.
+fn drop_shortcuts_into_failed(report: &mut ScanReport) -> usize {
+    let failed: Vec<Source> = report.per_source.iter().filter(|(_, r)| r.error.is_some()).map(|(s, _)| *s).collect();
+    if failed.is_empty() {
+        return 0;
+    }
+    // Heroic shortcuts name the app, not the store: any of Heroic's stores may hold it.
+    let into_failed = |s: Source| match s {
+        Source::Heroic => {
+            [Source::Heroic, Source::Epic, Source::Gog, Source::Amazon].iter().any(|h| failed.contains(h))
+        }
+        s => failed.contains(&s),
+    };
+    let before = report.games.len();
+    report.games.retain(|g| !g.duplicate_of.as_ref().is_some_and(|(s, _)| into_failed(*s)));
+    before - report.games.len()
 }
 
 /// Drop desktop entries that duplicate a game from a real source (lending their art to it if it
@@ -327,5 +347,31 @@ mod tests {
         assert_eq!(dedupe(&mut v), 1);
         assert_eq!(v.len(), 2);
         assert_eq!(v[0].art.icon.as_deref(), Some(std::path::Path::new("/icons/g.png")));
+    }
+
+    #[test]
+    fn shortcuts_into_a_library_that_failed_to_scan_are_left_out() {
+        let shortcut = |name: &str, into: Source| {
+            let mut g = ScannedGame::new(Source::Desktop, format!("{name}.desktop"), name);
+            g.duplicate_of = Some((into, name.into()));
+            g
+        };
+        let mut report = ScanReport {
+            games: vec![
+                shortcut("fl-2026", Source::Faugus),
+                shortcut("hades", Source::Heroic),
+                shortcut("osu", Source::Lutris),
+                ScannedGame::new(Source::Desktop, "runelite.desktop", "RuneLite"),
+            ],
+            per_source: vec![
+                (Source::Faugus, SourceReport { error: Some("games.json: bad JSON".into()), ..Default::default() }),
+                (Source::Gog, SourceReport { error: Some("unreadable".into()), ..Default::default() }),
+                (Source::Lutris, SourceReport::default()),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(drop_shortcuts_into_failed(&mut report), 2);
+        let left: Vec<&str> = report.games.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(left, ["osu", "RuneLite"], "Lutris scanned fine: its shortcut is still matched (or kept) by dedupe");
     }
 }

@@ -105,7 +105,7 @@ impl AppState {
                 }
             }
             if out.library_changed() {
-                self.rescan_sources(&[Source::Steam, Source::Desktop]);
+                self.rescan_local_libraries();
             }
         }
         // The key changed in Settings (after the first scan; only once it looks complete).
@@ -120,7 +120,7 @@ impl AppState {
             self.steam_names.status = None;
             let path = self.paths.cache_dir.join(names::OWNED_FILE);
             if path.is_file() && std::fs::remove_file(&path).is_ok() {
-                self.rescan_sources(&[Source::Steam, Source::Desktop]);
+                self.rescan_local_libraries();
             }
         } else if sn::key_looks_complete(&key) && self.steam_names_allowed() {
             self.steam_names.key_seen = Some(key);

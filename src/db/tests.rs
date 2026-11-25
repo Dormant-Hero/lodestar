@@ -135,3 +135,17 @@ fn launch_and_playtime() {
     db.merge_scan(&[], &[Source::Faugus]).unwrap();
     assert!(!db.get(id).unwrap().unwrap().installed);
 }
+
+#[test]
+fn a_removed_games_id_is_never_given_to_a_new_game() {
+    let mut db = Db::open_memory().unwrap();
+    let launch = || LaunchSpec::Url("steam://rungameid/1".into());
+    let a = db.add_manual("A", launch(), Art::default()).unwrap();
+    let b = db.add_manual("B", launch(), Art::default()).unwrap();
+    db.delete(b).unwrap();
+    let c = db.add_manual("C", launch(), Art::default()).unwrap();
+    assert!(c > b, "C got {c}, the id of the removed B was {b}");
+    db.merge_scan(&[sg(Source::Steam, "10", "Scanned")], &[Source::Steam]).unwrap();
+    let scanned = db.load_all().unwrap().into_iter().find(|g| g.name == "Scanned").unwrap().id;
+    assert!(scanned > c && a < b);
+}

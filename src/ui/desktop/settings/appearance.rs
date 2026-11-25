@@ -143,10 +143,10 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
 
     ui.add_space(10.0);
     heading(ui, "More themes", pal);
-    hint_text(ui, "Community themes and Playnite theme imports are in Add-ons.", pal);
+    hint_text(ui, "Browse themes made by the community and install one in a click.", pal);
     ui.horizontal(|ui| {
-        if ui.button("Get more themes in Add-ons").clicked() {
-            d.open_addons = Some(crate::ui::desktop::addons::Section::DesktopThemes);
+        if ui.button("Get more themes").clicked() {
+            d.open_addons = Some(crate::ui::desktop::addons::Section::Browse);
         }
     });
     ch

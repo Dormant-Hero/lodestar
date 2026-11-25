@@ -606,8 +606,91 @@ fn the_filter_preset_selector_becomes_tabs_of_lodestars_collections() {
     // Any other open collection: its own tab.
     let other = texts.iter().find(|t| t.0 == "{collection.name}").expect("other");
     assert!(other.1.is_some_and(|v| v.contains("{collection.key} != all && ")), "{other:?}");
+    // Nothing beside it: room up to the screen's edge, so its text keeps its size.
+    let reach = (pair(tabs, "pos")[0] + tabs.get("max_width").and_then(T::as_float).unwrap() as f32) * W;
+    assert!((reach - W).abs() < 0.5, "{reach}");
     let toml = toml::to_string(tabs).unwrap();
     let _: crate::theme::model::Element = toml::from_str(&toml).unwrap_or_else(|err| panic!("{err}\n{toml}"));
+}
+
+/// The tab strip and the theme's LB / RB prompts in `els`: (strip's left edge, the most it
+/// may reach, prompts' [left, right]) in px.
+fn tabs_and_shoulders(els: &[Table]) -> (f32, f32, Vec<[f32; 2]>) {
+    let tabs = by_type(els, "stack")
+        .into_iter()
+        .find(|s| s.get("direction").and_then(T::as_str) == Some("horizontal"))
+        .expect("tabs");
+    assert_eq!(pair(tabs, "origin")[0], 0.0, "left-aligned strip");
+    let x = pair(tabs, "pos")[0] * W;
+    let max = tabs.get("max_width").and_then(T::as_float).expect("max_width") as f32 * W;
+    let prompts = by_type(els, "helpbar")
+        .into_iter()
+        .filter(|e| e.get("glyphs").and_then(T::as_bool) == Some(true))
+        .map(|e| [pair(e, "pos")[0] * W, (pair(e, "pos")[0] + pair(e, "size")[0]) * W])
+        .collect();
+    (x, x + max, prompts)
+}
+
+/// Lodestar writes the tabs' names where Playnite themes show small pictures, so the names
+/// can be wider than the room the theme gives them: the strip keeps inside its dock (a
+/// Border with a MaxWidth, which cuts off what doesn't fit in WPF) and clear of the RB
+/// prompt after it.
+#[test]
+fn the_tab_strip_keeps_inside_its_dock_and_clear_of_the_shoulder_prompts() {
+    let main = wrap_main(
+        r##"<Grid>
+          <ListBoxEx x:Name="PART_ListGameItems" Height="600" VerticalAlignment="Top"/>
+          <Grid VerticalAlignment="Bottom" Height="120">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <ContentControl Grid.Column="1" Width="60" Height="60" ContentTemplate="{DynamicResource ButtonPromptLB}"/>
+            <Border Grid.Column="2" MaxWidth="600" Background="#202020">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Rectangle Width="100" Height="40" Fill="Red"/>
+                <FilterPresetSelector x:Name="PART_FilterPresetSelector" Grid.Column="1" FontSize="30"/>
+              </Grid>
+            </Border>
+            <ContentControl Grid.Column="3" Width="60" Height="60" ContentTemplate="{DynamicResource ButtonPromptRB}"/>
+          </Grid>
+        </Grid>"##,
+    );
+    let els = compiled(&[("Views/Main.xaml", main)], &[]).main.unwrap().elements;
+    let dock = by_type(&els, "rect").into_iter().find(|e| e.get("color").and_then(T::as_str) == Some("#202020"));
+    let dock = dock.expect("dock");
+    let (dock_x, dock_w) = (pair(dock, "pos")[0] * W, pair(dock, "size")[0] * W);
+    assert!((dock_w - 600.0).abs() < 1.0, "{dock_w}");
+    let (x, reach, prompts) = tabs_and_shoulders(&els);
+    assert!((x - (dock_x + 100.0)).abs() < 1.5, "after the red box: {x} {dock_x}");
+    assert!(reach <= dock_x + dock_w + 0.5 && reach > dock_x + dock_w - 5.0, "{reach} {dock_x} {dock_w}");
+    let rb = prompts.iter().find(|p| p[0] > x).expect("rb");
+    assert!(reach <= rb[0], "{reach} {rb:?}");
+}
+
+/// Prompts laid over the ends of the strip's own box (the strip filling a row the prompts
+/// sit in): the strip runs between them.
+#[test]
+fn the_tab_strip_runs_between_prompts_over_its_ends() {
+    let main = wrap_main(
+        r##"<Grid>
+          <ListBoxEx x:Name="PART_ListGameItems" Height="600" VerticalAlignment="Bottom"/>
+          <Grid HorizontalAlignment="Left" VerticalAlignment="Top" Width="700" Height="60" Margin="100,20,0,0">
+            <ContentControl ContentTemplate="{DynamicResource ButtonPromptLB}" Width="50" Height="35"
+                            HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <FilterPresetSelector x:Name="PART_FilterPresetSelector" Margin="30,0,30,0" FontSize="24"
+                                  VerticalAlignment="Top"/>
+            <ContentControl ContentTemplate="{DynamicResource ButtonPromptRB}" Width="50" Height="35"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"/>
+          </Grid>
+        </Grid>"##,
+    );
+    let els = compiled(&[("Views/Main.xaml", main)], &[]).main.unwrap().elements;
+    let (x, reach, prompts) = tabs_and_shoulders(&els);
+    assert_eq!(prompts.len(), 2);
+    assert!((x - 150.0).abs() < 1.0, "after LB: {x}");
+    assert!((reach - 750.0).abs() < 1.0, "up to RB: {reach}");
 }
 
 #[test]

@@ -1,5 +1,20 @@
 # Lodestar changelog
 
+## 0.17.2 — 25 November 2026
+
+### Fixes
+- **No more second copies of games** added to Steam or the app menu by another launcher (Faugus, Heroic, Lutris):
+  they showed up again after Lodestar finished looking up Steam game names.
+- **The right pictures for new games**: a newly found game could show the pictures of a game you had removed. Lodestar
+  tidies this up by itself, and games that got someone else's pictures fetch their own again.
+
+### Themes
+- **Delete your own themes** in the theme creator: the bin next to Edit in "Your themes".
+- A new theme started from one of yours is called "My Northline 2" instead of "My My Northline".
+- Settings → Appearance → **Get more themes** opens the theme list straight away.
+- Imported Playnite themes with filter tabs show "LB Tabs" in the help bar, and their tabs no longer run under the
+  theme's LB / RB pictures.
+
 ## 0.17.1 — 25 November 2026
 
 ### Updates

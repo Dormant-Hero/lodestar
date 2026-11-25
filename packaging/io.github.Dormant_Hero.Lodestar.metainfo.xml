@@ -80,6 +80,12 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.17.2" date="2026-11-25" type="stable">
+      <description>
+        <p>Fixes games added to Steam or the app menu by another launcher showing up twice, and new games sometimes
+          showing a removed game's pictures. You can now delete your own themes in the theme creator.</p>
+      </description>
+    </release>
     <release version="0.17.1" date="2026-11-25" type="stable">
       <description>
         <p>Lodestar updates itself: it tells you when a new version is out, shows what's new and installs it in one

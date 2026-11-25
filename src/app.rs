@@ -65,6 +65,8 @@ pub struct ScanStatus {
     /// Every game id (shown or excluded) when the running scan started: what is "new" after it
     /// (a partial reload before ScanDone must not hide the built-in libraries' new games).
     pub(crate) known_before: Option<std::collections::HashSet<GameId>>,
+    /// The art folder was tidied this session (`art::tidy`, before the first scan writes).
+    pub(crate) art_tidied: bool,
 }
 
 impl ScanStatus {
@@ -452,10 +454,13 @@ impl AppState {
         self.rescan_only(None);
     }
 
-    /// Rescan some libraries only (the Steam name lookup found names): the others keep their
-    /// games. Desktop entries should come along with a store, so its shortcuts dedupe.
-    pub(crate) fn rescan_sources(&mut self, sources: &[Source]) {
-        self.rescan_only(Some(sources.to_vec()));
+    /// Rescan the libraries on this computer, without RomM and add-ons (they go online or run
+    /// other programs): the Steam name lookup found names. All of them, not just Steam: a
+    /// shortcut (Steam's or a menu entry) into Faugus, Heroic or Lutris is only recognised as
+    /// that game while that library is scanned too; without it the shortcut became a second copy.
+    pub(crate) fn rescan_local_libraries(&mut self) {
+        let local = Source::ALL.iter().copied().filter(|s| !matches!(s, Source::Romm | Source::Addon)).collect();
+        self.rescan_only(Some(local));
     }
 
     fn rescan_only(&mut self, only: Option<Vec<Source>>) {
@@ -471,6 +476,7 @@ impl AppState {
         let tx = self.bg_tx.clone();
         let ctx = self.ctx.clone();
         let db_path = self.paths.db_file();
+        let tidy_art = (!std::mem::replace(&mut self.scan.art_tidied, true)).then(|| self.paths.art_dir());
         let mut scan_ctx = ScanContext::from_config(&self.config);
         if let Some(keep) = &only {
             for s in Source::ALL.iter().filter(|s| !keep.contains(s)) {
@@ -484,6 +490,17 @@ impl AppState {
             .spawn(move || {
                 let msg = (|| -> anyhow::Result<BgMsg> {
                     let mut db = Db::open(&db_path)?;
+                    if let Some(art_dir) = &tidy_art {
+                        match crate::art::tidy::run(&db, art_dir) {
+                            Ok(t) if t != Default::default() => log::info!(
+                                "art: removed {} folders of games that are gone, fetching art again for {} games",
+                                t.folders_removed,
+                                t.games_refetched
+                            ),
+                            Ok(_) => {}
+                            Err(e) => log::warn!("art clean-up: {e:#}"),
+                        }
+                    }
                     // Library add-ons run last, in a pass of their own: a slow or hanging one
                     // (up to its timeout) must not hold back the built-in libraries' games.
                     let addon_key = Source::Addon.key();

@@ -532,3 +532,13 @@ fn a_light_scheme_recolours_a_dark_theme() {
     assert_ne!(l.games, f.games, "element colours that were palette colours follow");
     assert_eq!(ThemeFile::parse(&f.to_theme_toml(None).unwrap()).unwrap(), f);
 }
+
+#[test]
+fn new_theme_names_never_pile_up_my() {
+    use super::start::new_theme_name;
+    assert_eq!(new_theme_name("Northline", &[]), "My Northline");
+    assert_eq!(new_theme_name("Northline", &["My Northline"]), "My Northline 2");
+    assert_eq!(new_theme_name("My Northline", &["My Northline"]), "My Northline 2");
+    assert_eq!(new_theme_name("My Northline 2", &["My Northline", "My Northline 2"]), "My Northline 3");
+    assert_eq!(new_theme_name("My Northline", &[]), "My Northline", "a free name is kept as it is");
+}

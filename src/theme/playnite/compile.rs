@@ -51,7 +51,7 @@ use roxmltree::Node as X;
 use std::collections::{BTreeMap, HashMap};
 use toml::{Table, Value as T};
 
-use emit::is_hint_bar;
+use emit::{is_hint_bar, shoulder_prompts};
 pub(crate) use measure::FontMeasurer;
 use visibility::template_triggers;
 
@@ -221,11 +221,13 @@ fn compile_view(
         names: 0,
         root: Some(tpl),
         stacks: stack::enabled(),
+        shoulder_prompts: vec![],
     };
     let inh = Inherit::root(tree);
     let mut node = b.build(root, &inh, 0)?;
     layout::layout(&mut node, measurer);
     widen_slots(&mut node);
+    b.shoulder_prompts = shoulder_prompts(&node);
     let dump_to = std::env::var_os("LODESTAR_PN_COMPILE_DUMP").map(|d| d.to_string_lossy().to_string());
     if let Some(d) = &dump_to {
         dump(&node, &format!("{d}-{ty}.txt"));
@@ -579,6 +581,8 @@ struct Builder<'b, 't, 'i> {
     root: Option<X<'t, 'i>>,
     /// Flowing panels become `stack` containers (the placement tests turn this off).
     stacks: bool,
+    /// Where the view's LB / RB prompts sit (the tab strip keeps clear of them).
+    shoulder_prompts: Vec<Rect>,
 }
 
 fn round(v: f32) -> f32 {
@@ -602,6 +606,9 @@ struct Ctx {
     scroll: Option<Rect>,
     /// The row of bottom buttons the help bar takes the place of.
     row: Option<Rect>,
+    /// What WPF's layout clips the element to: the boxes of its ancestors with a set width
+    /// (Width / MaxWidth), where content wider than that is cut off. The tab strip keeps to it.
+    bounds: Rect,
 }
 
 /// How Playnite's FullscreenTilePanel fills a game list's box: horizontal layout (Playnite's

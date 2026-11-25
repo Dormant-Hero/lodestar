@@ -2,6 +2,7 @@
 //! letter jumps.
 
 use super::*;
+use crate::theme::model::{Element, ThemeFile};
 
 /// Short controller-support label for menu values ("" = unknown).
 pub(super) fn controller_short(c: Option<ControllerSupport>) -> &'static str {
@@ -24,9 +25,9 @@ pub(super) fn is_hidden_collection(c: &Collection) -> bool {
 /// The filter tabs a theme draws over its game list, as the collection keys they stand for, in
 /// order. Translated Playnite themes draw each tab as a text shown or highlighted by a rule
 /// `{collection.key} == <key>` (theme/playnite/compile.rs, `tabs_table`); no such rules: no tabs.
-pub(super) fn theme_tab_keys(theme: &crate::theme::model::ThemeFile) -> Vec<String> {
-    use crate::theme::model::Element;
-    fn walk(e: &Element, out: &mut Vec<String>) {
+pub(super) fn theme_tab_keys(theme: &ThemeFile) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    each_games_element(theme, &mut |e| {
         let c = e.common();
         for rule in [&c.visible_if, &c.hidden_if].into_iter().flatten() {
             if let Some(key) = rule.trim().strip_prefix("{collection.key} == ").map(str::trim)
@@ -37,13 +38,31 @@ pub(super) fn theme_tab_keys(theme: &crate::theme::model::ThemeFile) -> Vec<Stri
                 out.push(key.to_string());
             }
         }
+    });
+    out
+}
+
+/// The theme draws its own LB / RB pictures on the game list (Playnite themes put them beside
+/// their filter tabs), so the hint bar needn't say what those buttons do.
+pub(super) fn theme_prompts_shoulders(theme: &ThemeFile) -> bool {
+    let mut found = false;
+    each_games_element(theme, &mut |e| {
+        if let Element::HelpBar { buttons, glyphs: true, .. } = e {
+            found |= buttons.iter().any(|b| b.eq_ignore_ascii_case("lb") || b.eq_ignore_ascii_case("rb"));
+        }
+    });
+    found
+}
+
+/// Every element of the theme's game list, stacks' children included.
+fn each_games_element(theme: &ThemeFile, f: &mut impl FnMut(&Element)) {
+    fn walk(e: &Element, f: &mut impl FnMut(&Element)) {
+        f(e);
         if let Element::Stack { children, .. } = e {
-            children.iter().for_each(|ch| walk(ch, out));
+            children.iter().for_each(|ch| walk(ch, f));
         }
     }
-    let mut out = vec![];
-    theme.games.elements.iter().for_each(|e| walk(e, &mut out));
-    out
+    theme.games.elements.iter().for_each(|e| walk(e, f));
 }
 
 /// First letter used for letter jumps ('#' for digits/symbols).

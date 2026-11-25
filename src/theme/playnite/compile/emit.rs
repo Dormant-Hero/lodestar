@@ -7,7 +7,8 @@ use super::*;
 
 impl Default for Ctx {
     fn default() -> Self {
-        Ctx { opacity: 1.0, clip: Rect::new(0.0, 0.0, W, H), cond: Cond::default(), scroll: None, row: None }
+        let screen = Rect::new(0.0, 0.0, W, H);
+        Ctx { opacity: 1.0, clip: screen, cond: Cond::default(), scroll: None, row: None, bounds: screen }
     }
 }
 
@@ -89,6 +90,19 @@ pub(super) fn is_hint_bar(e: &Table) -> bool {
     e.get("type").and_then(T::as_str) == Some("helpbar") && e.get("glyphs").and_then(T::as_bool) != Some(true)
 }
 
+/// The boxes of the visible LB / RB prompts under `n`.
+pub(super) fn shoulder_prompts(n: &LNode) -> Vec<Rect> {
+    if n.vis != Vis::Visible || n.data.opacity <= 0.01 {
+        return vec![];
+    }
+    let mut out = match n.data.kind {
+        Kind::Prompt("lb" | "rb", _) => vec![n.rect],
+        _ => vec![],
+    };
+    out.extend(n.children.iter().flat_map(shoulder_prompts));
+    out
+}
+
 /// A theme's button prompt in `r`: one glyph, as tall as the box.
 pub(super) fn prompt_table(button: &str, color: Option<Color>, r: Rect) -> Table {
     let mut t = el_table("helpbar", r);
@@ -146,7 +160,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         // long name or a missing fact moves what follows as in Playnite.
         if self.stacks && matches!(n.data.kind, Kind::None) && area > 0.0 && is_flow(n) && varies(n) {
             let saved = self.stats.clone();
-            let sub = Ctx { opacity: 1.0, clip: cx.clip, cond: Cond::default(), scroll: cx.scroll, row: None };
+            let sub = Ctx { opacity: 1.0, cond: Cond::default(), row: None, ..cx.clone() };
             if let Some(mut t) = self.stack_node(n, &sub, true, false) {
                 self.decorate(&mut t, &deco, out.len(), "stack");
                 out.push(t);
@@ -181,7 +195,9 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             cx.row
         };
         let scroll = if matches!(n.panel, Panel::Scroll { .. }) { Some(r.intersect(&cx.clip)) } else { cx.scroll };
-        let sub = Ctx { opacity, clip, cond, row, scroll };
+        let width_set = n.width.is_some() || n.max[0].is_finite();
+        let bounds = if width_set { cx.bounds.intersect(&r) } else { cx.bounds };
+        let sub = Ctx { opacity, clip, cond, row, scroll, bounds };
         for k in kids {
             self.emit(k, &sub, out);
         }
@@ -314,7 +330,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 return true;
             }
             Kind::Tabs(tabs) if area > 0.0 => {
-                let mut tbl = self.tabs_table(n, tabs);
+                let mut tbl = self.tabs_table(n, tabs, cx);
                 self.decorate(&mut tbl, deco, out.len(), "tabs");
                 out.push(tbl);
                 self.stats.area_drawn += area;
@@ -530,8 +546,8 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
 
     /// The filter preset tabs as a row of texts: each of `TABS`, plain or (when its collection
     /// is the open one) bold in the current colour, then the open collection's own name when
-    /// it is none of them.
-    pub(super) fn tabs_table(&self, n: &LNode, tabs: &TabsOut) -> Table {
+    /// it is none of them. The row keeps to `tab_room`, its text shrinking when it doesn't fit.
+    pub(super) fn tabs_table(&self, n: &LNode, tabs: &TabsOut, cx: &Ctx) -> Table {
         let r = n.rect.deflate_pub(n.padding);
         let key = "{collection.key}";
         let text = |label: &str, current: bool| -> T {
@@ -567,18 +583,52 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         t.insert("direction".into(), T::String("horizontal".into()));
         t.insert("align".into(), T::String("center".into()));
         set_f(&mut t, "gap", tabs.label.size * n.scale * 1.2 / H);
-        let (ox, x) = match n.ha {
-            Al::End => (1.0, r.x + r.w),
-            Al::Center => (0.5, r.x + r.w / 2.0),
-            _ => (0.0, r.x),
-        };
         let line = tabs.label.size * n.scale * 1.344;
         let y = (r.y + (r.h.min(line * 2.0) / 2.0)).min(r.y + r.h);
+        let room = self.tab_room(r, n.ha, cx, [y - line / 2.0, y + line / 2.0]);
+        let (ox, x) = match n.ha {
+            Al::End => (1.0, room.x + room.w),
+            Al::Center => (0.5, room.x + room.w / 2.0),
+            _ => (0.0, room.x),
+        };
         set_pair(&mut t, "pos", [x / W, y / H]);
         set_pair(&mut t, "origin", [ox, 0.5]);
         set_pair(&mut t, "size", [0.0, 0.0]);
+        set_f(&mut t, "max_width", room.w / W);
         t.insert("children".into(), T::Array(children));
         t
+    }
+
+    /// The room the tab strip at `r` (aligned `ha`, its text line spanning `line`, top and
+    /// bottom) may take. Playnite's tabs are often small pictures where Lodestar writes names,
+    /// so the strip may grow past its own box, but only up to where WPF's layout clips it
+    /// (`Ctx::bounds`: a dock with a MaxWidth) and to the LB / RB prompts beside it.
+    fn tab_room(&self, r: Rect, ha: Al, cx: &Ctx, line: [f32; 2]) -> Rect {
+        let lo = cx.bounds.x.max(cx.clip.x);
+        let hi = (cx.bounds.x + cx.bounds.w).min(cx.clip.x + cx.clip.w);
+        let (mut x0, mut x1) = match ha {
+            Al::End => (lo, (r.x + r.w).min(hi)),
+            Al::Center => (lo, hi),
+            _ => (r.x.max(lo), hi),
+        };
+        let mid = r.x + r.w / 2.0;
+        for p in &self.shoulder_prompts {
+            let beside = p.y < line[1] && p.y + p.h > line[0] && p.x < x1 && p.x + p.w > x0;
+            if !beside {
+                continue;
+            }
+            if p.x + p.w / 2.0 < mid {
+                x0 = x0.max(p.x + p.w);
+            } else {
+                x1 = x1.min(p.x);
+            }
+        }
+        if ha == Al::Center {
+            let half = (mid - x0).min(x1 - mid);
+            (x0, x1) = (mid - half, mid + half);
+        }
+        // Nothing sensible left (prompts over the whole strip): its own box.
+        if x1 - x0 < line[1] - line[0] { r } else { Rect::new(x0, r.y, x1 - x0, r.h) }
     }
 
     /// The game list at `r`: one row of covers (carousel) or a grid, shaped the way Playnite's

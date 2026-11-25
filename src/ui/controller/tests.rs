@@ -412,3 +412,105 @@ fn hints_name_what_a_does_on_the_built_in_details_page() {
     ui.details.as_mut().unwrap().focus = 3;
     assert_eq!(a(&ui, &st).as_deref(), Some("Options"));
 }
+
+/// The Lodestar theme with filter tabs over its game list the way imported Playnite themes draw
+/// them (each tab a text that a `{collection.key} == …` rule highlights), plus `extra` elements.
+fn tabs_theme(st: &AppState, extra: &str) -> Arc<Theme> {
+    let mut t = (*st.themes.load("Lodestar")).clone();
+    t.key = "tabs".into();
+    let mut tab = String::new();
+    for (key, label) in [("all", "All Games"), ("recent", "Continue Playing"), ("favorites", "Favourites")] {
+        tab += &format!(
+            "[[children]]\ntype = \"text\"\ntext = \"{label}\"\nhidden_if = \"{{collection.key}} == {key}\"\n\
+             [[children]]\ntype = \"text\"\ntext = \"{label}\"\nvisible_if = \"{{collection.key}} == {key}\"\n"
+        );
+    }
+    tab += "[[children]]\ntype = \"text\"\ntext = \"Installed\"\nvisible_if = \"{collection.key} == installed\"\n";
+    let stack = format!("type = \"stack\"\ndirection = \"horizontal\"\npos = [0.3, 0.05]\n{tab}");
+    for src in [stack.as_str(), extra].into_iter().filter(|s| !s.is_empty()) {
+        let el: crate::theme::model::Element = toml::from_str(src).unwrap_or_else(|e| panic!("{e}\n{src}"));
+        t.file.games.elements.push(el);
+    }
+    Arc::new(t)
+}
+
+/// Alpha: installed, favourite, played; Bravo: played; Charlie: neither; Delta: installed.
+fn tabs_setup(extra: &str) -> (tempfile::TempDir, AppState, ControllerUi) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut st = AppState::for_test(dir.path());
+    st.library.replace(vec![
+        Game { installed: true, favorite: true, last_played: Some(1_700_000_200), ..g(1, "Alpha") },
+        Game { last_played: Some(1_700_000_100), ..g(2, "Bravo") },
+        g(3, "Charlie"),
+        Game { installed: true, ..g(4, "Delta") },
+    ]);
+    st.controller_theme = tabs_theme(&st, extra);
+    let mut ui = ControllerUi::new();
+    open(&mut ui, &st.library, "all");
+    (dir, st, ui)
+}
+
+fn press(ui: &mut ControllerUi, st: &mut AppState, nav: Nav) -> String {
+    let screen = Rect::from_min_size(pos2(0.0, 0.0), vec2(1920.0, 1080.0));
+    ui.handle_nav(st, nav, screen, 1.0, (false, false));
+    ui.refresh_list(&st.library);
+    ui.cur_key().unwrap_or_default()
+}
+
+#[test]
+fn shoulder_buttons_walk_a_themes_filter_tabs_in_order_and_wrap() {
+    let (_d, mut st, mut ui) = tabs_setup("");
+    assert_eq!(ui.screen, Screen::Games);
+    let mut seen = vec![];
+    for _ in 0..4 {
+        seen.push(press(&mut ui, &mut st, Nav::PageDown));
+    }
+    assert_eq!(seen, ["recent", "favorites", "installed", "all"], "RB: the tabs in the theme's order, round");
+    assert_eq!(press(&mut ui, &mut st, Nav::PageUp), "installed", "LB from the first tab: the last");
+    assert_eq!(press(&mut ui, &mut st, Nav::PageUp), "favorites");
+    assert_eq!(ui.screen, Screen::Games);
+    assert_consistent(&ui, &st.library);
+}
+
+#[test]
+fn shoulder_buttons_skip_tabs_without_games_and_leave_other_collections_for_the_first_tab() {
+    let (_d, mut st, mut ui) = tabs_setup("");
+    // No favourites: that tab has no collection behind it.
+    let mut games = st.library.games.clone();
+    games.iter_mut().for_each(|g| g.favorite = false);
+    st.library.replace(games);
+    ui.refresh_list(&st.library);
+    assert_eq!(press(&mut ui, &mut st, Nav::PageDown), "recent");
+    assert_eq!(press(&mut ui, &mut st, Nav::PageDown), "installed");
+    // A collection with no tab of its own (it shows as an extra tab after the theme's):
+    // RB goes round to the first tab, LB back to the last.
+    open(&mut ui, &st.library, "steam");
+    assert_eq!(press(&mut ui, &mut st, Nav::PageDown), "all");
+    open(&mut ui, &st.library, "steam");
+    assert_eq!(press(&mut ui, &mut st, Nav::PageUp), "installed");
+}
+
+#[test]
+fn shoulder_buttons_page_the_list_on_themes_without_tabs() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut st = AppState::for_test(dir.path());
+    st.set_controller_theme("Lodestar");
+    st.library.replace((1..=40).map(|i| Game { installed: true, ..g(i, &format!("Game {i:02}")) }).collect());
+    let mut ui = ControllerUi::new();
+    open(&mut ui, &st.library, "all");
+    assert_eq!(press(&mut ui, &mut st, Nav::PageDown), "all", "no tabs: the collection stays");
+    assert!(ui.game_sel > 0, "RB pages down the list");
+    assert!(!ui.hints(&st).iter().any(|h| matches!(h.button, Button::LB | Button::RB)), "and no tab hint");
+}
+
+#[test]
+fn the_hint_bar_names_the_tab_buttons_unless_the_theme_draws_them() {
+    let lb =
+        |ui: &ControllerUi, st: &AppState| ui.hints(st).into_iter().find(|h| h.button == Button::LB).map(|h| h.label);
+    let (_d, st, ui) = tabs_setup("");
+    assert_eq!(lb(&ui, &st).as_deref(), Some("Tabs"));
+    // The theme's own LB / RB pictures beside its tabs say it already.
+    let prompts = "type = \"helpbar\"\npos = [0.25, 0.05]\nbuttons = [\"lb\"]\nglyphs = true\n";
+    let (_d, st, ui) = tabs_setup(prompts);
+    assert_eq!(lb(&ui, &st), None);
+}
