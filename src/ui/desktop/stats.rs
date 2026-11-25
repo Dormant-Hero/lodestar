@@ -71,6 +71,7 @@ impl DesktopUi {
             LibSel::All => {}
             LibSel::Installed => parts.push("Installed".into()),
             LibSel::NotInstalled => parts.push("Not installed".into()),
+            LibSel::NotInSteamLibrary => parts.push("Not in your Steam library".into()),
             LibSel::Favorites => parts.push("Favourites".into()),
             LibSel::Recent => parts.push("Recently played".into()),
             LibSel::Hidden => parts.push("Hidden".into()),
@@ -117,7 +118,10 @@ impl DesktopUi {
         let summary = self.filter_summary();
         let Some(page) = self.stats.as_mut() else { return };
         let mut click: Option<Click> = None;
+        // The page's controls, for the controller (pad.rs).
+        let mut controls = vec![];
         egui::ScrollArea::vertical().id_salt("ls_stats_scroll").auto_shrink([false, false]).show(ui, |ui| {
+            let mark = super::pad::widget_mark(ui);
             egui::Frame::new().inner_margin(egui::Margin::symmetric(24, 18)).show(ui, |ui| {
                 let w = ui.available_width();
                 // Title, back button.
@@ -237,7 +241,9 @@ impl DesktopUi {
                     right(ui, &mut click);
                 }
             });
+            controls = super::pad::controls_since(ui, mark);
         });
+        self.pad.page_shown(controls);
         let in_filter = page.filtered;
         if let Some(c) = click {
             self.stats_click(st, c, in_filter);

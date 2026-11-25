@@ -180,3 +180,42 @@ fn every_store_in_one_home() {
     assert!(!hades.installed);
     assert!(!report.games.iter().any(|g| g.source_id == "Hades"));
 }
+
+/// A library from before shortcuts were matched: the Heroic shortcut `Fortnite.desktop` was a
+/// game of its own. The next scan folds its row into the Epic game, played time and favourite
+/// included, and leaves no missing copy.
+#[test]
+fn old_rows_of_store_shortcuts_fold_into_the_store_game() {
+    let (tmp, home) = everything_home();
+    let data = tmp.path().join("lodestar-data");
+    std::fs::create_dir_all(&data).unwrap();
+    let report = run_all(&ctx_for(&home, &data));
+    assert!(
+        report.dropped_shortcuts.contains(&DroppedShortcut {
+            shortcut: (Source::Desktop, "Fortnite.desktop".into()),
+            target: (Source::Epic, "Fortnite".into()),
+        }),
+        "{:?}",
+        report.dropped_shortcuts
+    );
+
+    let mut db = crate::db::Db::open_memory().unwrap();
+    let mut old = report.games.clone();
+    old.push(ScannedGame::new(Source::Desktop, "Fortnite.desktop", "Fortnite"));
+    db.merge_scan(&old, &report.ok_sources).unwrap();
+    let id_of = |db: &crate::db::Db, src: Source, sid: &str| {
+        db.load_all().unwrap().into_iter().find(|g| g.source == src && g.source_id == sid).map(|g| g.id)
+    };
+    let shortcut = id_of(&db, Source::Desktop, "Fortnite.desktop").unwrap();
+    let epic = id_of(&db, Source::Epic, "Fortnite").unwrap();
+    let heroic_playtime = db.get(epic).unwrap().unwrap().playtime_secs;
+    db.set_favorite(shortcut, true).unwrap();
+    db.add_playtime(shortcut, 1200).unwrap();
+
+    let s = db.merge_scan_with_shortcuts(&report.games, &report.ok_sources, &report.dropped_shortcuts).unwrap();
+    assert_eq!((s.removed, s.missing), (1, 0), "{s:?}");
+    assert_eq!(id_of(&db, Source::Desktop, "Fortnite.desktop"), None);
+    let epic = db.get(epic).unwrap().unwrap();
+    assert!(epic.favorite);
+    assert_eq!(epic.playtime_secs, heroic_playtime + 1200);
+}

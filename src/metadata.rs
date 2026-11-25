@@ -359,6 +359,22 @@ pub struct MetadataFetcher {
 
 impl MetadataFetcher {
     pub fn new(ctx: &egui::Context, art_dir: PathBuf, cfg: &MetadataConfig) -> MetadataFetcher {
+        // Screenshot runs may answer from local fixture files (never the network).
+        MetadataFetcher::start(ctx, art_dir, cfg, fixture::from_env())
+    }
+
+    /// A fetcher that answers every request with "not found" (tests that queue lookups).
+    #[cfg(test)]
+    pub(crate) fn offline(ctx: &egui::Context, art_dir: PathBuf, cfg: &MetadataConfig) -> MetadataFetcher {
+        MetadataFetcher::start(ctx, art_dir, cfg, Some(fixture::FixtureHttp::empty()))
+    }
+
+    fn start(
+        ctx: &egui::Context,
+        art_dir: PathBuf,
+        cfg: &MetadataConfig,
+        fixtures: Option<fixture::FixtureHttp>,
+    ) -> MetadataFetcher {
         let shared = Arc::new(Shared {
             q: Mutex::new(Queue { jobs: VecDeque::new(), background: VecDeque::new(), ids: HashSet::new() }),
             cv: Condvar::new(),
@@ -370,8 +386,6 @@ impl MetadataFetcher {
         });
         let (tx, rx) = unbounded();
         let (sh, ctx) = (shared.clone(), ctx.clone());
-        // Screenshot runs may answer from local fixture files (never the network).
-        let fixtures = fixture::from_env();
         let spawned = std::thread::Builder::new().name("metadata".into()).spawn(move || {
             // Load off the UI thread; swapped in whole so `request` never waits on disk.
             let loaded = protondb::Cache::load(&protondb::Cache::path(&art_dir));

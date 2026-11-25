@@ -126,6 +126,19 @@ fn combo_recorder(ui: &mut Ui, st: &mut AppState, start: bool, pal: &Pal) -> boo
 
 pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pal) -> bool {
     let mut ch = false;
+    heading(ui, "Desktop mode", pal);
+    let c = &mut st.config.controller;
+    ch |= ui.checkbox(&mut c.desktop_navigation, "Use the controller in desktop mode").changed();
+    let name = c.menu_button_name();
+    hint_text(
+        ui,
+        &format!(
+            "Move around the library, its menus and windows while Lodestar is the active window and no \
+             game is running. While a game runs only the menu button ({name}) reaches Lodestar."
+        ),
+        pal,
+    );
+    ui.add_space(6.0);
     heading(ui, "Controller mode", pal);
     controller_look(ui, st, d);
     let c = &mut st.config.controller;
@@ -224,6 +237,8 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
         }
     }
     ui.add_space(6.0);
+    ch |= categories(ui, st, pal);
+    ui.add_space(6.0);
     egui::CollapsingHeader::new(RichText::new("More options").strong().color(pal.text))
         .id_salt("ls_ctl_more")
         .default_open(false)
@@ -284,6 +299,52 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
     ui.add_space(8.0);
     if ui.button("Switch to controller mode now").clicked() {
         st.switch_mode(crate::app::Mode::Controller);
+    }
+    ch
+}
+
+/// Settings → Controller → Categories: the checklist of controller Settings → General →
+/// Categories. Returns "changed".
+fn categories(ui: &mut Ui, st: &mut AppState, pal: &Pal) -> bool {
+    use crate::library::Category;
+    use std::sync::Arc;
+    type Rows = Arc<Vec<(&'static str, Vec<(Category, String)>)>>;
+    heading(ui, "Categories in controller mode", pal);
+    hint_text(ui, "Hiding a category never hides its games: they stay in All Games.", pal);
+    // Counting every category's games is a pass over the library each: once per change.
+    let id = egui::Id::unique("ls_ctl_categories");
+    let generation = st.library.generation;
+    let rows: Rows = match ui.data(|d| d.get_temp::<(u64, Rows)>(id)) {
+        Some((g, rows)) if g == generation => rows,
+        _ => {
+            let rows: Rows = Arc::new(crate::ui::controller::categories::checklist(&st.library));
+            ui.data_mut(|d| d.insert_temp(id, (generation, rows.clone())));
+            rows
+        }
+    };
+    let mut ch = false;
+    let choice = &mut st.config.controller.categories;
+    for (group, cats) in rows.iter() {
+        ui.label(RichText::new(*group).color(pal.dim));
+        ui.horizontal_wrapped(|ui| {
+            for (c, label) in cats {
+                let key = c.collection.key();
+                if !c.hideable() {
+                    ui.add_enabled(false, egui::Checkbox::new(&mut true, label.as_str()))
+                        .on_disabled_hover_text("Always shown: every game stays one press away here");
+                    continue;
+                }
+                let mut shown = choice.shows(&key, c.default);
+                let mut checkbox = ui.checkbox(&mut shown, label.as_str());
+                if c.collection.kind == crate::library::CollectionKind::Pc {
+                    checkbox = checkbox.on_hover_text(crate::ui::controller::categories::PC_HELP);
+                }
+                if checkbox.changed() {
+                    choice.set(&key, c.default, shown);
+                    ch = true;
+                }
+            }
+        });
     }
     ch
 }

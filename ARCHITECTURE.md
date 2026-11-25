@@ -48,10 +48,11 @@ the module path is the parent's name followed by the part (for example `launch::
 | App core | `app`, `*_app` | `AppState`, the frame loop, polling background work; `edit_app`, `art_app`, `romm_app` … are the `AppState` methods for one area each |
 | Data model | `model`, `library`, `library_collections`, `db`, `search` | `Game`, `GameId`, `Source`, metadata; the in-memory library with its collections and filtered views; the SQLite store; fuzzy search |
 | Configuration | `config`, `config_menu_button` | `~/.config/lodestar/config.toml` (serde, lenient: an invalid value drops only itself) and the standard paths (`Paths`, `LODESTAR_HOME`) |
-| Finding games | `scan::*`, `steam_names*` | One scanner per library (Steam, Heroic, Lutris, Bottles, Faugus, itch, Minecraft, Moonlight, Wine-prefix stores, desktop entries, ROM folders, RomM, add-ons); `steam_names` looks up, in the background, the names of Steam games Steam's files don't name and the owned-games list (user's Web API key), which the Steam scanner reads from the cache |
+| Finding games | `scan::*`, `steam_names*` | One scanner per library (Steam, Heroic, Lutris, Bottles, Faugus, itch, Minecraft, Moonlight, Wine-prefix stores, desktop entries, ROM folders, RomM, add-ons); `steam_names` looks up, in the background, the names of Steam games Steam's files don't name and the owned-games list (user's Web API key), which the Steam scanner reads from the cache; `steam_owned` marks not-installed Steam games played here that left the account's library (an ended subscription), whose Install opens Steam |
 | Emulation | `emulation::*`, `scan::emulation*` | Consoles, built-in emulator definitions, detecting emulators, BIOS / firmware, several ROMs per game, the ROM hash database |
 | Launching | `launch::*`, `client_launch`, `game_options*` | Resolving a game into a command, spawning it, tracking the session through `/proc`, keeping store clients out of sight (`launch::hygiene`), scripts; game options turn switches into environment variables and wrappers |
-| Artwork and metadata | `art*`, `metadata*`, `igdb`, `images*` | Artwork sources and the artwork engine, online metadata (Steam, IGDB, SteamGridDB, Wikipedia, ProtonDB), and the image cache (decode workers, disk thumbnails, GPU texture LRU) |
+| Artwork and metadata | `art*`, `metadata*`, `igdb`, `images*` | Artwork sources and the artwork engine, online metadata (Steam, IGDB, SteamGridDB, Wikipedia, ProtonDB), and the image cache (decode workers, disk thumbnails, GPU texture LRU). libretro's name lists come from GitHub's API (60 requests an hour per address); once that limit is reached, `art::worker::more` looks for the ROM's exact No-Intro / Redump names on the image host instead, and a game none of them fits is asked again later (`Fail::Later`) |
+| First start | `welcome_app`, `ui::desktop::welcome_ui`, `ui::controller::welcome` | The one-time welcome step of a fresh install (no config file, no library): recommends a SteamGridDB key, checks it, and holds the first online lookups until it is answered; the desktop dialog and the controller card draw it |
 | Achievements | `achievements::*`, `ui::achievements` | `Hub`: game pages' answers (one worker; Steam from the client's files, RetroAchievements' Web API) and the library's counts (`summary`: a niced background pass over the whole library, page answers, `summary.json`); the UI reads `Hub::counts()` |
 | Achievements | `achievements::*` | Steam achievements from the Steam client's files, RetroAchievements from its public Web API (the user's username + Web API key), a worker (`Hub`) with per-game answers and library counts; emulators' RetroAchievements sign-in is only read, never written |
 | Themes | `theme::model`, `theme::render::*` | The Lodestar theme format (`theme.toml`) and the renderer that draws a theme's views with data bindings |
@@ -59,8 +60,8 @@ the module path is the parent's name followed by the part (for example `launch::
 | Console artwork | `theme::console_art`, `tools/gen-console-art.py` | Lodestar's own picture set for every console, store and built-in collection (card, wide background, wordmark, device): SVGs drawn by the generator into `assets/consoles/`, embedded compressed, written once to the cache, reached by themes through `{collection.art.*}` / `{game.consoleart.*}` |
 | Theme import | `theme::playnite::*`, `theme::catalog::*` | Playnite theme importer (XAML → resource tree → look → layout / view compiler), Playnite's community theme list (browse, install, updates) |
 | Media | `media::*` | Theme videos (one `ffmpeg` process per video), navigation sounds and music (a pure-Rust mixer feeding one player process), install hints for missing programs |
-| Input | `input`, `input::pad`, `input::gate`, `input::style` | Gamepad → `Nav` events, the menu-button combination, the focus gate (see "Controller safety rule"), button glyph style |
-| Desktop UI | `ui::desktop::*` | Top bar, explorer sidebar, grid / list / details views, dialogs, Settings, Add-ons, editors |
+| Input | `input`, `input::pad`, `input::gate`, `input::style` | Gamepad → `Nav` events, the menu-button combination, the focus gate (see "Controller safety rule") and desktop mode's stricter rule, button glyph style |
+| Desktop UI | `ui::desktop::*` | Top bar, explorer sidebar, grid / list / details views, dialogs, Settings, Add-ons, editors; `ui::desktop::pad` turns controller presses into the keys, menu keys and focus moves the library, menus and dialogs already answer |
 | Controller UI | `ui::controller::*` | Collections → Games → Details through the theme renderer, side menus, on-screen keyboard, the in-game menu |
 | Desktop integration | `tray`, `tray_app`, `winctl`, `launch::winhide*`, `instance`, `main_window` | Tray icon (StatusNotifierItem over D-Bus), hiding windows, one instance per library, remembering the window's size and position |
 | Updates | `update`, `update_app`, `ui::desktop::update_ui`, `ui::controller::update` | Lodestar's own updates: a daily check of GitHub's latest release (background thread, off in screenshot runs), and for the AppImage the checked download (size, SHA-256, AppImage magic, only this repository's release files) that replaces the file, `<name>.old` kept until the next start, and the restart (`exec` of the new AppImage) |
@@ -104,7 +105,10 @@ The import runs on the `theme-job` thread.
 
 While a game runs and no Lodestar window is focused, only the menu button gets through, and only to open the
 menu. When a Lodestar window is focused, only the in-game menu's own buttons get through. A hidden or minimised
-window never counts as focused, and an unknown focus state fails safe. The rule lives in `input/gate.rs`, the
+window never counts as focused, and an unknown focus state fails safe. Desktop mode is stricter: the controller
+moves around the library only while a Lodestar window is reported focused, nothing is running, launching or just
+ended, and a look for running games taken since the last game ended saw nothing (`gate::desktop_pad`, applied
+after the safety rule's filter; background input doesn't apply). The rule lives in `input/gate.rs`, the
 combination detection in `input/pad.rs`. Both have regression tests that must keep passing. Change them only
 together with those tests.
 
@@ -143,7 +147,8 @@ The binary re-executes itself under `xvfb-run`, so no window appears on screen. 
 
 * `--controller --inject right*3,accept` drives controller mode.
 * `LODESTAR_DESKTOP_OPEN=settings` opens a dialog first, and `LODESTAR_DESKTOP_KEYS=click:x:y,text:abc` sends
-  pointer and keyboard events.
+  pointer and keyboard events. In desktop mode it also sends controller presses (`pad:down*3,pad:a`) through
+  the pad's rule, in a made-up situation (`game:up`, `focus:off`, `seen:on`, `wait:1500`).
 * `LODESTAR_FRAME_STATS=1`, `LODESTAR_LATENCY_PROBE=1` and `LODESTAR_IDLE_PROBE=5` measure performance.
 
 `lodestar --help` lists the rest. `LODESTAR_HOME` keeps the config, library and caches in one folder, so a test

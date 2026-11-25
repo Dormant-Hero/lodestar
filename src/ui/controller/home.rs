@@ -272,10 +272,11 @@ impl ControllerUi {
                 })
             });
         let (specs, max, per_row) = spec.unwrap_or_else(|| (vec!["all".into()], 1, 30));
-        let mut picked = pick_rows(&specs, &self.colls, max.max(1));
+        let added = self.added_categories();
+        let mut picked = pick_rows(&specs, &self.colls, max.max(1), &added);
         if picked.is_empty() {
             // Nothing the theme asked for has games: at least show the whole library.
-            picked = pick_rows(&["all".to_string()], &self.colls, 1);
+            picked = pick_rows(&["all".to_string()], &self.colls, 1, &[]);
         }
         self.home.rows = picked
             .into_iter()
@@ -719,6 +720,59 @@ mod tests {
         ui2.home_sync(&st2, 0.0);
         assert_eq!(ui2.screen, Screen::Collections);
         assert!(ui2.rail_info(&st2, ViewKind::Collections).is_none());
+    }
+
+    /// A theme whose home rows list only stores: the stores the player hid leave, and PC, which
+    /// the theme doesn't list, gets a row once the player adds it (after the theme's rows: it has
+    /// none of PC's kind).
+    #[test]
+    fn home_rows_follow_the_players_categories() {
+        let (_d, mut st, mut ui) = setup();
+        let mut games: Vec<Game> =
+            (1..=4).map(|i| game(i, &format!("Steam {i}"), None, Some(1_700_000_000 + i))).collect();
+        games.extend((5..=7).map(|i| Game { source: Source::Gog, ..game(i, &format!("GOG {i}"), None, None) }));
+        st.library.replace(games);
+        let mut t = (*st.controller_theme).clone();
+        t.key = "stores-only".into();
+        for e in &mut t.file.home.as_mut().expect("home view").elements {
+            if let Element::Rows { rows, .. } = e {
+                *rows = vec!["recent".into(), "sources:3".into()];
+            }
+        }
+        st.controller_theme = Arc::new(t);
+        let sync = |ui: &mut ControllerUi, st: &AppState| {
+            ui.categories.clone_from(&st.config.controller.categories);
+            ui.refresh_collections(&st.library);
+            ui.home_sync(st, 0.0);
+        };
+        sync(&mut ui, &st);
+        assert_eq!(row_names(&ui), ["Continue Playing", "Steam", "GOG"]);
+        let c = &mut st.config.controller.categories;
+        c.set("steam", true, false);
+        c.set("gog", true, false);
+        c.set("pc", false, true);
+        sync(&mut ui, &st);
+        assert_eq!(row_names(&ui), ["Continue Playing", "PC Games"]);
+        assert_eq!(ui.home.rows[1].1.len(), 7, "every PC game");
+        // Every row hidden: the home page still shows All Games, never nothing.
+        st.config.controller.categories.set("recent", true, false);
+        st.config.controller.categories.set("pc", false, false);
+        sync(&mut ui, &st);
+        assert_eq!(row_names(&ui), ["All Games"]);
+        assert!(ui.home.row < ui.home.rows.len());
+    }
+
+    /// A library with emulated games lists PC already, but the built-in theme's rows don't
+    /// name it: hiding the store is what brings its row onto the home page.
+    #[test]
+    fn hiding_a_store_brings_pc_home() {
+        let (_d, mut st, mut ui) = setup();
+        assert!(ui.colls.iter().any(|c| c.collection.kind == CollectionKind::Pc), "PC is listed");
+        st.config.controller.categories.set("steam", true, false);
+        ui.categories.clone_from(&st.config.controller.categories);
+        ui.refresh_collections(&st.library);
+        ui.home_sync(&st, 0.0);
+        assert_eq!(row_names(&ui), ["Continue Playing", "PlayStation 2", "PC Games", "Emulators", "All Games"]);
     }
 
     #[test]

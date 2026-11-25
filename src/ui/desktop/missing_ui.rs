@@ -154,6 +154,32 @@ pub(crate) fn page_hint(ui: &mut Ui, g: &Game, pal: &Pal) {
     ));
 }
 
+/// The game page's note for a Steam game that is no longer in the account's Steam library
+/// (steam_owned.rs); its Install button says Open in Steam.
+pub(crate) fn steam_library_hint(ui: &mut Ui, caps: Option<&super::StoreCaps>, pal: &Pal) {
+    if !caps.is_some_and(|c| c.not_in_steam_library) {
+        return;
+    }
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        let (rect, _) = ui.allocate_exact_size(vec2(13.0, 13.0), Sense::hover());
+        paint_icon(ui.painter(), rect, Icon::InfoCircle, pal.dim);
+        ui.label(RichText::new("Not in your Steam library").size(12.5).strong().color(pal.dim));
+    });
+    ui.add(
+        egui::Label::new(
+            RichText::new(
+                "It may have come with a subscription such as EA Play that has ended, or from someone's \
+                 shared library.",
+            )
+            .size(12.5)
+            .color(pal.dim),
+        )
+        .wrap(),
+    );
+}
+
 // ------------------------------------------------------------------ Settings → Libraries
 
 /// Settings → Libraries → Missing games.

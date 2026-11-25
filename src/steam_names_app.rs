@@ -6,6 +6,8 @@
 //! CONTRACT (UIs):
 //!   st.steam_names.running              a lookup is running
 //!   st.steam_names.status               plain words about the last lookup (None = nothing yet)
+//!   st.refresh_steam_owned()            re-read the owned-games list into the library (at start-up,
+//!                                       after a scan, when the key changes; see steam_owned.rs)
 
 use crate::app::AppState;
 use crate::model::Source;
@@ -37,6 +39,12 @@ impl AppState {
         !crate::art::net::local_only()
             && self.config.scan.include_uninstalled
             && !self.config.scan.disabled_sources.iter().any(|k| k == Source::Steam.key())
+    }
+
+    /// Hand the saved owned-games list to the library, which marks the games no longer in it.
+    pub(crate) fn refresh_steam_owned(&mut self) {
+        let key_set = !self.steam_key().is_empty();
+        self.library.set_steam_owned(crate::steam_owned::load(&self.paths.cache_dir, key_set));
     }
 
     /// A scan finished: look up what it couldn't name, and the owned-games list when due.
@@ -104,6 +112,10 @@ impl AppState {
                     }
                 }
             }
+            // A fetched list (changed or not: it may be the first since a key was set).
+            if out.owned_count.is_some() {
+                self.refresh_steam_owned();
+            }
             if out.library_changed() {
                 self.rescan_local_libraries();
             }
@@ -117,6 +129,7 @@ impl AppState {
         if key.is_empty() {
             // Key removed: forget the owned-games list it fetched.
             self.steam_names.key_seen = Some(key);
+            self.refresh_steam_owned();
             self.steam_names.status = None;
             let path = self.paths.cache_dir.join(names::OWNED_FILE);
             if path.is_file() && std::fs::remove_file(&path).is_ok() {

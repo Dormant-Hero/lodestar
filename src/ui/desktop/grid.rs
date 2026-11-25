@@ -258,6 +258,9 @@ impl DesktopUi {
         let cover = Rect::from_min_size(rect.min - vec2(0.0, lift), vec2(lay.item_w, lay.cover_h));
         let p = ui.painter();
         let radius = look.radius;
+        if let Some(tile) = look.tile {
+            p.rect_filled(rect, radius, tile);
+        }
 
         soft_shadow(
             p,
@@ -345,6 +348,9 @@ impl DesktopUi {
             count_pill(p, pos2(cover.left() + 8.0, low), count, ps, room, pal.accent);
         }
         if lay.name_h > 0.0 {
+            if let Some(strip) = look.caption {
+                p.rect_filled(Rect::from_min_max(pos2(rect.left(), rect.bottom() - lay.name_h), rect.max), 0.0, strip);
+            }
             let color = if selected { pal.text } else { mix(pal.text, pal.dim, 0.35) };
             let gal = wrapped(
                 p,
@@ -375,7 +381,7 @@ impl DesktopUi {
         let mut acts = vec![];
         let n_multi = if in_multi { self.multi.len() } else { 0 };
         let cur = self.coll_sel;
-        resp.context_menu(|ui| {
+        self.game_menu_popup(&resp, pos).show(|ui| {
             if n_multi > 1 {
                 let ids = self.multi_ids_in(lib, view);
                 multi_menu(ui, lib, &ids, cur, pal, &mut acts)

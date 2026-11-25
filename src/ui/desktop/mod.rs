@@ -33,6 +33,7 @@ mod list;
 mod menus;
 mod missing_ui;
 mod own_window;
+mod pad;
 mod persist;
 mod random;
 mod romm_ui;
@@ -49,6 +50,7 @@ mod undo;
 pub(crate) mod update_ui;
 mod view;
 mod viewer;
+mod welcome_ui;
 mod whats_new_ui;
 
 pub(crate) use own_window::{capture_x11 as capture_own_window, window_rects as own_window_rects};
@@ -79,6 +81,9 @@ pub(crate) enum LibSel {
     Installed,
     /// Games that aren't installed.
     NotInstalled,
+    /// Not-installed Steam games that are no longer in the account's Steam library (an ended
+    /// subscription, a family member's game; steam_owned.rs). Listed under Not installed.
+    NotInSteamLibrary,
     Favorites,
     Recent,
     Hidden,
@@ -90,8 +95,12 @@ pub(crate) enum LibSel {
 pub(crate) struct StoreCaps {
     pub id: GameId,
     pub can_install: bool,
+    /// Install opens the game in Steam: it is no longer in the account's Steam library.
+    pub not_in_steam_library: bool,
     pub can_uninstall: bool,
     pub store_page: Option<String>,
+    /// Its install size is being added up ("Calculate install size" waits).
+    pub sizing: bool,
 }
 
 impl StoreCaps {
@@ -99,8 +108,10 @@ impl StoreCaps {
         StoreCaps {
             id,
             can_install: st.can_install(id),
+            not_in_steam_library: st.library.get(id).is_some_and(|g| st.library.not_in_steam_library(g)),
             can_uninstall: st.can_uninstall(id),
             store_page: st.store_page(id),
+            sizing: st.size_calculating(id),
         }
     }
 }
@@ -181,6 +192,8 @@ pub struct DesktopUi {
     dlg: dialogs::Dialogs,
     /// Dialogs in their own windows (own_window.rs).
     own: own_window::OwnWindows,
+    /// The controller in desktop mode (pad.rs).
+    pad: pad::PadState,
     undo: Option<Undo>,
     /// (game id, library generation) → plain-text description.
     desc_cache: Option<(GameId, u64, String)>,
@@ -265,6 +278,7 @@ impl Default for DesktopUi {
             actions: vec![],
             dlg: dialogs::Dialogs::default(),
             own: Default::default(),
+            pad: Default::default(),
             undo: None,
             desc_cache: None,
             timing: None,
@@ -299,16 +313,23 @@ impl LibSel {
             LibSel::All => "all",
             LibSel::Installed => "installed",
             LibSel::NotInstalled => "notinstalled",
+            LibSel::NotInSteamLibrary => "notinsteamlibrary",
             LibSel::Favorites => "favorites",
             LibSel::Recent => "recent",
             LibSel::Hidden => "hidden",
         }
     }
 
+    /// An entry that shows only games that aren't installed.
+    pub(crate) fn not_installed(self) -> bool {
+        matches!(self, LibSel::NotInstalled | LibSel::NotInSteamLibrary)
+    }
+
     fn from_key(k: &str) -> LibSel {
         match k {
             "installed" => LibSel::Installed,
             "notinstalled" => LibSel::NotInstalled,
+            "notinsteamlibrary" => LibSel::NotInSteamLibrary,
             "favorites" => LibSel::Favorites,
             "recent" => LibSel::Recent,
             "hidden" => LibSel::Hidden,
@@ -362,7 +383,12 @@ impl DesktopUi {
             self.scroll_to_sel = true;
         }
         self.frame += 1;
-        self.debug_next_key(&ctx);
+        // While a dialog has its own window, that window gets the pad (own_window.rs).
+        let pad_here = !self.own.any();
+        if pad_here {
+            self.pad_pass(&ctx, st);
+        }
+        self.debug_next_key(&ctx, st);
         self.handle_keys(&ctx, st);
         self.debug_tick(&ctx, st);
         self.draw_panels(ui, st);
@@ -375,8 +401,12 @@ impl DesktopUi {
         self.undo_toast(&ctx, st);
         self.random_toast(&ctx, st);
         self.merge_banner(&ctx, st);
+        welcome_ui::show(&ctx, st, &self.pal);
         self.apply_actions(&ctx, st);
         self.flush_config(&ctx, st);
+        if pad_here {
+            self.pad_end(&ctx);
+        }
     }
 
     /// Once: testing hooks from the environment and the state kept from the last run.
@@ -401,7 +431,7 @@ impl DesktopUi {
         if self.style_gen != st.style_generation {
             self.style_gen = st.style_generation;
             apply_style(ctx, &st.desktop_theme);
-            self.pal = Pal::from_palette(&st.desktop_theme.file.palette);
+            self.pal = Pal::of_theme(&st.desktop_theme);
         }
         // Theme fonts load in the background and become usable a few frames in: look them up
         // every frame (two map lookups), not only when the theme changes.
@@ -449,7 +479,10 @@ impl DesktopUi {
         }
         self.fills = self.fills(st, ambient_on);
 
-        self.draw_bars(ui, st, &view);
+        let top_bar = self.draw_bars(ui, st, &view);
+        if ambient_on {
+            self.paint_art(ui, st, top_bar);
+        }
         self.draw_explorer_panel(ui, st);
         let view_mode = st.config.desktop.view;
         match view_mode {
@@ -466,20 +499,23 @@ impl DesktopUi {
         self.groups.spans = spans;
     }
 
-    fn draw_bars(&mut self, ui: &mut egui::Ui, st: &mut AppState, view: &[usize]) {
+    /// The top bar and the status bar; returns the top bar's rect.
+    fn draw_bars(&mut self, ui: &mut egui::Ui, st: &mut AppState, view: &[usize]) -> egui::Rect {
         let fills = self.fills;
         let slot = self.panel_slot(ui);
         let r = egui::Panel::top("ls_topbar")
             .frame(egui::Frame::new().fill(fills.bar).inner_margin(egui::Margin::symmetric(8, 6)))
             .show_separator_line(false)
             .show(ui, |ui| self.top_bar(ui, st));
-        self.paint_panel(ui, slot, r.response.rect, ambient::Panel::Bar);
+        let top_bar = r.response.rect;
+        self.paint_panel(ui, slot, top_bar, ambient::Panel::Bar);
         let slot = self.panel_slot(ui);
         let r = egui::Panel::bottom("ls_status")
             .frame(egui::Frame::new().fill(fills.bar).inner_margin(egui::Margin::symmetric(10, 4)))
             .show_separator_line(false)
             .show(ui, |ui| self.status_bar(ui, st, view));
         self.paint_panel(ui, slot, r.response.rect, ambient::Panel::Bar);
+        top_bar
     }
 
     /// The explorer sidebar (collapsible; remembered in the config).
@@ -558,7 +594,8 @@ impl DesktopUi {
     fn draw_details_mode(&mut self, ui: &mut egui::Ui, st: &mut AppState, shown: &grouping::Shown) {
         let fills = self.fills;
         let pal = self.pal;
-        egui::Panel::left("ls_details_list")
+        let slot = self.panel_slot(ui);
+        let r = egui::Panel::left("ls_details_list")
             .frame(egui::Frame::new().fill(fills.list))
             .resizable(true)
             .default_size(290.0)
@@ -573,6 +610,7 @@ impl DesktopUi {
                     self.compact_list(ui, st, shown);
                 }
             });
+        self.paint_panel(ui, slot, r.response.rect, ambient::Panel::List);
         let slot = self.panel_slot(ui);
         let r = egui::CentralPanel::default().frame(egui::Frame::new().fill(fills.page)).show(ui, |ui| {
             if shown.view.is_empty() {

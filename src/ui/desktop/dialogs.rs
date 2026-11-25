@@ -89,11 +89,35 @@ const MODAL_PAD: i8 = 20;
 
 /// Standard modal look: window fill, rounded, padded; `width` fixed. In the dialog's own window
 /// (own_window.rs) it fills that window instead (its full width) and closes the same ways.
+/// The bool: Esc or a click beside the dialog asks to close it.
 pub(crate) fn modal<R>(
     ctx: &egui::Context,
     id: &str,
     pal: &Pal,
     width: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (R, bool) {
+    modal_closing(ctx, id, pal, width, true, add)
+}
+
+/// `modal` for a dialog a stray click must not answer: only Esc asks to close it, a click
+/// beside it does nothing.
+pub(crate) fn modal_esc_only<R>(
+    ctx: &egui::Context,
+    id: &str,
+    pal: &Pal,
+    width: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (R, bool) {
+    modal_closing(ctx, id, pal, width, false, add)
+}
+
+fn modal_closing<R>(
+    ctx: &egui::Context,
+    id: &str,
+    pal: &Pal,
+    width: f32,
+    backdrop_closes: bool,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> (R, bool) {
     if super::own_window::hosts_modal(ctx, id) {
@@ -110,7 +134,14 @@ pub(crate) fn modal<R>(
             ui.set_width(width);
             add(ui)
         });
-    let close = resp.should_close();
+    let close = if backdrop_closes {
+        resp.should_close()
+    } else {
+        // `should_close` without the backdrop's click.
+        resp.is_top_modal
+            && !resp.any_popup_open
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape))
+    };
     (resp.inner, close)
 }
 

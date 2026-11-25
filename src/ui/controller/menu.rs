@@ -33,6 +33,12 @@ pub enum Act {
     ToggleFullscreen,
     /// Settings → Launchers (store clients around games, one game at a time).
     LaunchersMenu,
+    /// Settings → Categories: which categories controller mode lists.
+    CategoriesMenu,
+    /// Show or hide one category (its collection key).
+    ToggleCategory(String),
+    /// The menu on a focused category: leave it out of the lists.
+    HideCategory(String),
     ToggleHideLaunchers,
     ToggleCloseLaunchers,
     ToggleHideSteam,
@@ -170,7 +176,8 @@ pub struct Item {
     pub label: String,
     pub value: Option<String>,
     pub act: Option<Act>,
-    /// Multi-line, non-selectable information block (`label` = heading, `value` = text).
+    /// Multi-line, non-selectable information block (`label` = heading, `value` = text; no
+    /// text: a heading over the rows that follow).
     pub info: bool,
     pub danger: bool,
     /// Shown in the menu's help panel while this item is selected or hovered.
@@ -183,6 +190,10 @@ impl Item {
     }
     pub fn value(label: impl Into<String>, value: impl Into<String>, act: Act) -> Item {
         Item { label: label.into(), value: Some(value.into()), act: Some(act), info: false, danger: false, help: None }
+    }
+    /// A heading over the rows after it (not selectable).
+    pub fn heading(text: impl Into<String>) -> Item {
+        Item { label: text.into(), value: None, act: None, info: true, danger: false, help: None }
     }
     pub fn info(heading: impl Into<String>, text: impl Into<String>) -> Item {
         Item { label: heading.into(), value: Some(text.into()), act: None, info: true, danger: false, help: None }
@@ -207,6 +218,7 @@ pub enum MenuKind {
     GameOptions(GameId),
     Sort,
     Launchers,
+    Categories,
     LaunchOptions(GameId),
     Completion(GameId),
     Controller(GameId),
@@ -470,7 +482,9 @@ impl Menu {
                 // Word boundaries first; a word too long for a row (a path) still breaks.
                 let text = it.value.clone().unwrap_or_default();
                 let g = wrapped(painter, text, look.font(0.021), look.text, list_w - look.h(0.04), 8);
-                let h = g.size().y + look.h(0.021) * 1.3 + look.h(0.035);
+                let heading_h = look.h(0.021) * 1.3;
+                let h =
+                    if it.value.is_none() { heading_h + look.h(0.03) } else { g.size().y + heading_h + look.h(0.035) };
                 heights.push(h);
                 info_galleys.push(Some(g));
             } else {
@@ -680,6 +694,13 @@ impl Menu {
     /// An information block: a small heading over wrapped text.
     fn draw_info_row(&self, lp: &Painter, look: &Look, r: Rect, i: usize, g: &Arc<Galley>) {
         let it = &self.items[i];
+        let hx = r.left() + look.h(0.02);
+        if it.value.is_none() {
+            // A heading over the rows that follow: no block, sitting on them.
+            let hg = lp.layout_no_wrap(it.label.to_uppercase(), look.bold(0.0165), look.dim);
+            lp.galley(pos2(hx, r.bottom() - hg.size().y - look.h(0.006)), hg, look.dim);
+            return;
+        }
         lp.rect_filled(r, cr(look.h(0.01)), look.surface_alt);
         if i == self.sel && it.act.is_some() {
             // A reading page's block (About): the selection is an outline.
@@ -690,7 +711,6 @@ impl Menu {
                 egui::StrokeKind::Inside,
             );
         }
-        let hx = r.left() + look.h(0.02);
         let hg = lp.layout_no_wrap(it.label.to_uppercase(), look.bold(0.0165), look.dim);
         lp.galley(pos2(hx, r.top() + look.h(0.015)), hg.clone(), look.dim);
         lp.galley(pos2(hx, r.top() + look.h(0.015) + hg.size().y + look.h(0.006)), g.clone(), look.text);

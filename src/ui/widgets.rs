@@ -163,6 +163,11 @@ pub fn paint_contain(painter: &Painter, bounds: Rect, tex: &TextureHandle, tint:
 /// Vertical gradient from `top` to `bottom` colour (premultiplied interpolation, so fading a
 /// colour into transparency blends correctly).
 pub fn vgradient(painter: &Painter, rect: Rect, top: Color32, bottom: Color32) {
+    painter.add(Shape::mesh(vgradient_mesh(rect, top, bottom)));
+}
+
+/// The mesh `vgradient` paints (for a shape that is placed later, into a reserved slot).
+pub fn vgradient_mesh(rect: Rect, top: Color32, bottom: Color32) -> Mesh {
     let mut m = Mesh::default();
     m.colored_vertex(rect.left_top(), top);
     m.colored_vertex(rect.right_top(), top);
@@ -170,7 +175,7 @@ pub fn vgradient(painter: &Painter, rect: Rect, top: Color32, bottom: Color32) {
     m.colored_vertex(rect.right_bottom(), bottom);
     m.add_triangle(0, 1, 2);
     m.add_triangle(1, 2, 3);
-    painter.add(Shape::mesh(m));
+    m
 }
 
 /// Vertical gradient filling a rounded rect: solid rounded caps at the top and bottom with a

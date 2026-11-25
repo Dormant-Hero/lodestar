@@ -62,7 +62,7 @@ fn fold_into(conn: &Connection, from: i64, to: i64) -> Result<()> {
             serde_json::to_string(&tags)?
         ],
     )?;
-    super::emu_dupes::replace_in_collections(conn, from, Some(to))?;
+    super::fold::replace_in_collections(conn, from, Some(to))?;
     conn.execute("DELETE FROM games WHERE id = ?1", [from])?;
     Ok(())
 }

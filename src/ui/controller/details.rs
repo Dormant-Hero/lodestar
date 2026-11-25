@@ -49,6 +49,8 @@ pub enum Primary {
     Cancel,
     /// Not installed, and its store / add-on can install it.
     Install,
+    /// No longer in the account's Steam library: A opens the game in Steam (steam_owned.rs).
+    OpenInSteam,
 }
 
 impl Primary {
@@ -69,6 +71,7 @@ impl Primary {
             Primary::Stop => "Quit game",
             Primary::Cancel => "Cancel launch",
             Primary::Install => "Install",
+            Primary::OpenInSteam => "Open in Steam",
         }
     }
 
@@ -164,6 +167,9 @@ pub fn draw(
     let mut moving = false;
     approach(&mut s.focus_anim, s.focus as f32, dt, 18.0, &mut moving);
     let rects = paint_buttons(&page, game, primary, s);
+    if primary == Primary::OpenInSteam {
+        paint_steam_library_note(&page, rects[0].bottom());
+    }
     if let Some((pos, true)) = ui.input(|i| i.pointer.hover_pos().map(|p| (p, i.pointer.primary_clicked()))) {
         out.clicked = rects.iter().position(|r| r.contains(pos));
     }
@@ -356,10 +362,8 @@ fn paint_buttons(page: &Page, game: &Game, primary: Primary, s: &DetailsState) -
     p.rect_stroke(ring, cr(ring.height() / 2.0), Stroke::new(look.h(0.0035), look.selection), StrokeKind::Outside);
     let names = [
         match primary {
-            Primary::Stop | Primary::Cancel => primary.label(),
             Primary::Install if game.source == crate::model::Source::Romm => "Download",
-            Primary::Install => "Install",
-            Primary::Play => "Play",
+            _ => primary.label(),
         },
         if game.favorite { "Unfavourite" } else { "Favourite" },
         if game.art.is_empty() { "No artwork yet" } else { "Artwork" },
@@ -390,6 +394,8 @@ fn paint_primary_label(page: &Page, r: Rect, bh: f32, game: &Game, primary: Prim
         p.rect_filled(Rect::from_center_size(c, vec2(icon_w * 0.85, icon_w * 0.85)), cr(2.0), fg);
     } else if primary == Primary::Install {
         download_glyph(p, c, icon_w, fg);
+    } else if primary == Primary::OpenInSteam {
+        open_glyph(p, c, icon_w, fg);
     } else {
         let h = icon_w;
         let pts = vec![c + vec2(-h * 0.4, -h * 0.5), c + vec2(h * 0.55, 0.0), c + vec2(-h * 0.4, h * 0.5)];
@@ -690,6 +696,26 @@ fn picture_glyph(p: &egui::Painter, c: egui::Pos2, w: f32, col: Color32) {
     for tri in [[at(0.0, 1.0), at(0.36, 0.36), at(0.8, 1.0)], [at(0.45, 1.0), at(0.72, 0.52), at(1.0, 1.0)]] {
         p.add(egui::Shape::convex_polygon(tri.to_vec(), col, Stroke::NONE));
     }
+}
+
+/// An arrow out to the top right (opens another app), centred on `c`, `w` wide.
+fn open_glyph(p: &egui::Painter, c: egui::Pos2, w: f32, col: Color32) {
+    let st = Stroke::new((w * 0.16).max(1.5), col);
+    let (a, b) = (pos2(c.x - w * 0.4, c.y + w * 0.4), pos2(c.x + w * 0.45, c.y - w * 0.45));
+    p.line_segment([a, b], st);
+    p.line_segment([b, pos2(b.x - w * 0.55, b.y)], st);
+    p.line_segment([b, pos2(b.x, b.y + w * 0.55)], st);
+}
+
+/// Under the buttons of a game no longer in the account's Steam library: why its button opens
+/// Steam instead of installing.
+fn paint_steam_library_note(page: &Page, buttons_bottom: f32) {
+    let Page { p, look, screen, sw, .. } = *page;
+    // One line between the buttons and the stats: the short form of the desktop page's note.
+    let text =
+        "Not in your Steam library. It may be from a subscription that ended, such as EA Play, or a shared library.";
+    let g = layout_line(p, text, look.medium(0.019), look.dim, 0.6 * sw);
+    paint_galley(p, pos2(screen.left() + 0.06 * sw, buttons_bottom + look.h(0.013)), &g, look.dim, SHADOW, 0.0);
 }
 
 /// A download arrow over a tray, centred on `c`, `w` wide.

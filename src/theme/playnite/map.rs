@@ -28,6 +28,11 @@ pub(crate) fn luminance(c: Color) -> f32 {
     0.2126 * lin(c.0[0]) + 0.7152 * lin(c.0[1]) + 0.0722 * lin(c.0[2])
 }
 
+/// Dark enough for light text: the line between a dark and a light theme.
+pub(crate) fn is_dark(c: Color) -> bool {
+    luminance(c) < 0.35
+}
+
 pub(crate) fn contrast(a: Color, b: Color) -> f32 {
     let (x, y) = (luminance(a), luminance(b));
     (x.max(y) + 0.05) / (x.min(y) + 0.05)
@@ -227,7 +232,7 @@ pub(crate) fn palette(
     let dark_text = Color([0x10, 0x10, 0x12, 255]);
     let accent_text = if contrast(white, accent) >= contrast(dark_text, accent) { white } else { dark_text };
     let palette = Palette {
-        dark: luminance(bg) < 0.35,
+        dark: is_dark(bg),
         background: bg,
         surface,
         surface_alt,

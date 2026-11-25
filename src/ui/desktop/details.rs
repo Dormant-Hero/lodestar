@@ -29,6 +29,8 @@ pub(crate) enum PlayState {
     /// Launched, not seen running yet (store client starting, login …).
     Starting,
     Install,
+    /// No longer in the account's Steam library: opens the game in Steam (steam_owned.rs).
+    OpenInSteam,
     NotInstalled,
 }
 
@@ -37,6 +39,8 @@ pub(crate) fn play_state(g: &Game, running: Option<crate::model::GameId>, caps: 
         PlayState::Running
     } else if g.installed {
         PlayState::Play
+    } else if caps.is_some_and(|c| c.can_install && c.not_in_steam_library) {
+        PlayState::OpenInSteam
     } else if caps.is_some_and(|c| c.can_install) {
         PlayState::Install
     } else {
@@ -111,7 +115,6 @@ impl DesktopUi {
         if hero_resp.double_clicked() && !arranging {
             self.push(Action::Edit(id, edit::Tab::General));
         }
-        let sizing = st.size_calculating(id);
         let pic;
         {
             let g = &st.library.games[gi];
@@ -165,10 +168,11 @@ impl DesktopUi {
             let g = &st.library.games[gi];
             let caps = self.caps_for(g.id).cloned();
             let state = play_state_now(st, g, running, caps.as_ref());
-            self.play_row(ui, g, state, 42.0, sizing);
+            self.play_row(ui, g, state, 42.0);
             launch_status_line(ui, st, g.id, &pal);
             super::romm_ui::progress_line(ui, st, g.id, &pal);
             super::missing_ui::page_hint(ui, g, &pal);
+            super::missing_ui::steam_library_hint(ui, caps.as_ref(), &pal);
             ui.add_space(10.0);
             let mut acts = vec![];
             if feature_chips(ui, g, &pal, pal.surface, &mut acts) {
@@ -376,13 +380,13 @@ impl DesktopUi {
         let pal = self.pal;
         let g = &st.library.games[gi];
         let running = crate::ui::launching::running(st);
-        let sizing = st.size_calculating(g.id);
         let caps = self.caps_for(g.id).cloned();
         let state = play_state_now(st, g, running, caps.as_ref());
-        self.play_row(ui, g, state, 44.0, sizing);
+        self.play_row(ui, g, state, 44.0);
         launch_status_line(ui, st, g.id, &pal);
         super::romm_ui::progress_line(ui, st, g.id, &pal);
         super::missing_ui::page_hint(ui, g, &pal);
+        super::missing_ui::steam_library_hint(ui, caps.as_ref(), &pal);
         if emulator_hint(ui, g, &pal) {
             self.push(Action::Settings(super::settings::Tab::Emulation));
         }
@@ -410,6 +414,7 @@ impl DesktopUi {
     /// The description and the info card: side by side, or stacked in a narrow pane.
     fn page_body(&mut self, ui: &mut Ui, st: &mut AppState, gi: usize) {
         let pal = self.pal;
+        let (card, card_border, card_radius) = (self.fills.card, self.fills.card_border, self.fills.card_radius);
         let ach = crate::ui::achievements::for_game(st, st.library.games[gi].id);
         let g = &st.library.games[gi];
         let lgen = st.library.generation;
@@ -453,7 +458,8 @@ impl DesktopUi {
         };
         let mut acts = vec![];
         let mut stats = |ui: &mut Ui, w: f32| {
-            egui::Frame::new().fill(pal.surface).corner_radius(8).inner_margin(14).show(ui, |ui| {
+            let frame = egui::Frame::new().fill(card).stroke(card_border).corner_radius(card_radius);
+            frame.inner_margin(14).show(ui, |ui| {
                 ui.set_width(w - 28.0);
                 stats_grid(ui, g, &pal, "ls_stats_view", &mut acts);
                 link_chips(ui, g, &pal, &mut acts);
@@ -489,8 +495,8 @@ impl DesktopUi {
     }
 
     /// The action row: big Play button (with a drop-down for the game's other actions) ·
-    /// pencil (Edit Game Details) · ••• (More). `sizing`: the install size is being calculated.
-    fn play_row(&mut self, ui: &mut Ui, g: &Game, state: PlayState, h: f32, sizing: bool) {
+    /// pencil (Edit Game Details) · ••• (More).
+    fn play_row(&mut self, ui: &mut Ui, g: &Game, state: PlayState, h: f32) {
         // Wraps instead of clipping when the panel is very narrow (big UI scale, small window).
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
@@ -504,7 +510,7 @@ impl DesktopUi {
             if icon_button(ui, Icon::Arrange, arranging, s, "Arrange logo and background").clicked() {
                 self.toggle_arrange(g);
             }
-            self.more_button(ui, g, s, sizing, arranging);
+            self.more_button(ui, g, s, arranging);
         });
     }
 
@@ -513,11 +519,12 @@ impl DesktopUi {
     fn play_button(&mut self, ui: &mut Ui, g: &Game, state: PlayState, h: f32) {
         let pal = self.pal;
         let (label, fill, fg, enabled) = match state {
-            PlayState::Play => ("Play", pal.accent, pal.accent_text, true),
+            PlayState::Play => ("Play", pal.play, pal.play_text, true),
             PlayState::Running => ("Stop", pal.danger, Color32::WHITE, true),
             PlayState::Starting => ("Cancel", pal.surface_alt, pal.text, true),
             PlayState::Install if g.source == Source::Romm => ("Download", pal.accent, pal.accent_text, true),
             PlayState::Install => ("Install", pal.accent, pal.accent_text, true),
+            PlayState::OpenInSteam => ("Open in Steam", pal.accent, pal.accent_text, true),
             PlayState::NotInstalled => ("Not installed", pal.surface_alt, pal.dim, false),
         };
         let plays = g.edits.actions.iter().filter(|a| a.play).count();
@@ -579,6 +586,7 @@ impl DesktopUi {
             PlayState::Running => paint_icon(p, ir, Icon::Stop, fg),
             PlayState::Starting => paint_icon(p, ir, Icon::Close, fg),
             PlayState::Install => paint_icon(p, ir, Icon::Download, fg),
+            PlayState::OpenInSteam => paint_icon(p, ir, Icon::Link, fg),
             PlayState::NotInstalled => paint_icon(p, ir, Icon::Close, fg),
         }
         p.galley(pos2(ir.right() + 12.0, main_rect.center().y - gal.size().y / 2.0), gal, fg);
@@ -589,7 +597,8 @@ impl DesktopUi {
             }
             self.push(match state {
                 PlayState::Running | PlayState::Starting => Action::Stop(g.id),
-                PlayState::Install => Action::Install(g.id),
+                // Open in Steam is Install too: `install_game` opens Steam for it.
+                PlayState::Install | PlayState::OpenInSteam => Action::Install(g.id),
                 _ => Action::Play(g.id),
             });
         }
@@ -617,7 +626,7 @@ impl DesktopUi {
     }
 
     /// ••• with the More menu (a dot on it when the game has custom launch options).
-    fn more_button(&mut self, ui: &mut Ui, g: &Game, s: f32, sizing: bool, arranging: bool) {
+    fn more_button(&mut self, ui: &mut Ui, g: &Game, s: f32, arranging: bool) {
         let custom = g.launch_override.as_ref().is_some_and(|o| !o.is_empty());
         let more =
             icon_button(ui, Icon::More, false, s, if custom { "More (custom launch options are set)" } else { "More" });
@@ -632,7 +641,7 @@ impl DesktopUi {
         let caps = self.caps_for(g.id).cloned();
         let mut arrange = false;
         egui::Popup::menu(&more).show(|ui| {
-            more_menu(ui, g, sizing, caps.as_ref(), &mut acts);
+            more_menu(ui, g, caps.as_ref(), &mut acts);
             arrange = arrange::arrange_menu_entry(ui, arranging);
         });
         if arrange {
@@ -712,6 +721,11 @@ fn play_tooltip(g: &Game, state: PlayState) -> Option<String> {
             "On your RomM server. Downloads it into its console's ROM folder; then it plays with your emulator.".into()
         }
         PlayState::Install => format!("Not installed. Opens {} to install it.", install_via(g.source)),
+        PlayState::OpenInSteam => {
+            "Opens the game in Steam, which shows Install when someone in your Steam Family shares it, \
+             or how to get it again."
+                .into()
+        }
         PlayState::NotInstalled => match g.source {
             Source::Manual | Source::Desktop => "Set its program in Edit… → Actions.".to_string(),
             Source::Emulator => "ROM not found — is the drive connected? (Settings → Emulation)".to_string(),

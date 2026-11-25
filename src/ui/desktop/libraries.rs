@@ -114,8 +114,8 @@ const GROUPS: &[Group] = &[
             row(Source::Moonlight, "Moonlight", "Apps of paired Sunshine / Apollo hosts", Extra::None),
             row(
                 Source::Desktop,
-                "Desktop entries",
-                "Installed apps' .desktop shortcuts that look like games",
+                "Shortcuts",
+                "Game shortcuts in the app menu that belong to no other library",
                 Extra::Desktop,
             ),
             row(Source::Addon, "Add-ons", "Games from external library add-ons", Extra::Addons),

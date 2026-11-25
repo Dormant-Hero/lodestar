@@ -57,6 +57,9 @@ pub(crate) fn entries(c: &Counts, collapsed: &[String]) -> Vec<Entry> {
         if c.not_installed > 0 {
             out.push(Entry::Lib(LibSel::NotInstalled));
         }
+        if c.not_in_steam_library > 0 {
+            out.push(Entry::Lib(LibSel::NotInSteamLibrary));
+        }
         out.extend([LibSel::Favorites, LibSel::Recent].map(Entry::Lib));
         if c.hidden > 0 {
             out.push(Entry::Lib(LibSel::Hidden));

@@ -14,6 +14,11 @@ pub(crate) fn score_for_click(cur: Option<u8>, k: u8) -> Option<u8> {
     (stars_of(cur) != k).then_some(k * 20)
 }
 
+/// The stars after `steps` presses of ← / → from `from` (0: not set).
+pub(crate) fn step_stars(from: u8, steps: i32) -> u8 {
+    (i32::from(from) + steps).clamp(0, 5) as u8
+}
+
 /// The common score of `ids` (None inside: not set; outer None: they differ).
 pub(crate) fn common_score(lib: &crate::library::Library, ids: &[GameId]) -> Option<Option<u8>> {
     let mut it = ids.iter().filter_map(|id| lib.get(*id)).map(|g| g.edits.user_score);
@@ -22,7 +27,8 @@ pub(crate) fn common_score(lib: &crate::library::Library, ids: &[GameId]) -> Opt
 }
 
 /// "User score  ☆☆☆☆☆" menu row for `ids` whose score is `cur` (outer None: they differ).
-/// Hovering lights the stars up to the pointer.
+/// Hovering lights the stars up to the pointer. The controller steps the stars the way a screen
+/// reader steps a slider (pad.rs) and sets them with A.
 pub(crate) fn score_row(
     ui: &mut egui::Ui,
     cur: Option<Option<u8>>,
@@ -40,6 +46,22 @@ pub(crate) fn score_row(
     let hover_k = resp
         .hover_pos()
         .and_then(|p| (p.x >= stars_left).then(|| (((p.x - stars_left) / star_w).floor() as u8 + 1).clamp(1, 5)));
+    // The stars stepped to while the row has the focus (forgotten when it loses it).
+    let pick_id = resp.id.with("pick");
+    if !ui.memory(|m| m.has_focus(resp.id)) {
+        ui.data_mut(|d| d.remove::<u8>(pick_id));
+    }
+    let mut pick: Option<u8> = ui.data(|d| d.get_temp(pick_id));
+    let steps = ui.input(|i| {
+        use egui::accesskit::Action;
+        i.num_accesskit_action_requests(resp.id, Action::Increment) as i32
+            - i.num_accesskit_action_requests(resp.id, Action::Decrement) as i32
+    });
+    if steps != 0 {
+        let k = step_stars(pick.unwrap_or(lit), steps);
+        ui.data_mut(|d| d.insert_temp(pick_id, k));
+        pick = Some(k);
+    }
     let p = ui.painter();
     if resp.hovered() {
         p.rect_filled(rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
@@ -52,7 +74,7 @@ pub(crate) fn score_row(
     };
     let gal = p.layout_no_wrap(label, egui::FontId::proportional(14.0), text);
     p.galley(egui::pos2(rect.left() + 4.0, rect.center().y - gal.size().y / 2.0), gal, text);
-    let shown = hover_k.unwrap_or(lit);
+    let shown = hover_k.or(pick).unwrap_or(lit);
     for k in 1..=5u8 {
         let c = egui::pos2(stars_left + (k as f32 - 0.5) * star_w, rect.center().y);
         if k <= shown {
@@ -62,12 +84,17 @@ pub(crate) fn score_row(
             star_outline(p, c, 7.0, egui::Stroke::new(1.2, pal.dim));
         }
     }
+    resp.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), f64::from(shown), "User score"));
     let resp = resp.on_hover_text("Click a star to rate (★ = 20 … ★★★★★ = 100); the same star again clears it");
+    let new = match (hover_k, pick) {
+        (Some(k), _) if cur.is_none() => Some(Some(k * 20)),
+        (Some(k), _) => Some(score_for_click(cur.flatten(), k)),
+        (None, Some(k)) => Some((k > 0).then_some(k * 20)),
+        (None, None) => None,
+    };
     if resp.clicked()
-        && let Some(k) = hover_k
+        && let Some(new) = new
     {
-        let base = cur.flatten();
-        let new = if cur.is_none() { Some(k * 20) } else { score_for_click(base, k) };
         actions.push(Action::SetScore(ids.to_vec(), new));
         ui.close();
     }
@@ -122,5 +149,13 @@ mod tests {
         assert_eq!(score_for_click(Some(80), 4), None, "the lit star again clears");
         assert_eq!(score_for_click(Some(75), 4), None);
         assert_eq!(score_for_click(Some(80), 5), Some(100));
+    }
+
+    #[test]
+    fn stepped_stars_stay_between_none_and_five() {
+        assert_eq!(step_stars(0, 1), 1);
+        assert_eq!(step_stars(3, -1), 2);
+        assert_eq!(step_stars(1, -2), 0);
+        assert_eq!(step_stars(5, 1), 5);
     }
 }

@@ -21,6 +21,9 @@ pub(crate) enum Fail {
     BadKey(SourceKind),
     /// The source's API limit is reached (or nearly, in bulk runs): why and when it continues.
     Limit(String),
+    /// The source can't settle this game now, though it keeps answering others (libretro
+    /// without its name list): asked again another time.
+    Later(String),
 }
 
 impl From<NetErr> for Fail {
@@ -37,11 +40,14 @@ impl std::fmt::Display for Fail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Fail::Cancelled => write!(f, "cancelled"),
-            Fail::Transient(e) | Fail::Limit(e) => write!(f, "{e}"),
+            Fail::Transient(e) | Fail::Limit(e) | Fail::Later(e) => write!(f, "{e}"),
             Fail::BadKey(_) => write!(f, "the API key was rejected (check Settings → Metadata)"),
         }
     }
 }
+
+/// What `Engine::check_sgdb_key` searches for: any name SteamGridDB surely knows.
+const KEY_CHECK_TERM: &str = "Portal";
 
 /// Request context: bulk runs are slower (≤ 2 req/s) and cancellable.
 #[derive(Clone, Copy)]
@@ -475,6 +481,17 @@ impl Engine {
             return Err(Fail::BadKey(SourceKind::SteamGridDb));
         }
         Ok(resp)
+    }
+
+    /// Does SteamGridDB accept `key`? One small search with it, before the key is saved (a
+    /// rejection here doesn't mark the saved key as rejected).
+    pub fn check_sgdb_key(&self, key: &str) -> KeyCheck {
+        match self.get(&sgdb_search_url(KEY_CHECK_TERM), Some(key.trim()), MAX_JSON_BYTES, Req::UI) {
+            Ok(r) if r.status == 200 && parse_sgdb_games(&r.body).is_some() => KeyCheck::Works,
+            Ok(r) if matches!(r.status, 401 | 403) => KeyCheck::Rejected,
+            Ok(r) => KeyCheck::Unreachable(format!("SteamGridDB answered HTTP {}", r.status)),
+            Err(e) => KeyCheck::Unreachable(e.to_string()),
+        }
     }
 
     pub fn sgdb_games(&self, term: &str, key: &str, r: Req) -> Result<Vec<SgdbGame>, Fail> {

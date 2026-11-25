@@ -98,9 +98,14 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
     ui.horizontal(|ui| {
         ui.label("Game background behind the window");
         let cur = st.config.desktop.background_image;
-        let theme_on = st.desktop_theme.file.desktop.background_image;
+        let d = &st.desktop_theme.file.desktop;
+        let theme_says = match (d.background_image, d.background_image_details_only) {
+            (false, _) => "off",
+            (true, false) => "on",
+            (true, true) => "in the details view",
+        };
         let label = |v: Option<bool>| match v {
-            None => format!("Theme default ({})", if theme_on { "on" } else { "off" }),
+            None => format!("Theme default ({theme_says})"),
             Some(true) => "On".to_string(),
             Some(false) => "Off".to_string(),
         };

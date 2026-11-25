@@ -88,3 +88,14 @@ fn user_art_set_replace_and_reset() {
     st.set_art_slot(id, ArtSlot::Hero, Some(jpg.clone()));
     assert_eq!(st.library.get(id).unwrap().edits.background_placement, None);
 }
+
+#[test]
+fn a_game_that_just_ended_settles_for_a_moment() {
+    let t0 = Instant::now();
+    let at = |ms: u64| t0 + Duration::from_millis(ms);
+    assert!(just_ended(Some(t0), t0, false));
+    assert!(just_ended(Some(t0), at(1100), false));
+    assert!(!just_ended(Some(t0), at(1300), false));
+    assert!(!just_ended(None, t0, false), "no game ended this run");
+    assert!(!just_ended(Some(t0), at(100), true), "a game is up again: the game's rule applies");
+}

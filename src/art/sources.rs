@@ -57,8 +57,8 @@ impl SourceKind {
     pub const ALL: [SourceKind; 9] = [
         SourceKind::Steam,
         SourceKind::SteamGridDb,
-        SourceKind::Gog,
         SourceKind::Igdb,
+        SourceKind::Gog,
         SourceKind::TheGamesDb,
         SourceKind::Libretro,
         SourceKind::Lutris,
@@ -207,19 +207,23 @@ impl ArtList {
     }
 }
 
-/// The built-in order for PC games (every source but the console-only GameTDB).
+/// The built-in order for PC games (every source but the console-only GameTDB). A saved order
+/// (`MetadataConfig::source_order`) always wins; this only places what it doesn't name.
+/// IGDB before GOG: IGDB's covers are the box art of almost every PC game, while a name search
+/// of GOG's catalog only knows GOG's own (GOG games are matched by their product id anyway).
 pub const PC_ORDER: [SourceKind; 8] = [
     SourceKind::Steam,
     SourceKind::SteamGridDb,
-    SourceKind::Gog,
     SourceKind::Igdb,
+    SourceKind::Gog,
     SourceKind::TheGamesDb,
     SourceKind::Libretro,
     SourceKind::Lutris,
     SourceKind::PcGamingWiki,
 ];
 
-/// The built-in order for emulated / console games: console art first.
+/// The built-in order for emulated / console games: the exact console sources first (libretro by
+/// the ROM's No-Intro / Redump name, GameTDB by its disc id), then the community and IGDB art.
 pub const EMU_ORDER: [SourceKind; 9] = [
     SourceKind::Libretro,
     SourceKind::GameTdb,

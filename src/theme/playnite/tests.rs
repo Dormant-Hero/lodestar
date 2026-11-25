@@ -93,6 +93,14 @@ fn desktop_theme_folder_becomes_a_desktop_palette() {
     let wg = t["desktop"]["window_gradient"].as_table().expect("window gradient");
     assert_eq!(wg["stops"].as_array().unwrap().len(), 2);
     assert!(rep.carried.iter().any(|l| l.contains("Gradients and fills of the window")), "{all}");
+    // Playnite's desktop look: see-through panels, the game art behind the window in the
+    // details view (its Library view keeps PART_ImageBackground), darkened towards black; no
+    // item tiles (Playnite's item clears them unless the user turns them on).
+    let d = &f.desktop;
+    assert!(d.see_through_panels && d.background_image && d.background_image_details_only);
+    assert!((d.background_dim - 0.7).abs() < 0.01, "{}", d.background_dim);
+    assert_eq!(d.background_dim_color, Some(Color::BLACK));
+    assert_eq!(d.tile_fill, None);
     assert!(!rep.dir.join("fonts").exists(), "no text font to copy");
     // Lodestar's theme list picks it up and it loads.
     let m = ThemeManager::new(themes.path().to_path_buf());
@@ -100,6 +108,42 @@ fn desktop_theme_folder_becomes_a_desktop_palette() {
     assert_eq!(info.meta.name, "Harbour Night");
     let (t, problem) = m.load_checked("harbour-night");
     assert_eq!((t.key.as_str(), problem), ("harbour-night", None));
+}
+
+#[test]
+fn light_window_fades_the_game_art_towards_its_background() {
+    let src = tempfile::tempdir().unwrap();
+    let themes = tempfile::tempdir().unwrap();
+    desktop_theme(src.path());
+    // The same theme in light colours: black text on a pale window.
+    let light = dict(
+        r##"<Color x:Key="TextColor">#FF202020</Color>
+        <SolidColorBrush x:Key="TextBrush" Color="{DynamicResource TextColor}" />
+        <SolidColorBrush x:Key="WindowBackgourndBrush" Color="#FFE8EEF2" />"##,
+    );
+    write(src.path(), "Constants.xaml", light.as_bytes());
+    let rep = import(src.path(), themes.path()).unwrap();
+    let f = ThemeFile::parse(&std::fs::read_to_string(rep.dir.join("theme.toml")).unwrap()).unwrap();
+    assert!(!f.palette.dark);
+    // Playnite's darkening towards black would turn the see-through window grey.
+    assert_eq!(f.desktop.background_dim_color, Some(f.palette.background));
+}
+
+/// A desktop window painted with a small tiled texture at half opacity: the palette's
+/// background is the texture's colour as the window shows it, not Playnite's default navy.
+#[test]
+fn a_textured_desktop_window_gives_the_background_colour() {
+    let src = tempfile::tempdir().unwrap();
+    let themes = tempfile::tempdir().unwrap();
+    write(src.path(), "theme.yaml", b"Id: Grain_1\nName: Grain\nThemeApiVersion: 2.6.0\n");
+    write(src.path(), "Constants.xaml", dict(r##"<ImageBrush x:Key="WindowBackgourndBrush" ImageSource="{ThemeFile 'Images/grain.png'}" TileMode="Tile" Opacity="0.5" />"##).as_bytes());
+    let grain = image::RgbImage::from_pixel(4, 4, image::Rgb([0x40, 0x40, 0x40]));
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgb8(grain).write_to(&mut png, image::ImageFormat::Png).unwrap();
+    write(src.path(), "Images/grain.png", png.get_ref());
+    let rep = import(src.path(), themes.path()).unwrap();
+    let f = ThemeFile::parse(&std::fs::read_to_string(rep.dir.join("theme.toml")).unwrap()).unwrap();
+    assert_eq!(f.palette.background, c("#202020"));
 }
 
 /// A fullscreen .pthm package: background picture, bundled font family, a video.
@@ -208,8 +252,8 @@ fn fullscreen_package_is_laid_onto_top_bar() {
     assert!((grid["selected_scale"].as_float().unwrap() - 1.06).abs() < 1e-3);
     let glow = grid["selected_glow"].as_table().unwrap();
     assert_eq!(glow["color"].as_str(), Some("#e63946"), "GlyphColor glow");
-    assert_eq!(grid["uninstalled_scrim"].as_str(), Some("#000000aa"));
-    assert_eq!(grid["item_caption"].as_str(), Some("{game.name}"));
+    // Playnite's defaults: games that aren't installed aren't darkened, no titles.
+    assert!(grid.get("uninstalled_scrim").is_none() && grid.get("item_caption").is_none(), "{grid:?}");
     // The details band: Playnite's GameDetailsBackgroundBrush fades in over a third of it.
     let band = el(&t, "details", "pn_band").unwrap();
     let band_end = el(&t, "details", "pn_band_1").expect("the band's solid part");

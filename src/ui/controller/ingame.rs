@@ -72,6 +72,12 @@ impl ControllerUi {
         (!self.sys.menus.is_empty() && !self.sys.left_for_game) || self.sys.library
     }
 
+    /// The in-game menu or the menu button screens are drawn (also while they wait for the menu
+    /// button after the focus went to the game), or the user browses from the in-game menu.
+    pub fn overlay_open(&self) -> bool {
+        !self.sys.menus.is_empty() || self.sys.library
+    }
+
     /// A menu button press that counts (see the module docs). `summoned`: Lodestar wasn't
     /// focused and was just brought to the front for it.
     pub fn on_guide(&mut self, st: &mut AppState, summoned: bool, now: f64) {

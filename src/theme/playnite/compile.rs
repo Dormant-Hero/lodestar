@@ -12,12 +12,15 @@
 //! - PART_ elements → Lodestar's own: ListGameItems → `grid` / `carousel` (the cover look comes
 //!   from the extracted look), TextClock → `datetime` clock, battery → text, bottom buttons →
 //!   `helpbar`, ImageBackground → the game's picture (mask, blur), logo hooks → `{art.logo}`,
-//!   HtmlDescription → scrolling text, ButtonContext → a Play / Install button.
+//!   HtmlDescription → scrolling text, ButtonContext → a Play / Install button in the face its
+//!   template gives it (focused: the details page opens with the focus on it).
 //! - Visibility: as written, `{Settings …}` at Playnite's defaults, DataTrigger /
 //!   MultiDataTrigger on game properties → `visible_if` / `hidden_if`; triggers on the
 //!   controller's state (ElementName helpers, focus, selected index …) are left out and the
 //!   element keeps its resting state (counted for the report).
 //! - Elements that fade in when the selection changes get an `appear` transition.
+//! - The GameDetails page is laid out where Playnite shows it: inside the main screen's
+//!   PART_ElemGameDetails, over what the main screen still shows with the page open.
 //!
 //! What can't be drawn (add-on panels, mirrored lists, videos other than the background,
 //! custom controls) is dropped and measured: when too much of the screen is dropped or the
@@ -25,39 +28,48 @@
 //! Lodestar's layout families instead (fill.rs).
 //!
 //! The stages, one submodule each: `build` turns the XAML tree into layout nodes (placement,
-//! paint, what each element draws), `visibility` decides when they show (Visibility,
-//! triggers, storyboards) and `bind` maps `{Binding}` paths onto Lodestar's bindings; layout.rs
+//! paint, what each element draws; `button` reads a button's template), `visibility` decides
+//! when they show (Visibility, triggers, storyboards) and `bind` maps `{Binding}` paths onto
+//! Lodestar's bindings; layout.rs
 //! measures and arranges the nodes (text measured by `measure`); `emit` writes them as
 //! element tables and `stack` turns panels of per-game texts into `stack` containers. The
 //! types the stages share are defined here.
 
 mod bind;
 mod build;
+mod button;
 mod emit;
 mod measure;
 mod stack;
+mod strip;
+mod tabs;
 mod visibility;
 
 use super::Mode;
 use super::layout::{self, Al, Content, Def, Dock, Len, Measurer, Node, Panel, Rect, Scale, TextSpec, Vis};
 use super::loc::ViewStrings;
-use super::look::{LookBrush, PlayniteLook, Stretch};
+use super::look::{ItemLook, LookBrush, PlayniteLook, Stretch};
+use super::options::Choices;
 use super::settings::{self, SVal, setting};
 use super::source::Source;
-use super::tree::{self, Markup, Texts, Tree, Value, content, name_of, prop_elem, tag};
+use super::tree::{self, Markup, Tree, Value, content, name_of, prop_elem, tag};
 use super::xaml::attr;
 use crate::theme::model::Color;
 use roxmltree::Node as X;
 use std::collections::{BTreeMap, HashMap};
 use toml::{Table, Value as T};
 
-use emit::{is_hint_bar, shoulder_prompts};
+use emit::{hint_rows, shoulder_prompts};
 pub(crate) use measure::FontMeasurer;
 use visibility::template_triggers;
 
 const W: f32 = layout::SCREEN[0];
 
 const H: f32 = layout::SCREEN[1];
+
+/// Placeholders of the main screen's and the details page's video, filled in by `apply`.
+const MAIN_VIDEO: &str = "@main_video";
+const DETAILS_VIDEO: &str = "@details_video";
 
 /// Below this share of the drawn area translated, the view isn't used.
 pub(crate) const MIN_COVERAGE: f32 = 0.6;
@@ -85,6 +97,8 @@ pub(crate) struct Stats {
     pub list: bool,
     /// Panels written as `stack`s.
     pub stacks: usize,
+    /// The Play / Install button (PART_ButtonContext) is drawn.
+    pub play_button: bool,
 }
 
 impl Stats {
@@ -110,6 +124,9 @@ pub(crate) struct ViewOut {
     pub stats: Stats,
     /// The theme defines this view itself (not Playnite's default underneath).
     pub own: bool,
+    /// The cover look of the game list when it is a row the theme lays out itself (None: the
+    /// extracted look's).
+    pub list_item: Option<ItemLook>,
 }
 
 /// The compiler's result.
@@ -124,12 +141,15 @@ pub(crate) struct Compiled {
     pub main_problem: Option<String>,
 }
 
-/// Compile the theme's fullscreen Main and GameDetails views. `look` is the extracted look
-/// (list shape, cover look); `measurer` measures text in Lodestar's fonts.
-pub(crate) fn compile(source: &Source, look: &PlayniteLook, measurer: &mut dyn Measurer) -> Compiled {
+/// Compile the theme's fullscreen Main and GameDetails views with the theme options' values
+/// (`chosen`). `look` is the extracted look (list shape, cover look); `measurer` measures text
+/// in Lodestar's fonts.
+pub(crate) fn compile(source: &Source, look: &PlayniteLook, chosen: &Choices, measurer: &mut dyn Measurer) -> Compiled {
     let files = source.files();
-    let texts = Texts::load(source, &files, Mode::Fullscreen);
-    let tree = Tree::build(&texts, &files);
+    let texts = super::extract::chosen_texts(source, &files, Mode::Fullscreen, chosen);
+    let mut tree = Tree::build(&texts, &files);
+    tree.settings = chosen.settings.clone();
+    tree.add_on_options = add_on_options(source, &files);
     let loc = ViewStrings::load(source, &files);
     let dims = |rel: &str| -> Option<[f32; 2]> {
         let bytes = source.read(rel, PICTURE_SIZE_LIMIT)?;
@@ -138,6 +158,26 @@ pub(crate) fn compile(source: &Source, look: &PlayniteLook, measurer: &mut dyn M
         Some([w as f32, h as f32])
     };
     compile_tree(&tree, look, &loc, &dims, measurer)
+}
+
+/// The theme's own screens as one comparable text (options.rs: whether an option changes
+/// them). Pictures keep no size of their own: enough to compare two settings of one theme.
+pub(crate) fn views_print(tree: &Tree, source: &Source, measurer: &mut dyn Measurer) -> String {
+    let look = super::extract::look_of(tree, None);
+    let loc = ViewStrings::load(source, &source.files());
+    let c = compile_tree(tree, &look, &loc, &|_| None, measurer);
+    let elements = |v: Option<ViewOut>| v.map(|v| v.elements);
+    format!("{:?}|{:?}", elements(c.main), elements(c.details))
+}
+
+/// The theme's ThemeOptions variables (its options.yaml) at their defaults.
+fn add_on_options(source: &Source, files: &[(String, u64)]) -> settings::AddOnOptions {
+    files
+        .iter()
+        .find(|(f, _)| f.eq_ignore_ascii_case("options.yaml"))
+        .and_then(|(f, _)| source.read_text(f, tree::FILE_LIMIT))
+        .map(|y| settings::AddOnOptions::parse(&y))
+        .unwrap_or_default()
 }
 
 pub(crate) fn compile_tree(
@@ -150,41 +190,69 @@ pub(crate) fn compile_tree(
     let mut out = Compiled::default();
     let mut images = BTreeMap::new();
     let input = Input { tree, look, loc, dims };
-    for (ty, main) in [("Main", true), ("GameDetails", false)] {
-        let mut kept = images.clone();
-        let Some(mut view) = compile_view(&input, measurer, &mut kept, ty, main) else { continue };
+    if let Some(mut view) = compile_view(&input, measurer, &mut images, View::Main) {
         let usable = |v: &ViewOut| v.stats.list && !list_covered(&v.elements);
-        if main && !usable(&view) {
+        if !usable(&view) {
             // The list shows once one of the theme's toggles is flipped (a "more games" or a
             // log-in button): the view with its toggles as the user leaves them.
             tree.toggles_at_rest.set(false);
-            let mut open_images = images.clone();
-            let open = compile_view(&input, measurer, &mut open_images, ty, main);
-            tree.toggles_at_rest.set(true);
+            let mut open_images = BTreeMap::new();
+            let open = compile_view(&input, measurer, &mut open_images, View::Main);
             if let Some(v) = open.filter(|v| usable(v)) {
                 view = v;
-                kept = open_images;
+                images = open_images;
+            } else {
+                tree.toggles_at_rest.set(true);
             }
         }
-        images = kept;
-        if main {
-            // Why, as the end of "The theme's own main screen …" in the report.
-            out.main_problem = if !view.stats.list {
-                Some("needs Playnite add-ons".into())
-            } else if list_covered(&view.elements) {
-                Some("opens behind a start screen or menu that only Playnite can take away".into())
-            } else if view.stats.coverage() < MIN_COVERAGE {
-                Some("needs Playnite add-ons for most of what it shows".into())
-            } else {
-                None
-            };
-            out.main = Some(view);
+        // Why, as the end of "The theme's own main screen …" in the report.
+        out.main_problem = if !view.stats.list {
+            Some("needs Playnite add-ons".into())
+        } else if list_covered(&view.elements) {
+            Some("opens behind a start screen or menu that only Playnite can take away".into())
+        } else if view.stats.coverage() < MIN_COVERAGE {
+            Some("needs Playnite add-ons for most of what it shows".into())
         } else {
-            out.details = Some(view);
-        }
+            None
+        };
+        out.main = Some(view);
     }
+    out.details = compile_details(&input, measurer, &mut images, out.main_ok());
+    tree.toggles_at_rest.set(true);
     out.images = images.into_iter().collect();
     out
+}
+
+/// The GameDetails page. Playnite opens it inside the main screen (its PART_ElemGameDetails),
+/// so whatever the main screen still shows with the page open is part of it: the page over
+/// the main screen when that translates, else the page on its own.
+fn compile_details(
+    input: &Input,
+    measurer: &mut dyn Measurer,
+    images: &mut BTreeMap<String, String>,
+    main_ok: bool,
+) -> Option<ViewOut> {
+    if main_ok {
+        let mut kept = images.clone();
+        let over = compile_view(input, measurer, &mut kept, View::DetailsOverMain)
+            .filter(|v| v.stats.play_button && v.stats.coverage() >= MIN_COVERAGE);
+        if over.is_some() {
+            *images = kept;
+            return over;
+        }
+    }
+    input.tree.toggles_at_rest.set(true);
+    compile_view(input, measurer, images, View::Details)
+}
+
+/// Which screen `compile_view` lays out.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum View {
+    Main,
+    /// The GameDetails page on its own.
+    Details,
+    /// The main screen with the GameDetails page open in its PART_ElemGameDetails.
+    DetailsOverMain,
 }
 
 /// What every view is compiled from.
@@ -195,18 +263,21 @@ struct Input<'a, 'i> {
     dims: &'a dyn Fn(&str) -> Option<[f32; 2]>,
 }
 
-/// One view (`Main` / `GameDetails`) laid out and written as elements; the theme files it uses
-/// are added to `images`.
+/// One view laid out and written as elements; the theme files it uses are added to `images`.
 fn compile_view(
     input: &Input,
     measurer: &mut dyn Measurer,
     images: &mut BTreeMap<String, String>,
-    ty: &str,
-    main: bool,
+    view: View,
 ) -> Option<ViewOut> {
     let Input { tree, look, loc, dims } = *input;
+    let ty = if view == View::Details { "GameDetails" } else { "Main" };
     let style = tree.implicit_style(ty)?;
-    let own = tree.layer_of(style) == tree::Layer::Theme;
+    let page = match view {
+        View::Main => None,
+        _ => Some(tree.implicit_style("GameDetails")?),
+    };
+    let own = tree.layer_of(page.unwrap_or(style)) == tree::Layer::Theme;
     let tpl = tree.template(style)?;
     let root = tree.template_root(tpl)?;
     let mut b = Builder {
@@ -214,20 +285,37 @@ fn compile_view(
         look,
         loc,
         dims,
-        main,
+        main: view != View::Details,
+        details_open: view != View::Main,
+        details_page: if view == View::DetailsOverMain { page.and_then(|p| tree.template(p)) } else { None },
         stats: Stats::default(),
         images,
         tpl_triggers: template_triggers(tree, tpl),
         names: 0,
         root: Some(tpl),
         stacks: stack::enabled(),
+        strip: None,
+        trigger_depth: std::cell::Cell::new(0),
+        placing_list: std::cell::Cell::new(false),
         shoulder_prompts: vec![],
+        hint_rows: vec![],
+    };
+    let ty = match view {
+        View::Main => "Main",
+        View::Details => "GameDetails",
+        View::DetailsOverMain => "GameDetailsOverMain",
     };
     let inh = Inherit::root(tree);
     let mut node = b.build(root, &inh, 0)?;
+    if b.details_page.is_some() {
+        // The main screen has no place for the page.
+        return None;
+    }
     layout::layout(&mut node, measurer);
     widen_slots(&mut node);
+    b.strip = strip::pick_list(&mut node);
     b.shoulder_prompts = shoulder_prompts(&node);
+    b.hint_rows = hint_rows(&node);
     let dump_to = std::env::var_os("LODESTAR_PN_COMPILE_DUMP").map(|d| d.to_string_lossy().to_string());
     if let Some(d) = &dump_to {
         dump(&node, &format!("{d}-{ty}.txt"));
@@ -235,6 +323,9 @@ fn compile_view(
     let mut els = vec![];
     let screen = Rect::new(0.0, 0.0, W, H);
     b.emit(&node, &Ctx { clip: screen, ..Ctx::default() }, &mut els);
+    if view == View::DetailsOverMain {
+        drop_hidden(&mut els);
+    }
     for (i, e) in els.iter_mut().enumerate() {
         e.insert("z".into(), T::Float(round(0.5 + i as f32 * 0.01) as f64));
     }
@@ -246,13 +337,27 @@ fn compile_view(
     }
     let mut stats = b.stats;
     stats.elements = els.len();
-    Some(ViewOut { elements: els, stats, own })
+    let list_item = b.strip.map(|s| ItemLook { cover_radius: (s.radius > 0.0).then_some(s.radius), ..s.look });
+    Some(ViewOut { elements: els, stats, own, list_item })
 }
 
 impl Compiled {
-    /// The details page is used (translated well enough).
+    /// The theme's own main screen can be used.
+    pub fn main_ok(&self) -> bool {
+        self.main.is_some() && self.main_problem.is_none()
+    }
+
+    /// The theme's own details page goes with `family`: always with its translated main
+    /// screen, and with a layout family when that stands in for a main screen Lodestar can't
+    /// translate (a family the user picks over a working translation keeps its own page).
+    pub fn details_with(&self, family: super::fill::Family) -> bool {
+        self.details_used() && (family == super::fill::Family::Translated || !self.main_ok())
+    }
+
+    /// The details page is used: it translated well enough and shows its Play button (a page
+    /// whose panel only an add-on brings in shows nothing else either).
     pub fn details_used(&self) -> bool {
-        self.details.as_ref().is_some_and(|d| !d.elements.is_empty() && d.stats.coverage() >= MIN_COVERAGE)
+        self.details.as_ref().is_some_and(|d| d.stats.play_button && d.stats.coverage() >= MIN_COVERAGE)
     }
 }
 
@@ -265,55 +370,72 @@ pub(crate) fn apply(theme: &mut T, c: &Compiled, look: &PlayniteLook, videos: [O
         meta.insert("start".into(), T::String("games".into()));
     }
     root.remove("home");
-    let find = |root: &Table, view: &str, pick: &dyn Fn(&Table) -> bool| -> Option<Table> {
-        root.get(view)?.get("elements")?.as_array()?.iter().filter_map(T::as_table).find(|t| pick(t)).cloned()
-    };
-    let named = |n: &'static str| move |t: &Table| t.get("name").and_then(T::as_str) == Some(n);
-    let views: [(&str, Option<&ViewOut>, Option<&str>); 2] = [
-        ("games", c.main.as_ref(), videos[0]),
-        ("details", c.details.as_ref().filter(|_| c.details_used()), videos[1]),
-    ];
-    for (view, out, video) in views {
-        let Some(out) = out else { continue };
-        // The theme's background brush under everything (Playnite paints the window with it).
-        let mut els: Vec<T> = vec![];
-        if let Some(mut bg) = find(root, view, &named("pn_background")) {
-            bg.insert("z".into(), T::Float(0.0));
-            els.push(T::Table(bg));
-        }
-        for e in &out.elements {
-            let mut e = e.clone();
-            if e.get("video").and_then(T::as_str) == Some("@main_video") {
-                match video {
-                    Some(v) => {
-                        e.insert("video".into(), T::String(v.to_string()));
-                    }
-                    None => continue,
-                }
-            }
-            if e.get("name").and_then(T::as_str) == Some("pn_list") {
-                super::fill::item_look(&mut e, &look.item, false);
-            }
-            els.push(T::Table(e));
-        }
-        // Lodestar's button hints on the details page (Playnite shows none there; B goes back),
-        // unless the theme draws its own row of texts (buttons, hints, stats) where they go.
-        if view == "details"
-            && !out.elements.iter().any(is_hint_bar)
-            && let Some(mut help) = find(root, view, &|t: &Table| t.get("type").and_then(T::as_str) == Some("helpbar"))
-            && !element_box(&help).is_some_and(|band| texts_in(&out.elements, band))
-        {
-            help.insert("z".into(), T::Float(90.0));
-            els.push(T::Table(help));
-        }
-        if let Some(T::Table(v)) = root.get_mut(view) {
-            v.insert("elements".into(), T::Array(els));
-            // Playnite draws these views on a 1920 × 1080 canvas scaled as one piece: on a
-            // 16:10 or 4:3 screen texts keep the room their boxes were measured with.
-            v.insert("viewbox".into(), T::Array(vec![T::Float(W as f64), T::Float(H as f64)]));
-        }
+    if let Some(main) = &c.main {
+        put_view(root, "games", main, look, videos);
+    }
+    apply_details(theme, c, look, videos)
+}
+
+/// Put the compiled GameDetails page (when it translated well) into a theme filled by any of
+/// the layout families: a theme whose main screen Lodestar can't translate still gets its own
+/// details page. `videos` = the copied main / details videos.
+pub(crate) fn apply_details(
+    theme: &mut T,
+    c: &Compiled,
+    look: &PlayniteLook,
+    videos: [Option<&str>; 2],
+) -> anyhow::Result<()> {
+    let root = theme.as_table_mut().ok_or_else(|| anyhow::anyhow!("theme isn't a table"))?;
+    if let Some(details) = c.details.as_ref().filter(|_| c.details_used()) {
+        put_view(root, "details", details, look, videos);
     }
     Ok(())
+}
+
+/// Replace `view`'s elements with the compiled ones, over the theme's background brush.
+fn put_view(root: &mut Table, view: &str, out: &ViewOut, look: &PlayniteLook, videos: [Option<&str>; 2]) {
+    let find = |root: &Table, pick: &dyn Fn(&Table) -> bool| -> Option<Table> {
+        root.get(view)?.get("elements")?.as_array()?.iter().filter_map(T::as_table).find(|t| pick(t)).cloned()
+    };
+    // The theme's background brush under everything (Playnite paints the window with it).
+    let mut els: Vec<T> = vec![];
+    if let Some(mut bg) = find(root, &|t: &Table| t.get("name").and_then(T::as_str) == Some("pn_background")) {
+        bg.insert("z".into(), T::Float(0.0));
+        els.push(T::Table(bg));
+    }
+    for e in &out.elements {
+        let mut e = e.clone();
+        let placeholder = e.get("video").and_then(T::as_str);
+        if let Some(p) = placeholder.filter(|p| [MAIN_VIDEO, DETAILS_VIDEO].contains(p)) {
+            match videos[usize::from(p == DETAILS_VIDEO)] {
+                Some(v) => {
+                    e.insert("video".into(), T::String(v.to_string()));
+                }
+                None => continue,
+            }
+        }
+        if e.get("name").and_then(T::as_str) == Some("pn_list") {
+            super::fill::item_look(&mut e, out.list_item.as_ref().unwrap_or(&look.item), false);
+        }
+        els.push(T::Table(e));
+    }
+    // Lodestar's button hints on the details page (Playnite shows none there; B goes back),
+    // unless the theme draws its own hints (a hint bar or button glyphs) or its own row of
+    // texts (buttons, stats) where they go.
+    if view == "details"
+        && !out.elements.iter().any(|e| e.get("type").and_then(T::as_str) == Some("helpbar"))
+        && let Some(mut help) = find(root, &|t: &Table| t.get("type").and_then(T::as_str) == Some("helpbar"))
+        && !element_box(&help).is_some_and(|band| texts_in(&out.elements, band))
+    {
+        help.insert("z".into(), T::Float(90.0));
+        els.push(T::Table(help));
+    }
+    if let Some(T::Table(v)) = root.get_mut(view) {
+        v.insert("elements".into(), T::Array(els));
+        // Playnite draws these views on a 1920 × 1080 canvas scaled as one piece: on a
+        // 16:10 or 4:3 screen texts keep the room their boxes were measured with.
+        v.insert("viewbox".into(), T::Array(vec![T::Float(W as f64), T::Float(H as f64)]));
+    }
 }
 
 /// An element's box on the 1920 × 1080 screen (`pos`, `size`, `origin`; a text without a
@@ -344,11 +466,13 @@ fn texts_in(els: &[Table], band: Rect) -> bool {
     })
 }
 
-/// Report lines for a translated import (area, carried?, text).
-pub(crate) fn report_lines(c: &Compiled) -> Vec<(super::report::Area, bool, String)> {
+/// Report lines for a translated import (area, carried?, text); `with_main`: the theme's own
+/// main screen is used too (else only its details page is).
+pub(crate) fn report_lines(c: &Compiled, with_main: bool) -> Vec<(super::report::Area, bool, String)> {
     use super::report::Area;
     let mut out = vec![];
-    if let Some(m) = &c.main {
+    let main = c.main.as_ref().filter(|_| with_main);
+    if let Some(m) = main {
         out.push((
             Area::Layout,
             true,
@@ -376,7 +500,7 @@ pub(crate) fn report_lines(c: &Compiled) -> Vec<(super::report::Area, bool, Stri
     let mut dropped: BTreeMap<&str, usize> = BTreeMap::new();
     let mut ui = 0;
     let mut fades = 0;
-    for v in [c.main.as_ref(), c.details.as_ref().filter(|_| c.details_used())].into_iter().flatten() {
+    for v in [main, c.details.as_ref().filter(|_| c.details_used())].into_iter().flatten() {
         for (k, n) in &v.stats.dropped {
             *dropped.entry(k).or_default() += n;
         }
@@ -397,13 +521,15 @@ pub(crate) fn report_lines(c: &Compiled) -> Vec<(super::report::Area, bool, Stri
         out.push((Area::NotPossible, false, format!("Parts of its screens Lodestar can't draw: {}", list.join(", "))));
     }
     if ui > 0 {
+        let (what, rest) = if ui == 1 {
+            ("1 effect that reacts".to_string(), "that part keeps its")
+        } else {
+            (format!("{ui} effects that react"), "those parts keep their")
+        };
         out.push((
             Area::NotPossible,
             false,
-            format!(
-                "{ui} effect{} that react to the controller (menus sliding in, helpers that move the list) — those parts keep their resting look",
-                if ui == 1 { "" } else { "s" }
-            ),
+            format!("{what} to the controller (menus sliding in, helpers that move the list) — {rest} resting look"),
         ));
     }
     out
@@ -436,10 +562,26 @@ fn plural(k: &str) -> String {
 struct Bind {
     path: String,
     element: Option<String>,
+    /// A `RelativeSource` or `Source` instead of the data context.
     relative: bool,
+    /// The `RelativeSource` mode (`Self`, `TemplatedParent`, `FindAncestor` …).
+    relative_mode: Option<String>,
     converter: Option<String>,
     param: Option<String>,
     format: Option<String>,
+}
+
+impl Bind {
+    /// It reads the element it is set on (`RelativeSource Self`).
+    fn on_self(&self) -> bool {
+        self.relative_mode.as_deref() == Some("Self")
+    }
+
+    /// It reads the control a template part belongs to: the part itself or the templated
+    /// parent.
+    fn on_control(&self) -> bool {
+        matches!(self.relative_mode.as_deref(), Some("Self" | "TemplatedParent"))
+    }
 }
 
 /// When something is shown, in Lodestar terms.
@@ -483,13 +625,23 @@ enum Kind {
     Image(ImageOut),
     List,
     Clock(TextOut),
-    Help(TextOut),
+    /// A bottom-bar button (the help bar takes the place of its row). `unread`: a button
+    /// drawing its InputHint's prompt and a label Lodestar can't read (set at runtime), so its
+    /// measured box is too small for what it shows.
+    Help {
+        look: TextOut,
+        unread: bool,
+    },
     Button(ButtonOut),
-    /// The theme's background video.
-    Video,
+    /// One of the theme's own videos, by the placeholder of the view it belongs to
+    /// (`MAIN_VIDEO` / `DETAILS_VIDEO`; the importer copies one video per view).
+    Video(&'static str),
+    /// A row of the game list's items the theme lays out itself (strip.rs); the game list when
+    /// PART_ListGameItems itself doesn't show.
+    Mirror(Box<strip::Strip>),
     /// The filter preset tabs (PART_FilterPresetSelector): Lodestar's main collections, the
     /// open one highlighted.
-    Tabs(TabsOut),
+    Tabs(Box<TabsOut>),
     /// A button prompt the theme draws next to its own text (`ButtonPromptA` …): that
     /// button's glyph in the user's controller style (a help bar `buttons` name).
     Prompt(&'static str, Option<Color>),
@@ -497,9 +649,12 @@ enum Kind {
 
 #[derive(Clone, Debug, Default)]
 struct TabsOut {
+    /// The names in Lodestar's own look (when the theme's preset template isn't read).
     label: TextOut,
-    /// Colour of the open collection's tab.
+    /// Colour of the open collection's tab in that look.
     current: Option<Color>,
+    /// The strip's direction and the theme's preset buttons (tabs.rs).
+    look: tabs::PresetLook,
 }
 
 /// The tabs a filter preset strip shows: Lodestar's collections that match Playnite's default
@@ -507,7 +662,7 @@ struct TabsOut {
 const TABS: [(&str, &str); 4] =
     [("all", "All Games"), ("recent", "Continue Playing"), ("favorites", "Favourites"), ("installed", "Installed")];
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct TextOut {
     text: String,
     color: Option<Color>,
@@ -543,8 +698,16 @@ struct ButtonOut {
     fill: Option<LookBrush>,
     border: Option<(Color, f32)>,
     radius: f32,
+    /// The face's height and its offset from the button's top, when the button's template
+    /// paints a band narrower than its box (button.rs `Face::band`).
+    band: Option<(f32, f32)>,
     /// Play / Install by the game's state.
     context: bool,
+    /// The label is the one the template writes itself (not Play / Install by the game's state).
+    own_text: bool,
+    /// The look for installed games when the template draws them differently (this one is then
+    /// the other games').
+    installed: Option<Box<ButtonOut>>,
 }
 
 /// A node's drawing.
@@ -572,7 +735,13 @@ struct Builder<'b, 't, 'i> {
     look: &'b PlayniteLook,
     loc: &'b ViewStrings,
     dims: &'b dyn Fn(&str) -> Option<[f32; 2]>,
+    /// Bindings are the main screen's (`SelectedGame.…`), not the details page's (`Game.…`).
     main: bool,
+    /// The game details page is open (PART_ElemGameDetails shows, the focus is on its Play
+    /// button).
+    details_open: bool,
+    /// The GameDetails template to lay out in the main screen's PART_ElemGameDetails.
+    details_page: Option<X<'t, 'i>>,
     stats: Stats,
     images: &'b mut BTreeMap<String, String>,
     tpl_triggers: HashMap<String, Vec<X<'t, 'i>>>,
@@ -581,8 +750,18 @@ struct Builder<'b, 't, 'i> {
     root: Option<X<'t, 'i>>,
     /// Flowing panels become `stack` containers (the placement tests turn this off).
     stacks: bool,
+    /// The row the theme lays out itself that stands in for the game list.
+    strip: Option<strip::Strip>,
+    /// Triggers being evaluated inside each other (`trigger_setter`, `settings_warning`): a
+    /// trigger whose condition reads what it sets ends here.
+    trigger_depth: std::cell::Cell<u8>,
+    /// The game list's own size and margins are being read (`place`): its SelectedIndex is
+    /// the first game's.
+    placing_list: std::cell::Cell<bool>,
     /// Where the view's LB / RB prompts sit (the tab strip keeps clear of them).
     shoulder_prompts: Vec<Rect>,
+    /// Where the view's bottom-bar buttons sit (the help bar spans those level with it).
+    hint_rows: Vec<emit::HintRow>,
 }
 
 fn round(v: f32) -> f32 {
@@ -655,6 +834,32 @@ fn list_covered(els: &[Table]) -> bool {
         }
     }
     covered > list.area() * 0.5
+}
+
+/// Elements under a later one that covers the whole screen with nothing showing through it
+/// (an opaque rect, or the game's picture filling the screen, whatever the game) are never
+/// seen: the main screen under a details page that paints its own background.
+fn drop_hidden(els: &mut Vec<Table>) {
+    let covers = |e: &Table| -> bool {
+        let plain = !["visible_if", "hidden_if", "transitions", "mask", "corner_radius", "gradient_stops", "gradient"]
+            .iter()
+            .any(|k| e.contains_key(*k))
+            && e.get("opacity").and_then(T::as_float).is_none_or(|o| o >= 0.999);
+        let full =
+            element_box(e).is_some_and(|b| b.x <= 0.5 && b.y <= 0.5 && b.x + b.w >= W - 0.5 && b.y + b.h >= H - 0.5);
+        let opaque = match e.get("type").and_then(T::as_str) {
+            Some("rect") => e.get("color").and_then(T::as_str).and_then(Color::parse).is_some_and(|c| c.0[3] == 255),
+            Some("image") => {
+                e.get("path").and_then(T::as_str) == Some("{art.hero}")
+                    && e.get("fit").and_then(T::as_str) == Some("cover")
+            }
+            _ => false,
+        };
+        plain && full && opaque
+    };
+    if let Some(i) = els.iter().rposition(covers) {
+        els.drain(..i);
+    }
 }
 
 /// Per-game single-line texts and clocks may grow past the box they were measured in (with a

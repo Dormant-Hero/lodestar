@@ -34,6 +34,9 @@ pub struct ControllerConfig {
     /// While a game runs this never applies: only the Guide button gets through then.
     /// Settings: "Only use the controller when Lodestar is the active window" = the opposite.
     pub background_input: bool,
+    /// The controller moves around desktop mode too (library, menus, dialogs), only while
+    /// Lodestar is the active window and no game runs (input/gate.rs `desktop_pad`).
+    pub desktop_navigation: bool,
     /// Hide the mouse pointer in controller mode until the mouse moves.
     pub hide_cursor: bool,
     /// Controller mode shows the time / the battery level (laptops, handhelds).
@@ -65,6 +68,9 @@ pub struct ControllerConfig {
     pub music_folder: Option<String>,
     /// Settings → Visuals: play theme videos (needs ffmpeg; otherwise the still picture shows).
     pub theme_videos: bool,
+    /// Settings → Categories: which categories controller mode lists.
+    #[serde(skip_serializing_if = "Categories::is_empty")]
+    pub categories: Categories,
     /// Older versions: what the Home button did while a Steam game ran. Read once into
     /// `menu_button` (see `Config::sanitized`), never written.
     #[serde(skip_serializing)]
@@ -73,6 +79,42 @@ pub struct ControllerConfig {
     /// desktop's own "no animations" setting (KDE: animation speed "Instant").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reduce_motion: Option<bool>,
+}
+
+/// Settings → Categories: the player's changes to the categories controller mode lists, by
+/// collection key ("steam", "recent", "pc", "platform:pc_linux", "coll:7"). A key the library
+/// doesn't have (a store that was removed) is simply not shown. All games is always listed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Categories {
+    /// Categories listed by default that the player hid.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub hidden: Vec<String>,
+    /// Categories not listed by default that the player asked for (PC, PC (Linux) …).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub added: Vec<String>,
+}
+
+impl Categories {
+    pub fn is_empty(&self) -> bool {
+        self.hidden.is_empty() && self.added.is_empty()
+    }
+
+    /// Is the category `key` listed? `default`: listed when the player chose nothing.
+    pub fn shows(&self, key: &str, default: bool) -> bool {
+        if default { !self.hidden.iter().any(|k| k == key) } else { self.added.iter().any(|k| k == key) }
+    }
+
+    /// List the category `key` or not. Only differences from the default are kept, so a
+    /// category back at its default leaves no trace.
+    pub fn set(&mut self, key: &str, default: bool, show: bool) {
+        self.hidden.retain(|k| k != key);
+        self.added.retain(|k| k != key);
+        if show != default {
+            let list = if default { &mut self.hidden } else { &mut self.added };
+            list.push(key.to_string());
+        }
+    }
 }
 
 /// Controller settings → Visuals → Text size.
@@ -201,6 +243,7 @@ impl Default for ControllerConfig {
             button_prompts: ButtonPrompts::Auto,
             guide_opens_lodestar: true,
             background_input: true,
+            desktop_navigation: true,
             hide_cursor: true,
             show_clock: true,
             show_battery: true,
@@ -218,6 +261,7 @@ impl Default for ControllerConfig {
             volume: 70,
             music_folder: None,
             theme_videos: true,
+            categories: Categories::default(),
             steam_home: None,
             reduce_motion: None,
         }

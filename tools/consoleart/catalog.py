@@ -235,7 +235,7 @@ COLLECTIONS = [
     E("moonlight", "Moonlight", "Streaming", "", 228, "stream", sat=0.55, screen="tiles"),
     E("romm", "RomM", "Your server", "", 270, "server", sat=0.5),
     E("emulator", "Emulators", "Retro games", "", 315, "cartridge", sat=0.55),
-    E("desktop", "Desktop", "Apps and games", "", 236, "apps", sat=0.55),
+    E("desktop", "Shortcuts", "From the app menu", "", 236, "apps", sat=0.55),
     E("manual", "Manual", "Added by you", "", 60, "plus", sat=0.55),
     E("addon", "Add-on", "Extensions", "", 300, "puzzle", sat=0.55),
 ]

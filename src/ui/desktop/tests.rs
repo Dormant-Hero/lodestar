@@ -34,6 +34,32 @@ fn counts_skip_hidden_and_group() {
     assert_eq!(c.generation, lib.generation);
 }
 
+/// The explorer's SOURCES counts and controller mode's store collections count the same games:
+/// everything that isn't hidden, installed or not (a missing game is a game that isn't
+/// installed). Hidden games count only under Hidden.
+#[test]
+fn explorer_and_controller_count_sources_alike() {
+    use crate::library::{Collection, CollectionKind};
+    let mut games: Vec<Game> = (1..=60)
+        .map(|i| fake_game(i, &format!("Game {i}"), if i % 4 == 0 { Source::Desktop } else { Source::Steam }))
+        .collect();
+    for g in games.iter_mut().filter(|g| g.id % 8 == 0) {
+        g.installed = false;
+        g.missing = Some(Missing { since: 1_700_000_000, kept: false });
+    }
+    let lib = Library::new(games);
+    let c = Counts::compute(&lib);
+    for (key, n) in &c.sources {
+        let s = key.as_source().unwrap();
+        let coll = Collection { kind: CollectionKind::Source(s), name: String::new() };
+        assert_eq!(lib.collection_games(&coll).len(), *n, "{s:?}");
+        let visible = lib.games.iter().filter(|g| g.source == s && !g.hidden);
+        assert_eq!(visible.count(), *n, "{s:?}");
+    }
+    let missing = lib.games.iter().filter(|g| g.missing.is_some() && !g.hidden).count();
+    assert!(missing > 0 && c.not_installed >= missing, "missing games count as not installed");
+}
+
 #[test]
 fn strip_html_basic() {
     assert_eq!(strip_html("plain text"), "plain text");
@@ -49,11 +75,13 @@ fn play_state_uses_the_store_caps() {
     use details::{PlayState, play_state};
     let mut g = fake_game(1, "A", Source::Steam);
     g.installed = false;
-    let caps = |can_install| StoreCaps { id: 1, can_install, can_uninstall: false, store_page: None };
+    let caps = |can_install| StoreCaps { id: 1, can_install, ..Default::default() };
     assert_eq!(play_state(&g, None, None), PlayState::NotInstalled);
     assert_eq!(play_state(&g, None, Some(&caps(false))), PlayState::NotInstalled);
     assert_eq!(play_state(&g, None, Some(&caps(true))), PlayState::Install);
     assert_eq!(play_state(&g, Some(1), Some(&caps(true))), PlayState::Running);
+    let gone = StoreCaps { not_in_steam_library: true, ..caps(true) };
+    assert_eq!(play_state(&g, None, Some(&gone)), PlayState::OpenInSteam, "no longer in the Steam library");
     g.installed = true;
     assert_eq!(play_state(&g, None, Some(&caps(true))), PlayState::Play);
 }

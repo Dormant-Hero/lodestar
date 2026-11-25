@@ -5,8 +5,8 @@ use super::*;
 
 impl ControllerUi {
     /// The quick menu (Start), Playnite Fullscreen's right menu: the running game, random game,
-    /// desktop mode, rescan, sort, hidden games, settings, power options, quit. Everything to
-    /// set up lives in Settings (settings.rs).
+    /// desktop mode, rescan, hide the focused category, sort, hidden games, settings, power
+    /// options, quit. Everything to set up lives in Settings (settings.rs).
     pub(super) fn quick_items(&self, st: &AppState) -> Vec<Item> {
         let c = &st.config.controller;
         let on = |b: bool| if b { "On" } else { "Off" };
@@ -20,6 +20,10 @@ impl ControllerUi {
         }
         v.push(Item::action("Switch to desktop mode", Act::SwitchDesktop));
         v.push(Item::value("Rescan library", if st.scan.running { "Scanning…" } else { "" }, Act::Rescan));
+        // Not first: a quick A after opening the menu shouldn't hide what is under the focus.
+        if let Some(c) = self.focused_category() {
+            v.push(Item::value("Hide category", card_name(&c), Act::HideCategory(c.key())));
+        }
         if self.sorts_a_list() {
             v.push(Item::value("Sort by", self.sort_label(), Act::SortMenu));
         }
@@ -130,8 +134,7 @@ impl ControllerUi {
             items.push(Item::action(format!("Cancel download{pct}"), Act::CancelDownload(id)).danger());
         } else if install {
             // Not installed: Install leads (Play would only fail or open the store anyway).
-            let label = if g.source == crate::model::Source::Romm { "Download" } else { "Install" };
-            items.push(Item::action(label, Act::Install(id)));
+            items.push(Item::action(st.install_label(g), Act::Install(id)));
         } else {
             items.push(Item::action("Play", Act::Play(id)));
             // The game's other actions ("Settings", "Launcher" …); the main one is what Play runs.

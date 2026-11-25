@@ -108,6 +108,10 @@ pub struct ScanReport {
     pub ok_sources: Vec<Source>,
     pub per_source: Vec<(Source, SourceReport)>,
     pub duplicates_dropped: usize,
+    /// Shortcuts left out as duplicates of a game another library reported (or knows as not
+    /// installed); pass to `Db::merge_scan_with_shortcuts` so their old rows fold into that game.
+    /// Never lists shortcuts into a library that failed to scan.
+    pub dropped_shortcuts: Vec<DroppedShortcut>,
     pub elapsed: Duration,
     /// Steam apps the scanner couldn't name (for the background name lookup).
     pub steam_needs: steam::names::Needs,
@@ -186,17 +190,25 @@ pub fn run_all(ctx: &ScanContext) -> ScanReport {
             }
         }
     }
-    report.duplicates_dropped = dedupe(&mut report.games);
+    report.dropped_shortcuts = dedupe(&mut report.games);
+    report.duplicates_dropped = report.dropped_shortcuts.len();
     report.duplicates_dropped += drop_shortcuts_into_failed(&mut report);
     // RomM games downloaded into a ROM folder are emulated games now.
     report.duplicates_dropped += romm::dedupe_with_emulation(ctx, &mut report.games);
     // Leftover shortcuts into a source that scanned fine but doesn't have the game installed
     // (e.g. Steam .desktop files of uninstalled games) are noise unless the user wants uninstalled games.
     if !ctx.config.include_uninstalled {
-        let ok = report.ok_sources.clone();
-        let before = report.games.len();
-        report.games.retain(|g| !(g.duplicate_of.as_ref().is_some_and(|(s, _)| ok.contains(s)) && !g.installed));
-        report.duplicates_dropped += before - report.games.len();
+        let ok = &report.ok_sources;
+        let (stale, games): (Vec<ScannedGame>, Vec<ScannedGame>) = std::mem::take(&mut report.games)
+            .into_iter()
+            .partition(|g| g.duplicate_of.as_ref().is_some_and(|(s, _)| ok.contains(s)) && !g.installed);
+        report.games = games;
+        report.duplicates_dropped += stale.len();
+        report.dropped_shortcuts.extend(
+            stale
+                .into_iter()
+                .filter_map(|g| Some(DroppedShortcut { target: g.duplicate_of?, shortcut: (g.source, g.source_id) })),
+        );
     }
     report.elapsed = t0.elapsed();
     report.steam_needs = ctx.steam_names.needs.lock().clone();
@@ -223,8 +235,8 @@ fn drop_shortcuts_into_failed(report: &mut ScanReport) -> usize {
 }
 
 /// Drop desktop entries that duplicate a game from a real source (lending their art to it if it
-/// lacks some). Returns how many were dropped.
-pub fn dedupe(games: &mut Vec<ScannedGame>) -> usize {
+/// lacks some). Returns what was dropped, each with the game it was matched to.
+pub fn dedupe(games: &mut Vec<ScannedGame>) -> Vec<DroppedShortcut> {
     let index: HashMap<(Source, String), usize> = games
         .iter()
         .enumerate()
@@ -232,6 +244,7 @@ pub fn dedupe(games: &mut Vec<ScannedGame>) -> usize {
         .map(|(i, g)| ((g.source, g.source_id.clone()), i))
         .collect();
     let mut donations: Vec<(usize, Art)> = vec![];
+    let mut dropped = vec![];
     let mut drop = vec![false; games.len()];
     for (i, g) in games.iter().enumerate() {
         if let Some(key) = &g.duplicate_of {
@@ -250,6 +263,10 @@ pub fn dedupe(games: &mut Vec<ScannedGame>) -> usize {
                     art.cover = None;
                 }
                 donations.push((target, art));
+                dropped.push(DroppedShortcut {
+                    shortcut: (g.source, g.source_id.clone()),
+                    target: (games[target].source, games[target].source_id.clone()),
+                });
                 drop[i] = true;
             }
         }
@@ -257,14 +274,13 @@ pub fn dedupe(games: &mut Vec<ScannedGame>) -> usize {
     for (target, art) in donations {
         games[target].art.fill_from(&art);
     }
-    let before = games.len();
     let mut i = 0;
     games.retain(|_| {
         let keep = !drop[i];
         i += 1;
         keep
     });
-    before - games.len()
+    dropped
 }
 
 /// Helpers shared by scanners.
@@ -344,7 +360,14 @@ mod tests {
         let mut orphan = ScannedGame::new(Source::Desktop, "other.desktop", "Other");
         orphan.duplicate_of = Some((Source::Steam, "99".into()));
         let mut v = vec![steam, shortcut, orphan];
-        assert_eq!(dedupe(&mut v), 1);
+        let dropped = dedupe(&mut v);
+        assert_eq!(
+            dropped,
+            [DroppedShortcut {
+                shortcut: (Source::Desktop, "game.desktop".into()),
+                target: (Source::Steam, "10".into())
+            }]
+        );
         assert_eq!(v.len(), 2);
         assert_eq!(v[0].art.icon.as_deref(), Some(std::path::Path::new("/icons/g.png")));
     }

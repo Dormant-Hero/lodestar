@@ -60,15 +60,15 @@ fn theme(ui: &mut Ui, st: &mut AppState, key: &str, spec: &OptionsSpec, pal: &Pa
         if jobs::busy(key) {
             ui.add(egui::Spinner::new().size(14.0));
         }
-        let others = spec.others();
-        if others > 0 {
-            hint_text(
-                ui,
-                &format!(
-                    "{others} more of its options change parts Lodestar draws its own way, so they aren't listed."
-                ),
-                pal,
-            );
+        let others = match spec.others() {
+            0 => None,
+            1 => Some("One more of its options changes parts Lodestar draws its own way, so it isn't listed.".into()),
+            n => {
+                Some(format!("{n} more of its options change parts Lodestar draws its own way, so they aren't listed."))
+            }
+        };
+        if let Some(t) = others {
+            hint_text(ui, &t, pal);
         }
     });
 }

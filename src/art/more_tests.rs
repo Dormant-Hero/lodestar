@@ -196,7 +196,8 @@ fn source_order_and_switches() {
     assert_eq!(o[0], (SourceKind::Libretro, true));
     assert_eq!(o[1], (SourceKind::Steam, true));
     assert_eq!(o[2], (SourceKind::SteamGridDb, true));
-    assert_eq!(o[3], (SourceKind::Gog, false));
+    assert_eq!(o[3], (SourceKind::Igdb, true));
+    assert_eq!(o[4], (SourceKind::Gog, false));
     // GameTDB (console-only) isn't in the PC list.
     assert_eq!(o.len(), PC_ORDER.len());
     assert!(!o.iter().any(|(k, _)| *k == SourceKind::GameTdb));
@@ -207,6 +208,45 @@ fn source_order_and_switches() {
     assert!(!SourceKind::TheGamesDb.configured(&c));
     c.thegamesdb_key = Some(" k ".into());
     assert!(SourceKind::TheGamesDb.configured(&c));
+}
+
+#[test]
+fn built_in_orders_for_a_new_install() {
+    let names = |l: ArtList| -> Vec<(&str, bool)> {
+        ordered_sources_for(&MetadataConfig::default(), l).into_iter().map(|(k, on)| (k.name(), on)).collect()
+    };
+    let on = |v: &[&'static str]| v.iter().map(|n| (*n, true)).collect::<Vec<_>>();
+    assert_eq!(
+        names(ArtList::Pc),
+        on(&["Steam", "SteamGridDB", "IGDB", "GOG", "TheGamesDB", "libretro", "Lutris", "PCGamingWiki"])
+    );
+    let mut emu = on(&["libretro", "GameTDB", "SteamGridDB", "IGDB", "TheGamesDB"]);
+    emu.extend(["Steam", "GOG", "PCGamingWiki", "Lutris"].map(|n| (n, false)));
+    assert_eq!(names(ArtList::Emulated), emu);
+}
+
+#[test]
+fn saved_orders_are_kept_when_the_built_in_one_changes() {
+    // A config saved by an older version, with its own orders and switches.
+    let text = r#"
+[metadata]
+source_order = ["Steam", "SteamGridDB", "GOG", "IGDB", "TheGamesDB", "libretro", "Lutris", "PCGamingWiki"]
+sources_off = ["TheGamesDB"]
+emu_source_order = ["libretro", "SteamGridDB", "IGDB", "Steam", "GOG", "PCGamingWiki", "Lutris", "TheGamesDB"]
+emu_sources_off = ["TheGamesDB"]
+"#;
+    let (cfg, problems) = crate::config::Config::parse_lenient(text);
+    assert!(problems.is_empty(), "{problems:?}");
+    let m = &cfg.metadata;
+    let order = |l: ArtList| -> Vec<&str> { ordered_sources_for(m, l).into_iter().map(|(k, _)| k.name()).collect() };
+    assert_eq!(order(ArtList::Pc), m.source_order.iter().map(String::as_str).collect::<Vec<_>>());
+    // GameTDB came later than this list: it follows the sources the list names.
+    let mut emu: Vec<&str> = m.emu_source_order.iter().map(String::as_str).collect();
+    emu.push("GameTDB");
+    assert_eq!(order(ArtList::Emulated), emu);
+    // Saving writes the user's lists back unchanged.
+    let again = crate::config::Config::parse_lenient(&toml::to_string_pretty(&cfg).unwrap()).0;
+    assert_eq!(again.metadata, cfg.metadata);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -421,6 +461,49 @@ fn pcgamingwiki_cover_by_title_checked_by_appid() {
     let c = items.iter().find(|c| c.source == "PCGamingWiki").unwrap();
     assert_eq!(c.url, full);
     assert!(c.thumb_url.as_deref().unwrap().contains("300px"));
+}
+
+#[test]
+fn libretro_without_its_name_list_uses_the_roms_exact_names() {
+    // GitHub's hourly limit (shared by everything on the same address) is used up: the name
+    // list can't be had, the image host still answers.
+    let tmp = tempfile::tempdir().unwrap();
+    let sys = console_platform(Some("n64")).and_then(|p| p.libretro).unwrap();
+    let cover = |stem: &str| libretro_image_url(sys, LR_BOXART, stem);
+    let net = Net2::default()
+        .status(&libretro_index_url(sys), 403)
+        .ok(&format!("HEAD {}", cover("Super Mario 64 (USA)")), b"")
+        .ok(&cover("Super Mario 64 (USA)"), &png(5, 7))
+        .ok(&format!("HEAD {}", cover("Star Fox 64 (USA)")), b"")
+        .ok(&cover("Star Fox 64 (USA)"), &png(5, 7));
+    let sent = net.sent.clone();
+    let e = engine(net, tmp.path(), MetadataConfig::default());
+    let req = |id: i64, name: &str, rom: &str| AutoRequest {
+        id,
+        name: name.into(),
+        appid: None,
+        gog_id: None,
+        platform: Some("Nintendo 64".into()),
+        rom_names: vec![rom.into()],
+        serial: None,
+        need: vec![ArtSlot::Cover],
+        sources: vec![SourceKind::Libretro],
+    };
+    let reqs = [
+        req(1, "Super Mario 64", "Super Mario 64 (USA)"),
+        // No image of exactly this name: the title may still match another region's image.
+        req(2, "Mario Kart 64", "Mario Kart 64 (Japan) (Rev 7)"),
+        req(3, "Star Fox 64", "Star Fox 64 (USA)"),
+    ];
+    let mut got = vec![];
+    e.auto_fill(&reqs, &std::sync::atomic::AtomicBool::new(false), &mut |id, art, tried| got.push((id, art, tried)));
+    let covered: Vec<i64> = got.iter().filter(|(_, a, _)| a.cover.is_some()).map(|(id, _, _)| *id).collect();
+    assert_eq!(covered, vec![1, 3]);
+    let tried = |id: i64| got.iter().find(|g| g.0 == id).map(|g| g.2.clone()).unwrap();
+    assert_eq!(tried(1), vec![SourceKind::Libretro]);
+    assert!(tried(2).is_empty(), "asked again once the name list can be had");
+    let index_asks = sent.lock().iter().filter(|u| u.starts_with(LIBRETRO_TREES)).count();
+    assert_eq!(index_asks, 1, "the limit is known after the first answer");
 }
 
 #[test]

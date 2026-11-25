@@ -83,6 +83,13 @@ Text, pictures and conditions can use values in braces, filled in for the select
 | System | `system.battery`, `system.charging`, `theme.dir` |
 
 A value that isn't known is empty, so `"{game.year}"` simply shows nothing for a game without a year.
+Names can change between versions (the "Desktop" library is called "Shortcuts" now), so pictures and
+conditions that must keep working are best keyed by `game.sourcekey` or `collection.key`; a theme that
+still uses the old name finds `Desktop.png` and matches `{game.source} == Desktop` all the same.
+
+Which categories controller mode lists is partly the player's choice (Settings → Categories): a theme's
+`rows` and collection lists leave out what the player hid and include what they added, so a theme should
+look right with any number of collections.
 
 ### Showing things only sometimes
 

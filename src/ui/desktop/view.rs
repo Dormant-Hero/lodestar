@@ -8,7 +8,7 @@ impl DesktopUi {
         let d = &st.config.desktop;
         let f = &mut self.filter;
         // "Not installed" in the sidebar wins over the Installed preset.
-        f.installed_only = d.preset == QuickPreset::Installed && self.lib_sel != LibSel::NotInstalled;
+        f.installed_only = d.preset == QuickPreset::Installed && !self.lib_sel.not_installed();
         f.favorites_only = d.preset == QuickPreset::Favorites;
         if self.groups.by != d.group_by || self.groups.collapsed != d.collapsed_groups {
             self.groups.by = d.group_by;
@@ -37,7 +37,7 @@ impl DesktopUi {
         }
         let f = &mut self.filter;
         let want = match self.lib_sel {
-            LibSel::All | LibSel::Hidden | LibSel::NotInstalled => None,
+            LibSel::All | LibSel::Hidden | LibSel::NotInstalled | LibSel::NotInSteamLibrary => None,
             LibSel::Installed => Some(CollectionKind::Installed),
             LibSel::Favorites => Some(CollectionKind::Favorites),
             LibSel::Recent => Some(CollectionKind::Recent),
@@ -88,7 +88,7 @@ impl DesktopUi {
         let mut lib_filter = self.filter.clone();
         lib_filter.tags.clear();
         let mut indices: Vec<usize> = self.cache.get(lib, &lib_filter).to_vec();
-        indices.retain(|&i| self.extra_match(&lib.games[i]));
+        indices.retain(|&i| self.extra_match(lib, &lib.games[i]));
         random::preset_retain(self.preset, lib, &mut indices);
         self.view = indices;
         self.groups.stamp += 1;

@@ -342,20 +342,21 @@ fn import_inner(
     }
     let scan = scan_xaml(&source, &xaml, &rep.source);
 
-    // Theme options (thememodifier.yaml): typed, tried, and the chosen values laid over the theme.
+    // Theme options (thememodifier.yaml, and Playnite settings that are the player's choice):
+    // typed, tried, and the chosen values laid over the theme.
     let wanted_values = match values {
         Some(v) => v.clone(),
         None => earlier.as_ref().map(|e| e.option_values.clone()).unwrap_or_default(),
     };
     let prepared = options::prepare(&source, mode, &wanted_values, known);
-    let overrides = prepared.as_ref().and_then(|(spec, v)| options::overrides_xaml(spec, v));
+    let chosen = prepared.as_ref().map(|(spec, v)| options::choices(spec, v)).unwrap_or_default();
     // The theme's own words (its Localization/en_US.xaml, its constants, chosen option labels).
     let mut strings = loc::Strings::load(&source);
-    if let Some(x) = &overrides {
+    if let Some(x) = &chosen.constants {
         strings.extend_from_xaml(x);
     }
     // The theme's look and its resources, resolved over Playnite's full default theme.
-    let extracted = extract::extract_with(&source, mode, overrides);
+    let extracted = extract::extract_with(&source, mode, &chosen);
     let banner = extracted.banner;
     let mut look = extracted.look;
     let res = extracted.resources;
@@ -363,16 +364,20 @@ fn import_inner(
     // Background picture (its colour is the background colour under it). Desktop: the
     // picture the theme's window really draws (the look), not any resource named "background".
     let picture = if fullscreen { background_picture(&res, &files, mode) } else { desktop_picture(&look, &files) };
-    let picture_color = match &picture {
-        Some(Ok(rel)) => source.read(rel, IMAGE_LIMIT).and_then(|b| average_color(&b)),
-        _ => None,
+    let picture_color = if fullscreen {
+        match &picture {
+            Some(Ok(rel)) => source.read(rel, IMAGE_LIMIT).and_then(|b| average_color(&b)),
+            _ => None,
+        }
+    } else {
+        window_image_color(&look, &source)
     };
     let mapped = colours(&res, &mut look, mode, picture_color, &mut out);
     let mut fonts = TextFonts::pick(&source, &files, &res, &look, mode, &mut out);
 
     // The theme's own main screen and details page, translated (compile.rs); Lodestar's
     // layout families (fill.rs) are the fallback and stay on offer.
-    let compiled = fullscreen.then(|| fonts.compile(&source, &look));
+    let compiled = fullscreen.then(|| fonts.compile(&source, &look, &chosen));
     let family = layout_family(&mut rep, &mut out, opts, &look, compiled.as_ref());
 
     // Videos and sounds.
@@ -420,6 +425,7 @@ fn import_inner(
             picture: picture_rel,
             main_video: copied.main_video.clone(),
             details_video: copied.details_video.clone(),
+            details_translated: compiled.as_ref().is_some_and(|c| c.details_with(family)),
             sounds: copied.sounds.clone(),
             music: copied.music.clone(),
             strings: strings.clone(),
@@ -520,8 +526,20 @@ fn scan_xaml(source: &Source, xaml: &[&String], source_name: &str) -> XamlScan {
     scan
 }
 
+/// The colour a desktop window painted with a picture or a tiled texture shows: the file's
+/// average at the brush's opacity, over the black under a Playnite window.
+fn window_image_color(look: &look::PlayniteLook, source: &Source) -> Option<Color> {
+    let look::LookBrush::Image { file: Some(f), opacity, .. } = look.desktop.window_background.as_ref()? else {
+        return None;
+    };
+    let average = source.read(f, IMAGE_LIMIT).and_then(|b| average_color(&b))?;
+    let alpha = (opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Some(map::over(average.with_alpha(alpha), Color::BLACK))
+}
+
 /// The palette (and, where the look has no window background, the gradient it was worked
-/// out from), with the report's colour line.
+/// out from), with the report's colour line. `picture_color`: fullscreen, the background
+/// picture's colour; desktop, the colour of the picture or texture the window is painted with.
 fn colours(
     res: &Resources,
     look: &mut look::PlayniteLook,
@@ -533,7 +551,10 @@ fn colours(
     // The brush the theme's window / main view paints, where it is a mostly opaque colour or
     // gradient.
     let window_brush = if fullscreen { look.main.background.as_ref() } else { look.desktop.window_background.as_ref() };
-    let window_color = window_brush.and_then(look::LookBrush::average).filter(|c| c.0[3] >= 200);
+    let window_color = window_brush
+        .and_then(look::LookBrush::average)
+        .filter(|c| c.0[3] >= 200)
+        .or(picture_color.filter(|_| !fullscreen));
     let mapped = map::palette(
         res,
         mode,
@@ -656,7 +677,7 @@ impl TextFonts {
 
     /// Compile the theme's views, measuring text in the font it will be drawn with: the
     /// theme's own, else the one Lodestar puts in its place (Titillium Web, the system font).
-    fn compile(&self, source: &Source, look: &look::PlayniteLook) -> compile::Compiled {
+    fn compile(&self, source: &Source, look: &look::PlayniteLook, chosen: &options::Choices) -> compile::Compiled {
         let font = |f: &Option<fonts::FontFile>| {
             f.as_ref().and_then(|f| source.read(&f.rel, FONT_LIMIT)).map(egui::FontData::from_owned)
         };
@@ -667,7 +688,7 @@ impl TextFonts {
             (None, None) => (None, None),
         };
         let mut measurer = compile::FontMeasurer::new(regular, bold);
-        compile::compile(source, look, &mut measurer)
+        compile::compile(source, look, chosen, &mut measurer)
     }
 }
 
@@ -692,7 +713,7 @@ fn layout_family(
     look: &look::PlayniteLook,
     compiled: Option<&compile::Compiled>,
 ) -> Family {
-    let translated_ok = compiled.is_some_and(|c| c.main.is_some() && c.main_problem.is_none());
+    let translated_ok = compiled.is_some_and(compile::Compiled::main_ok);
     let shape_family = Family::for_shape(look.main.list.shape);
     let suggested = if translated_ok { Family::Translated } else { shape_family };
     let mut family = opts.family.unwrap_or(suggested);
@@ -727,8 +748,8 @@ fn layout_family(
             );
         }
     }
-    if let Some(c) = compiled.filter(|_| family == Family::Translated) {
-        for (a, ok, line) in compile::report_lines(c) {
+    if let Some(c) = compiled.filter(|c| family == Family::Translated || c.details_with(family)) {
+        for (a, ok, line) in compile::report_lines(c, family == Family::Translated) {
             if ok {
                 out.ok(a, line);
             } else {
@@ -838,15 +859,11 @@ impl Build<'_> {
     ) -> anyhow::Result<()> {
         let Some((spec, values)) = prepared else { return Ok(()) };
         if spec.effective().next().is_none() {
-            if !spec.is_empty() {
-                out.no(
-                    Area::Options,
-                    format!(
-                        "The theme's {} option{} only change parts Lodestar draws its own way",
-                        spec.options.len(),
-                        if spec.options.len() == 1 { "" } else { "s" }
-                    ),
-                );
+            match spec.others() {
+                0 => {}
+                1 => out.no(Area::Options, "The theme's one option only changes parts Lodestar draws its own way"),
+                n => out
+                    .no(Area::Options, format!("The theme's {n} options only change parts Lodestar draws its own way")),
             }
             return Ok(());
         }
@@ -872,31 +889,50 @@ impl Build<'_> {
         options::snapshot(self.source, self.files, self.tmp, &media_links)?;
         rep.options = spec.effective().count();
         rep.option_values = values.clone();
-        let n = rep.options;
         let place = match self.mode {
             Mode::Desktop => "Settings → Appearance → Theme options",
             Mode::Fullscreen => {
                 "controller mode: Settings → Visuals → Theme options (or desktop Settings → Appearance)"
             }
         };
-        let count =
-            if n == 1 { "One of the theme's options".to_string() } else { format!("{n} of the theme's options") };
-        out.ok(Area::Options, format!("{count} can be changed in {place}"));
+        let (player, own): (Vec<_>, Vec<_>) = spec.effective().partition(|o| o.is_setting());
+        match own.len() {
+            0 => {}
+            1 => out.ok(Area::Options, format!("One of the theme's options can be changed in {place}")),
+            n => out.ok(Area::Options, format!("{n} of the theme's options can be changed in {place}")),
+        }
+        for o in player {
+            let name = settings::player_setting(&o.key).map_or(o.label.as_str(), |s| s.playnite_name);
+            let place = if own.is_empty() { place } else { "the same place" };
+            out.ok(
+                Area::Options,
+                format!("Playnite's “{name}” setting, which the theme reads, can be changed in {place}"),
+            );
+        }
         if !values.is_empty() {
             out.ok(
                 Area::Options,
                 format!("{} chosen option{} applied", values.len(), if values.len() == 1 { "" } else { "s" }),
             );
         }
-        let others = spec.others();
-        if others > 0 {
-            out.no(
-                Area::Options,
-                format!(
-                    "{others} more option{} only change parts Lodestar draws its own way",
-                    if others == 1 { "" } else { "s" }
-                ),
-            );
+        match spec.others() {
+            0 => {}
+            1 => out.no(Area::Options, "One more option only changes parts Lodestar draws its own way"),
+            n => out.no(Area::Options, format!("{n} more options only change parts Lodestar draws its own way")),
+        }
+        Ok(())
+    }
+
+    /// Copy the theme pictures the translated views show.
+    fn copy_view_images(&self, c: &compile::Compiled) -> anyhow::Result<()> {
+        for (from, to) in &c.images {
+            if let Some(bytes) = self.source.read(from, IMAGE_LIMIT) {
+                let dest = self.tmp.join(to);
+                if let Some(d) = dest.parent() {
+                    std::fs::create_dir_all(d)?;
+                }
+                std::fs::write(dest, bytes)?;
+            }
         }
         Ok(())
     }
@@ -911,27 +947,16 @@ impl Build<'_> {
             let mut v = fill::controller(Family::Classic, self.look, inputs, &mut notes)?;
             // Top Bar's own placement notes don't apply to the translated screens.
             notes.lines.retain(|(a, _, _)| matches!(a, Area::Covers | Area::Background | Area::Fonts));
-            for (from, to) in &c.images {
-                if let Some(bytes) = self.source.read(from, IMAGE_LIMIT) {
-                    let dest = self.tmp.join(to);
-                    if let Some(d) = dest.parent() {
-                        std::fs::create_dir_all(d)?;
-                    }
-                    std::fs::write(dest, bytes)?;
-                }
-            }
-            compile::apply(
-                &mut v,
-                c,
-                self.look,
-                [
-                    inputs.main_video.as_ref().map(|(p, _)| p.as_str()),
-                    inputs.details_video.as_ref().map(|(p, _)| p.as_str()),
-                ],
-            )?;
+            self.copy_view_images(c)?;
+            compile::apply(&mut v, c, self.look, copied_videos(inputs))?;
             v
         } else if self.mode == Mode::Fullscreen {
-            fill::controller(self.family, self.look, inputs, &mut notes)?
+            let mut v = fill::controller(self.family, self.look, inputs, &mut notes)?;
+            if let Some(c) = self.compiled.filter(|c| c.details_with(self.family)) {
+                self.copy_view_images(c)?;
+                compile::apply_details(&mut v, c, self.look, copied_videos(inputs))?;
+            }
+            v
         } else {
             fill::desktop(self.look, inputs, &mut notes)?
         };
@@ -942,6 +967,11 @@ impl Build<'_> {
         std::fs::write(self.tmp.join("theme.toml"), text)?;
         Ok(())
     }
+}
+
+/// The copied main screen and details page videos.
+fn copied_videos(inputs: &fill::Inputs) -> [Option<&str>; 2] {
+    [inputs.main_video.as_ref(), inputs.details_video.as_ref()].map(|v| v.map(|(p, _)| p.as_str()))
 }
 
 /// The report's lines on videos and sounds.

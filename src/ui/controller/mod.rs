@@ -7,6 +7,7 @@
 //! here with the theme's palette and fonts.
 
 mod act;
+pub(crate) mod categories;
 pub(crate) mod combo;
 mod credits;
 mod details;
@@ -26,6 +27,7 @@ pub(crate) mod settings;
 mod sounds;
 mod update;
 mod viewer;
+mod welcome;
 
 use crate::app::{AppState, Mode};
 use crate::config::SortBy;
@@ -69,8 +71,9 @@ struct ThemePreview {
     cache: HashMap<String, Arc<Theme>>,
 }
 
-/// What the collections were built for: library generation, `show_hidden`.
-type CollsSig = (u64, bool);
+/// What the collections were built for: library generation, `show_hidden`, the player's
+/// categories (hashed).
+type CollsSig = (u64, bool, u64);
 
 pub struct ControllerUi {
     renderer: Renderer,
@@ -78,8 +81,10 @@ pub struct ControllerUi {
     /// Collections + their (sorted) game indices, memoised per library generation.
     colls: Vec<CollectionItem>,
     colls_games: Vec<Vec<usize>>,
-    /// Library generation + `show_hidden` the collections were built for.
     colls_gen: Option<CollsSig>,
+    /// The player's choice of categories (`config.controller.categories`, kept in step by
+    /// `frame_start` and by the menus that change it).
+    categories: crate::config::Categories,
     coll_sel: usize,
     /// Key of the selected collection (survives regeneration).
     coll_key: Option<String>,
@@ -128,6 +133,8 @@ pub struct ControllerUi {
     /// The menu button's in-game menu and screens, clock / battery, the mouse pointer
     /// (ingame.rs, settings.rs).
     sys: ingame::SysState,
+    /// The first start's welcome step (welcome.rs).
+    welcome: welcome::Card,
 }
 
 /// Presses of A right after a launch (a double-tap on Play) must not arm "Quit game".
@@ -212,6 +219,7 @@ impl ControllerUi {
             colls: vec![],
             colls_games: vec![],
             colls_gen: None,
+            categories: Default::default(),
             coll_sel: 0,
             coll_key: None,
             cur: None,
@@ -241,6 +249,7 @@ impl ControllerUi {
             viewer: None,
             home: Default::default(),
             sys: Default::default(),
+            welcome: Default::default(),
         }
     }
 
@@ -399,6 +408,12 @@ impl ControllerUi {
         if self.osk.is_some() {
             let r = self.osk.as_mut().map(|o| o.nav(nav, kb.0, kb.1)).unwrap_or(OskResult::None);
             self.osk_result(st, r, now);
+            return true;
+        }
+        if st.welcome.open {
+            if let Some(o) = self.welcome.nav(st, nav, now) {
+                self.osk = Some(o);
+            }
             return true;
         }
         if !self.menus.is_empty() {
@@ -580,7 +595,8 @@ impl ControllerUi {
                         crate::ui::launching::stop(st, id);
                     }
                 }
-                details::Primary::Install => Self::install(st, id),
+                // Both go through `install_game`, which opens Steam for the second.
+                details::Primary::Install | details::Primary::OpenInSteam => Self::install(st, id),
                 details::Primary::Play => emu::play_or_choose(self, st, id, now),
             },
             1 => st.toggle_favorite(id),
@@ -603,12 +619,15 @@ impl ControllerUi {
     fn primary(st: &AppState, id: GameId) -> details::Primary {
         let running = crate::ui::launching::is_active(st, id);
         match st.library.get(id) {
-            Some(g) => details::Primary::for_game(
+            Some(g) => match details::Primary::for_game(
                 g,
                 running,
                 crate::ui::launching::starting(st, id),
                 !g.installed && st.can_install(id),
-            ),
+            ) {
+                details::Primary::Install if st.library.not_in_steam_library(g) => details::Primary::OpenInSteam,
+                p => p,
+            },
             None => details::Primary::Play,
         }
     }
@@ -696,6 +715,13 @@ impl ControllerUi {
                 self.refresh_launch_menu(st, id, now);
             }
             (Purpose::LaunchOptions(_) | Purpose::Command(_), OskResult::Cancel) => self.close_osk(st),
+            (Purpose::ApiKey, OskResult::Changed) => {}
+            (Purpose::ApiKey, OskResult::Done) => {
+                let key = o.text.clone();
+                self.welcome.key_entered(st, &key);
+                self.close_osk(st);
+            }
+            (Purpose::ApiKey, OskResult::Cancel) => self.close_osk(st),
         }
     }
 
@@ -785,6 +811,7 @@ impl ControllerUi {
                             | Act::ToggleTrayIcon
                             | Act::ToggleDescending
                             | Act::ToggleShowHidden
+                            | Act::ToggleCategory(_)
                             | Act::Setting(_)
                             | Act::ThemeOption(..)
                     )
@@ -921,6 +948,7 @@ impl ControllerUi {
         // The "Playing" overlay also covers the screen: nothing under it takes clicks.
         let switch_ask = crate::ui::launching::prompt(st);
         let overlay_open = self.osk.is_some()
+            || st.welcome.open
             || self.viewer.is_some()
             || !self.menus.is_empty()
             || self.overlay_shown()
@@ -928,12 +956,16 @@ impl ControllerUi {
             || !self.sys.menus.is_empty();
         let t_in = (((now - self.transition) / 0.22) as f32).clamp(0.0, 1.0);
         let mut animating = t_in < 1.0;
-        let hints =
-            if self.overlay_shown() || !self.menus.is_empty() || self.osk.is_some() || !self.sys.menus.is_empty() {
-                vec![] // the Playing overlay, the menus and the keyboard show their own
-            } else {
-                self.hints(st)
-            };
+        let hints = if self.overlay_shown()
+            || !self.menus.is_empty()
+            || self.osk.is_some()
+            || !self.sys.menus.is_empty()
+            || st.welcome.open
+        {
+            vec![] // the Playing overlay, the menus, the keyboard and the welcome step show their own
+        } else {
+            self.hints(st)
+        };
         let look = Look::new(st, screen);
         let pass = ScreenPass { screen, hints: &hints, opacity: menu::ease(t_in), interactive: !overlay_open, now, dt };
         if self.colls.is_empty() {
@@ -972,8 +1004,18 @@ impl ControllerUi {
         }
         let pointer = ui.input(|i| i.pointer.hover_pos().map(|p| (p, i.pointer.primary_clicked())));
         let menu_pointer =
-            if self.osk.is_some() || switch_ask.is_some() || !self.sys.menus.is_empty() { None } else { pointer };
+            if self.osk.is_some() || switch_ask.is_some() || !self.sys.menus.is_empty() || st.welcome.open {
+                None
+            } else {
+                pointer
+            };
         animating |= self.draw_top_menu(ui, st, &look, menu_pointer, now, dt);
+        if st.welcome.open {
+            let card_pointer = if self.osk.is_some() { None } else { pointer };
+            if let Some(o) = self.welcome.draw(ui, st, screen, &look, card_pointer, now) {
+                self.osk = Some(o);
+            }
+        }
         if let Some(o) = &mut self.osk {
             let (r, anim) = o.draw(ui, screen, &look, now);
             animating |= anim;
@@ -1002,6 +1044,9 @@ impl ControllerUi {
         // Theme videos rest while a game runs.
         self.renderer.opts.videos &= self.running.is_none();
         log::trace!("controller frame");
+        if self.categories != st.config.controller.categories {
+            self.categories.clone_from(&st.config.controller.categories);
+        }
         self.refresh_collections(&st.library);
         self.refresh_list(&st.library);
         self.home_sync(st, now);

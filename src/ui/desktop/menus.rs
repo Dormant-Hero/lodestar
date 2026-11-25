@@ -165,6 +165,9 @@ pub(crate) fn game_menu(
         ("Play", true)
     } else if can_install && g.source == crate::model::Source::Romm {
         ("Download", true)
+    } else if can_install && lib.not_in_steam_library(g) {
+        // No longer in the Steam library: Install opens it in Steam (steam_owned.rs).
+        ("Open in Steam", true)
     } else if can_install {
         ("Install", true)
     } else {
@@ -228,17 +231,8 @@ pub(crate) fn game_menu(
     if ui.button("Download artwork…").clicked() {
         actions.push(Action::BulkArt(artwork::BulkScope::Game(g.id)));
     }
-    // A cloud game is never on disk: no folder entry at all rather than a greyed one.
-    if !g.is_cloud() {
-        ui.separator();
-        if ui
-            .add_enabled(g.install_dir.is_some(), egui::Button::new("Open install folder"))
-            .on_disabled_hover_text("No install folder known. Set one in Edit… → Installation.")
-            .clicked()
-        {
-            actions.push(Action::OpenFolder(g.id));
-        }
-    }
+    ui.separator();
+    page_entries(ui, g, caps, actions);
     store_entries(ui, g, caps, actions);
     // Hand-added games, and games no longer in their library (missing_ui.rs).
     if g.source == Source::Manual || g.missing.is_some() {
@@ -256,15 +250,35 @@ pub(crate) fn game_menu(
     }
 }
 
-/// The game page's "•••" (More) menu. `sizing`: the install size is being calculated.
-pub(crate) fn more_menu(
-    ui: &mut egui::Ui,
-    g: &Game,
-    sizing: bool,
-    caps: Option<&StoreCaps>,
-    actions: &mut Vec<Action>,
-) {
+/// The game page's "•••" (More) menu.
+pub(crate) fn more_menu(ui: &mut egui::Ui, g: &Game, caps: Option<&StoreCaps>, actions: &mut Vec<Action>) {
     ui.set_min_width(220.0);
+    page_entries(ui, g, caps, actions);
+    store_entries(ui, g, caps, actions);
+    ui.separator();
+    let fav = if g.favorite { "Remove from favourites" } else { "Add to favourites" };
+    if ui.button(fav).clicked() {
+        actions.push(Action::ToggleFavorite(g.id));
+    }
+    if ui.button(if g.hidden { "Unhide" } else { "Hide" }).clicked() {
+        actions.push(if g.hidden { Action::Unhide(g.id) } else { Action::Hide(g.id) });
+    }
+    not_a_game_entries(ui, g, actions);
+    ui.menu_button("Set completion status", |ui| completion_menu(ui, g, actions));
+    controller_submenu(ui, g, actions);
+    ui.separator();
+    if ui.button("Launch options…").clicked() {
+        actions.push(Action::LaunchOptions(g.id));
+    }
+    if ui.add(egui::Button::new("Edit…").shortcut_text("F3")).clicked() {
+        actions.push(Action::Edit(g.id, edit::Tab::General));
+    }
+}
+
+/// Links, Open install folder, Create desktop shortcut and Calculate install size: the top of the
+/// game page's ••• menu, and in the right-click menu (which the controller's X opens) too. A
+/// cloud game is never on disk: no folder entries at all rather than greyed ones.
+fn page_entries(ui: &mut egui::Ui, g: &Game, caps: Option<&StoreCaps>, actions: &mut Vec<Action>) {
     let links = g.links();
     let r = ui.add_enabled_ui(!links.is_empty(), |ui| {
         ui.menu_button("Links", |ui| {
@@ -293,6 +307,7 @@ pub(crate) fn more_menu(
     {
         actions.push(Action::CreateShortcut(g.id));
     }
+    let sizing = caps.is_some_and(|c| c.sizing);
     let size_label = if sizing { "Calculating install size…" } else { "Calculate install size" };
     if !g.is_cloud()
         && ui
@@ -301,25 +316,6 @@ pub(crate) fn more_menu(
             .clicked()
     {
         actions.push(Action::CalcSize(g.id));
-    }
-    store_entries(ui, g, caps, actions);
-    ui.separator();
-    let fav = if g.favorite { "Remove from favourites" } else { "Add to favourites" };
-    if ui.button(fav).clicked() {
-        actions.push(Action::ToggleFavorite(g.id));
-    }
-    if ui.button(if g.hidden { "Unhide" } else { "Hide" }).clicked() {
-        actions.push(if g.hidden { Action::Unhide(g.id) } else { Action::Hide(g.id) });
-    }
-    not_a_game_entries(ui, g, actions);
-    ui.menu_button("Set completion status", |ui| completion_menu(ui, g, actions));
-    controller_submenu(ui, g, actions);
-    ui.separator();
-    if ui.button("Launch options…").clicked() {
-        actions.push(Action::LaunchOptions(g.id));
-    }
-    if ui.add(egui::Button::new("Edit…").shortcut_text("F3")).clicked() {
-        actions.push(Action::Edit(g.id, edit::Tab::General));
     }
 }
 

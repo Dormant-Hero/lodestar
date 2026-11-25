@@ -107,11 +107,17 @@ impl AppState {
     /// Per logic pass: while the controller drives Lodestar in the background (`wanted`: not
     /// focused, background input on, no game followed), look for games started elsewhere every
     /// [`BACKGROUND_LOOK`] and keep frames coming that often (the gate is decided per frame).
-    pub(crate) fn background_look(&mut self, wanted: bool) {
+    /// `since`: only a look started after this counts (desktop mode after a game ended,
+    /// input/gate.rs `looked_since`), so one starts right away rather than when the interval
+    /// is up.
+    pub(crate) fn background_look(&mut self, wanted: bool, since: Option<Instant>) {
         if !wanted {
             return;
         }
-        if self.running.last_adopt.is_none_or(|t| t.elapsed() >= BACKGROUND_LOOK) {
+        let last = self.running.last_adopt;
+        let due = last.is_none_or(|t| t.elapsed() >= BACKGROUND_LOOK);
+        let stale = since.is_some_and(|s| last.is_none_or(|t| t < s)) && !self.launcher.looking();
+        if due || stale {
             self.adopt_running_games();
         }
         self.ctx().request_repaint_after(BACKGROUND_LOOK);
@@ -250,6 +256,30 @@ mod tests {
         // The automatic default follows the tray.
         assert_eq!(close_action(false, false, true, S::effective(None, true), true), A::HideToTray);
         assert_eq!(close_action(false, false, true, S::effective(None, false), false), A::Minimise);
+    }
+
+    /// After a game ended, the next look for running games starts at once instead of when the
+    /// interval is up: desktop mode's pad waits for a look taken since (input/gate.rs
+    /// `looked_since`).
+    #[test]
+    fn a_look_starts_at_once_after_a_game_ended() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut st = AppState::for_test(dir.path());
+        // A screenshot run's looks read nothing: only when they happen counts here.
+        st.no_launch = true;
+        st.background_look(true, None);
+        let first = st.running.last_adopt.expect("looked");
+        st.background_look(true, None);
+        assert_eq!(st.running.last_adopt, Some(first), "not again within the interval");
+        std::thread::sleep(Duration::from_millis(2));
+        let ended = Instant::now();
+        st.background_look(true, Some(ended));
+        let again = st.running.last_adopt.unwrap();
+        assert!(again >= ended, "looked again right after the game");
+        st.background_look(true, Some(ended));
+        assert_eq!(st.running.last_adopt, Some(again), "once");
+        st.background_look(false, Some(Instant::now()));
+        assert_eq!(st.running.last_adopt, Some(again), "not wanted: no look");
     }
 
     #[test]

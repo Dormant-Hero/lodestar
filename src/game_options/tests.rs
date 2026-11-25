@@ -1,4 +1,4 @@
-//! Spec §7 cases (docs/game-options-spec.md) against a hand-built `Caps` / `LaunchEnv`
+//! How options resolve, checked against a hand-built `Caps` / `LaunchEnv`
 //! (never `caps::probe`). Resolve integration (Steam, URL, actions, display) is in
 //! launch/tests.rs.
 use super::compose::{self, ComposeInput, ComposeOutput, Core, LaunchKind};

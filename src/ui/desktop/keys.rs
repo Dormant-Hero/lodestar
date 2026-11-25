@@ -3,15 +3,19 @@
 use super::*;
 
 impl DesktopUi {
-    pub(super) fn handle_keys(&mut self, ctx: &egui::Context, st: &mut AppState) {
-        if self.dlg.any_open()
+    /// A dialog or a picker has the keyboard: the library's keys wait.
+    pub(super) fn keyboard_taken(&self, ctx: &egui::Context, st: &AppState) -> bool {
+        self.dlg.any_open()
             || self.coll_dlg.is_some()
             || crate::ui::launching::switch_ask(st).is_some()
             // "Choose what to play" / "Add to another game as a ROM": the arrows move between
             // their lines, Enter starts the focused one, nothing acts on the library behind.
             || emulation_ui::choose::is_open(ctx)
             || emulation_ui::addrom::is_open(ctx)
-        {
+    }
+
+    pub(super) fn handle_keys(&mut self, ctx: &egui::Context, st: &mut AppState) {
+        if self.keyboard_taken(ctx, st) {
             return;
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F)) {

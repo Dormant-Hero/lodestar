@@ -35,6 +35,12 @@ pub(crate) fn from_env() -> Option<FixtureHttp> {
 }
 
 impl FixtureHttp {
+    /// No answers: every request is a 404.
+    #[cfg(test)]
+    pub(crate) fn empty() -> FixtureHttp {
+        FixtureHttp { routes: vec![] }
+    }
+
     fn answer(&self, key: &str) -> HttpResponse {
         let best = self.routes.iter().filter(|(k, _)| key.starts_with(k.as_str())).max_by_key(|(k, _)| k.len());
         match best.and_then(|(_, p)| std::fs::read(p).ok()) {

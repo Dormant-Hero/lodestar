@@ -1,7 +1,7 @@
 //! egui style built from the desktop theme's palette.
 
 use crate::theme::{CoverTitle, DesktopStyle, Palette, Theme};
-use crate::ui::widgets::{mix, with_alpha};
+use crate::ui::widgets::{contrast_ratio, mix, with_alpha};
 use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle, Visuals, vec2};
 
 /// The palette as egui colours, plus a few derived shades the desktop UI uses everywhere.
@@ -24,6 +24,9 @@ pub struct Pal {
     pub hover: Color32,
     /// Selected row background.
     pub sel_bg: Color32,
+    /// The Play button and its label.
+    pub play: Color32,
+    pub play_text: Color32,
 }
 
 impl Pal {
@@ -49,7 +52,24 @@ impl Pal {
             bar: mix(bg, towards, 0.28),
             hover: mix(surface_alt, text, 0.07),
             sel_bg: mix(surface_alt, accent, 0.38),
+            play: accent,
+            play_text: p.accent_text.to_egui(),
         }
+    }
+
+    /// The palette plus what the theme's desktop style recolours (the Play button).
+    pub fn of_theme(theme: &Theme) -> Pal {
+        let mut pal = Pal::from_palette(&theme.file.palette);
+        if let Some(fill) = &theme.file.desktop.play_fill {
+            pal.play = fill.average().to_egui();
+            let dark = Color32::from_rgb(0x10, 0x10, 0x12);
+            pal.play_text = if contrast_ratio(Color32::WHITE, pal.play) >= contrast_ratio(dark, pal.play) {
+                Color32::WHITE
+            } else {
+                dark
+            };
+        }
+        pal
     }
 }
 
@@ -70,6 +90,10 @@ pub struct CoverLook {
     pub sel_width: f32,
     /// Hovered covers darken by this much instead of lightening.
     pub hover_darken: Option<f32>,
+    /// Painted behind each cover and its name.
+    pub tile: Option<Color32>,
+    /// Painted behind the name under each cover.
+    pub caption: Option<Color32>,
 }
 
 impl CoverLook {
@@ -82,6 +106,8 @@ impl CoverLook {
             sel_color: sel.and_then(|s| s.color).map_or(pal.selection, |c| c.to_egui()),
             sel_width: sel.map_or(3.0, |s| if s.width.is_finite() { s.width.clamp(0.0, 12.0) } else { 3.0 }),
             hover_darken: d.hover_darken.filter(|h| h.is_finite()).map(|h| h.clamp(0.0, 1.0)),
+            tile: d.tile_fill.as_ref().map(|b| b.average().to_egui()),
+            caption: d.caption_fill.as_ref().map(|b| b.average().to_egui()),
         }
     }
 }
@@ -89,6 +115,69 @@ impl CoverLook {
 impl Default for CoverLook {
     fn default() -> Self {
         CoverLook::of(&DesktopStyle::default(), &Pal::default())
+    }
+}
+
+/// How a game list row is drawn (`DesktopStyle::rows`), resolved once per frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RowLook {
+    pub sel_fill: Color32,
+    /// Width and colour of a bar along the selected row's left edge.
+    pub sel_bar: Option<(f32, Color32)>,
+    pub sel_text: Color32,
+    pub text: Color32,
+    pub text_uninstalled: Color32,
+    /// None: the list's own corners.
+    pub radius: Option<u8>,
+    /// The selected row's text wins over an uninstalled game's (a theme's IsSelected trigger
+    /// comes after its IsInstalled ones); Lodestar keeps uninstalled games dim.
+    selected_wins: bool,
+}
+
+impl RowLook {
+    pub fn of(d: &DesktopStyle, pal: &Pal) -> RowLook {
+        let own = RowLook {
+            sel_fill: pal.sel_bg,
+            sel_bar: None,
+            sel_text: pal.text,
+            text: mix(pal.text, pal.dim, 0.15),
+            text_uninstalled: pal.dim,
+            radius: None,
+            selected_wins: false,
+        };
+        let Some(r) = &d.rows else { return own };
+        let width = |w: f32| if w.is_finite() { w.clamp(1.0, 12.0) } else { 3.0 };
+        let sel_bar = r.selected_bar.map(|b| (width(b.width), b.color.map_or(pal.selection, |c| c.to_egui())));
+        // With neither a fill nor a bar the selected row would look like any other: it keeps
+        // Lodestar's own fill.
+        let unmarked = if sel_bar.is_none() { own.sel_fill } else { Color32::TRANSPARENT };
+        RowLook {
+            sel_fill: r.selected_fill.map_or(unmarked, |c| c.to_egui()),
+            sel_bar,
+            sel_text: r.selected_text.map_or(own.sel_text, |c| c.to_egui()),
+            text: r.text.map_or(own.text, |c| c.to_egui()),
+            text_uninstalled: r.text_uninstalled.map_or(own.text_uninstalled, |c| c.to_egui()),
+            radius: r.radius.map(crate::theme::radius_u8),
+            selected_wins: true,
+        }
+    }
+
+    /// A row's text colour.
+    pub fn text_for(&self, selected: bool, installed: bool) -> Color32 {
+        match (selected, installed) {
+            (true, _) if self.selected_wins => self.sel_text,
+            (_, false) => self.text_uninstalled,
+            (true, true) => self.sel_text,
+            (false, true) => self.text,
+        }
+    }
+
+    /// The selected row's fill and bar over `rect` (`radius`: the list's own corners).
+    pub fn paint_selected(&self, p: &egui::Painter, rect: egui::Rect, radius: u8) {
+        p.rect_filled(rect, self.radius.unwrap_or(radius), self.sel_fill);
+        if let Some((w, c)) = self.sel_bar {
+            p.rect_filled(egui::Rect::from_min_size(rect.min, vec2(w, rect.height())), 0.0, c);
+        }
     }
 }
 
@@ -263,6 +352,33 @@ mod tests {
     }
 
     #[test]
+    fn list_rows_follow_the_theme() {
+        let pal = Pal::default();
+        // Lodestar's own rows: the palette's selection fill, uninstalled games stay dim.
+        let own = RowLook::of(&DesktopStyle::default(), &pal);
+        assert_eq!((own.sel_fill, own.sel_bar, own.radius), (pal.sel_bg, None, None));
+        assert_eq!(own.text_for(true, false), pal.dim);
+        assert_eq!(own.text_for(true, true), pal.text);
+        // A theme's: a bar and no fill; its selected text wins.
+        let rows = crate::theme::RowStyle {
+            selected_bar: Some(SelectionBorder { color: Some(Color::parse("#55cdff").unwrap()), width: 5.0 }),
+            selected_text: Some(Color::parse("#55cdff").unwrap()),
+            text_uninstalled: Some(Color::parse("#a3a3a3").unwrap()),
+            ..Default::default()
+        };
+        let d = DesktopStyle { rows: Some(rows), ..Default::default() };
+        let look = RowLook::of(&d, &pal);
+        assert_eq!(look.sel_fill, Color32::TRANSPARENT);
+        assert_eq!(look.sel_bar, Some((5.0, Color32::from_rgb(0x55, 0xcd, 0xff))));
+        assert_eq!(look.text_for(true, false), Color32::from_rgb(0x55, 0xcd, 0xff));
+        assert_eq!(look.text_for(false, false), Color32::from_gray(0xa3));
+        // Neither a fill nor a bar: the selected row keeps the palette's fill.
+        let rows = crate::theme::RowStyle { text: Some(Color::parse("#a3a3a3").unwrap()), ..Default::default() };
+        let look = RowLook::of(&DesktopStyle { rows: Some(rows), ..Default::default() }, &pal);
+        assert_eq!((look.sel_fill, look.sel_bar), (pal.sel_bg, None));
+    }
+
+    #[test]
     fn theme_desktop_style_changes_the_look() {
         let d = DesktopStyle {
             cover_radius: Some(14.0),
@@ -271,9 +387,11 @@ mod tests {
             selection_border: Some(SelectionBorder { color: Some(Color::parse("#ff8800").unwrap()), width: 2.0 }),
             hover_darken: Some(1.7),
             font_scale: Some(FontScale { normal: 1.2, larger: 2.0, ..Default::default() }),
+            caption_fill: Some(crate::theme::Brush::Solid(Color::parse("#202020").unwrap())),
             ..Default::default()
         };
         let look = CoverLook::of(&d, &Pal::default());
+        assert_eq!(look.caption, Some(Color32::from_gray(0x20)));
         assert_eq!((look.radius, look.gap, look.title, look.sel_width), (14, Some(30.0), CoverTitle::Hover, 2.0));
         assert_eq!(look.sel_color, Color32::from_rgb(255, 136, 0));
         assert_eq!(look.hover_darken, Some(1.0));

@@ -186,6 +186,22 @@ pub enum ArtEvent {
         changed: usize,
         error: Option<String>,
     },
+    /// `check_sgdb_key`'s answer for `key`.
+    KeyChecked {
+        key: String,
+        check: KeyCheck,
+    },
+}
+
+/// Whether a SteamGridDB API key works (`ArtService::check_sgdb_key`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KeyCheck {
+    Checking,
+    Works,
+    /// SteamGridDB refused it (401 / 403).
+    Rejected,
+    /// SteamGridDB couldn't be asked (offline, server trouble): why.
+    Unreachable(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -219,6 +235,7 @@ enum Job {
     Apply { game: GameId, slot: ArtSlot, url: String },
     Import { game: GameId, slot: ArtSlot, path: PathBuf },
     Search { job: SearchJob, generation: u64 },
+    CheckKey { key: String },
 }
 
 #[derive(Default)]
@@ -402,6 +419,11 @@ impl ArtService {
         self.sh.jobs_cv.notify_one();
     }
 
+    /// Ask SteamGridDB whether `key` works; `KeyChecked` arrives through `poll`.
+    pub fn check_sgdb_key(&self, key: &str) {
+        self.push_front(Job::CheckKey { key: key.to_string() });
+    }
+
     /// Fill `opts.slots` of `games` from the online sources (confident matches only).
     pub fn bulk(&self, games: Vec<Game>, opts: BulkOptions) {
         self.sh.bulks.lock().push_back((games, opts));
@@ -476,6 +498,10 @@ fn run_jobs(sh: &Shared) {
                 Ok(path) => sh.send(ArtEvent::Applied { game, slot, path }),
                 Err(e) => sh.send(ArtEvent::Failed { game, slot, error: format!("{e:#}") }),
             },
+            Job::CheckKey { key } => {
+                let check = sh.eng.check_sgdb_key(&key);
+                sh.send(ArtEvent::KeyChecked { key, check });
+            }
             Job::Search { job, generation } => {
                 let key = (job.game, job.slot);
                 if sh.gens.lock().get(&key) != Some(&generation) {

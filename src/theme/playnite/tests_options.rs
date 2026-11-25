@@ -187,3 +187,35 @@ fn static_tag_triggers_follow_the_theme_constants() {
     assert_eq!(get("A", "Opacity").and_then(|v| v.num()), Some(0.5));
     assert_eq!(get("C", "Visibility").and_then(|v| v.text().map(str::to_string)).as_deref(), Some("Collapsed"));
 }
+
+/// Playnite's "Show game titles" is its user's setting, not the theme's: a fullscreen theme
+/// offers it as an option of its own, off (Playnite's default) until the player turns it on.
+/// A desktop theme doesn't.
+#[test]
+fn fullscreen_themes_offer_playnites_game_titles_switch() {
+    let src = tempfile::tempdir().unwrap();
+    let themes = tempfile::tempdir().unwrap();
+    // Playnite's own fullscreen views underneath: their tiles name the game by the setting.
+    write(
+        src.path(),
+        "theme.yaml",
+        b"Id: Titles_1\nName: Titles Test\nAuthor: Tester\nVersion: 1.0\nMode: Fullscreen\n",
+    );
+    let rep = import(src.path(), themes.path()).unwrap();
+    let spec = options::read(&rep.dir).expect("options");
+    let titles = spec.effective().find(|o| o.key == "Fullscreen.ShowGameTitles").expect("titles option");
+    assert_eq!((titles.label.as_str(), titles.default.as_str()), ("Theme's game titles (Playnite setting)", "False"));
+    let caption = |dir: &Path| {
+        std::fs::read_to_string(dir.join("theme.toml")).unwrap().contains(r#"item_caption = "{game.name}""#)
+    };
+    assert!(!caption(&rep.dir));
+    let on: BTreeMap<String, String> = [("Fullscreen.ShowGameTitles".to_string(), "True".to_string())].into();
+    let rep2 = apply_options(themes.path(), &rep.key, &on).unwrap();
+    assert!(caption(&rep2.dir));
+    assert_eq!(options::read(&rep2.dir).unwrap().values, on);
+
+    let desktop = tempfile::tempdir().unwrap();
+    theme(desktop.path());
+    let rep = import(desktop.path(), themes.path()).unwrap();
+    assert!(options::read(&rep.dir).unwrap().options.iter().all(|o| !o.is_setting()));
+}

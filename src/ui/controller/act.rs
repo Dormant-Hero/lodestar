@@ -215,6 +215,13 @@ impl ControllerUi {
             Act::LaunchersMenu => {
                 self.menus.push(Menu::new(MenuKind::Launchers, "Launchers", Self::launchers_items(st), now));
             }
+            Act::CategoriesMenu => {
+                let m = Menu::new(MenuKind::Categories, "Categories", Self::category_items(st), now)
+                    .with_subtitle("What controller mode lists");
+                self.menus.push(m);
+            }
+            Act::ToggleCategory(key) => self.toggle_category(st, &key),
+            Act::HideCategory(key) => self.hide_category(st, &key),
             Act::ToggleHideLaunchers
             | Act::ToggleCloseLaunchers
             | Act::ToggleHideSteam

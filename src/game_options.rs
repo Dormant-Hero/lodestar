@@ -1,4 +1,4 @@
-//! Game options (full spec in docs/game-options-spec.md): toggles instead of typing
+//! Game options: toggles instead of typing
 //! launch options. Global defaults live in `Config::game_options`, per-game overrides in
 //! `UserEdits::game_options`; both are a [`GameOptions`] where every field's Default / None means
 //! "inherit" (per game) or "Lodestar adds nothing" (global).

@@ -12,6 +12,11 @@ use super::emit::tile_panel;
 use super::visibility::duration_ms;
 use super::*;
 
+mod details;
+mod list;
+mod rest;
+mod tabs;
+
 thread_local! {
     /// Flowing panels as `stack` containers (`stack::enabled`). Off by default: the placement
     /// tests check absolute positions, so they write plain elements.
@@ -303,6 +308,12 @@ fn bindings_and_converters() {
     assert_eq!(bind_art(&parse_binding("SelectedGame.CoverImageObjectCached")), Some("{art.cover}"));
     assert_eq!(bind_art(&parse_binding("SelectedGame.Platforms[0].Icon")), None);
     assert_eq!(duration_ms("0:0:0.35"), Some(350));
+    // Where a RelativeSource points.
+    assert!(parse_binding("Tag, RelativeSource={RelativeSource Self}").on_self());
+    assert!(parse_binding("IsFocused, RelativeSource={RelativeSource Mode=TemplatedParent}").on_control());
+    let ancestor = parse_binding("DataContext.Time, RelativeSource={RelativeSource AncestorType={x:Type Main}}");
+    assert!(ancestor.relative && !ancestor.on_control());
+    assert!(!parse_binding("Tag, ElementName=SelfTest").on_self());
 }
 
 #[test]
@@ -908,7 +919,11 @@ fn a_column_of_texts_in_a_row_is_as_wide_as_its_longest_value() {
     let c = compiled(&[("Views/GameDetails.xaml", details)], &[]);
     STACKS.with(|f| f.set(false));
     let els = c.details.unwrap().elements;
-    let row = by_type(&els, "stack")[0];
+    // The page's row (Playnite's own main screen is drawn under the page).
+    for s in by_type(&els, "stack") {
+        eprintln!("STACK {}", toml::to_string(s).unwrap());
+    }
+    let row = by_type(&els, "stack").into_iter().find(|s| near(pair(s, "pos")[0], 100.0 / 1920.0)).expect("row");
     let cols = row["children"].as_array().unwrap();
     let col = cols[0].as_table().unwrap();
     // No width of its own: as wide as its texts, which span it; the centred value stays centred.
@@ -920,4 +935,215 @@ fn a_column_of_texts_in_a_row_is_as_wide_as_its_longest_value() {
     // A column with a Width keeps it.
     let fixed = cols[1].as_table().unwrap();
     assert!(near(pair(fixed, "size")[0], 200.0 / 1920.0), "{fixed:?}");
+}
+
+fn rects_colored<'a>(els: &'a [Table], color: &str) -> Vec<&'a Table> {
+    by_type(els, "rect").into_iter().filter(|r| r.get("color").and_then(T::as_str) == Some(color)).collect()
+}
+
+#[test]
+fn the_details_page_opens_with_the_focus_on_its_play_button() {
+    // Two black veils that fade in while their panel holds the focus: only the one around
+    // the Play button shows, at the opacity its fade ends at.
+    let details = wrap_details(
+        r##"<Grid>
+          <Grid x:Name="Actions" VerticalAlignment="Bottom" Height="200">
+            <Border Background="#000000">
+              <Border.Style><Style TargetType="Border">
+                <Setter Property="Opacity" Value="0"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding ElementName=Actions, Path=IsKeyboardFocusWithin}" Value="True">
+                    <DataTrigger.EnterActions><BeginStoryboard><Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="0.5" Duration="0:0:0.2"/>
+                    </Storyboard></BeginStoryboard></DataTrigger.EnterActions>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style></Border.Style>
+            </Border>
+            <ButtonEx x:Name="PART_ButtonContext" Width="300" Height="60"/>
+          </Grid>
+          <Grid x:Name="Media" VerticalAlignment="Top" Height="300">
+            <Border Background="#000001">
+              <Border.Style><Style TargetType="Border">
+                <Setter Property="Opacity" Value="0"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding ElementName=Media, Path=IsKeyboardFocusWithin}" Value="True">
+                    <DataTrigger.EnterActions><BeginStoryboard><Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.2"/>
+                    </Storyboard></BeginStoryboard></DataTrigger.EnterActions>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style></Border.Style>
+            </Border>
+          </Grid>
+        </Grid>"##,
+    );
+    let els = compiled(&[("Views/GameDetails.xaml", details)], &[]).details.expect("details").elements;
+    let veil = rects_colored(&els, "#000000");
+    assert_eq!(veil.len(), 1, "{els:#?}");
+    assert!((veil[0].get("opacity").and_then(T::as_float).unwrap_or(1.0) - 0.5).abs() < 1e-3);
+    assert!(rects_colored(&els, "#000001").is_empty(), "the media veil never fades in");
+}
+
+#[test]
+fn the_details_page_sits_in_the_main_screen_as_playnite_shows_it() {
+    // The main screen's picture brightens and its title fades out as the page opens; the
+    // list stays behind the page.
+    let main = wrap_main(
+        r##"<Grid>
+          <FadeImage x:Name="PART_ImageBackground" Opacity="0.4">
+            <FadeImage.Style><Style TargetType="FadeImage"><Style.Triggers>
+              <DataTrigger Binding="{Binding ElementName=PART_ElemGameDetails, Path=Visibility}" Value="Visible">
+                <DataTrigger.EnterActions><BeginStoryboard><Storyboard>
+                  <DoubleAnimation Storyboard.TargetProperty="Opacity" Duration="0:0:1" To="1"/>
+                </Storyboard></BeginStoryboard></DataTrigger.EnterActions>
+              </DataTrigger>
+            </Style.Triggers></Style></FadeImage.Style>
+          </FadeImage>
+          <TextBlock Text="Library" FontSize="40" VerticalAlignment="Top">
+            <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+              <DataTrigger Binding="{Binding ElementName=PART_ElemGameDetails, Path=Visibility}" Value="Visible">
+                <DataTrigger.EnterActions><BeginStoryboard><Storyboard>
+                  <DoubleAnimation Storyboard.TargetProperty="Opacity" Duration="0:0:0.1" To="0"/>
+                </Storyboard></BeginStoryboard></DataTrigger.EnterActions>
+              </DataTrigger>
+            </Style.Triggers></Style></TextBlock.Style>
+          </TextBlock>
+          <ListBoxEx x:Name="PART_ListGameItems" Height="400" VerticalAlignment="Bottom"/>
+          <GameDetails x:Name="PART_ElemGameDetails"/>
+        </Grid>"##,
+    );
+    let details = wrap_details(
+        r##"<StackPanel VerticalAlignment="Bottom" Margin="100,0,0,100">
+          <TextBlock Text="{Binding DisplayName}" FontSize="50"/>
+          <ButtonEx x:Name="PART_ButtonContext" Width="300" Height="60"/>
+        </StackPanel>"##,
+    );
+    let c = compiled(&[("Views/Main.xaml", main.clone()), ("Views/GameDetails.xaml", details)], &[]);
+    let els = c.details.expect("details").elements;
+    let hero = by_type(&els, "image")
+        .into_iter()
+        .find(|i| i.get("path").and_then(T::as_str) == Some("{art.hero}"))
+        .expect("the main screen's picture");
+    assert!(hero.get("opacity").is_none(), "{hero:?}");
+    assert!(text_of(&els, "Library").is_none());
+    assert!(text_of(&els, "{game.name}").is_some());
+    assert!(!els.iter().any(|e| e.get("name").and_then(T::as_str) == Some("pn_list")));
+    // On the main screen the picture keeps its own opacity and the title shows.
+    let main_els = c.main.expect("main").elements;
+    assert!(text_of(&main_els, "Library").is_some());
+
+    // A page that paints its own opaque background hides the main screen under it.
+    let opaque = wrap_details(
+        r##"<Grid Background="#101010">
+          <TextBlock Text="{Binding DisplayName}" FontSize="50"/>
+        </Grid>"##,
+    );
+    let els = compiled(&[("Views/Main.xaml", main), ("Views/GameDetails.xaml", opaque)], &[])
+        .details
+        .expect("details")
+        .elements;
+    assert!(by_type(&els, "image").is_empty(), "{els:#?}");
+    assert!(text_of(&els, "{game.name}").is_some());
+}
+
+#[test]
+fn a_buttons_face_comes_from_its_template_in_its_focus_state() {
+    let details = wrap_details(
+        r##"<Grid>
+          <Grid.Resources>
+            <Style x:Key="Pill" TargetType="ButtonEx">
+              <Setter Property="Background" Value="#40808080"/>
+              <Setter Property="Template"><Setter.Value>
+                <ControlTemplate TargetType="Button">
+                  <Grid>
+                    <Border x:Name="Face" Background="{TemplateBinding Background}" CornerRadius="30"/>
+                    <Border x:Name="Ring" BorderBrush="#FF00FF00" BorderThickness="3" CornerRadius="34" Visibility="Hidden"/>
+                    <ContentPresenter/>
+                  </Grid>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsFocused" Value="True">
+                      <Setter Property="Background" Value="#F2F2F2" TargetName="Face"/>
+                      <Setter Property="Visibility" Value="Visible" TargetName="Ring"/>
+                      <Setter Property="Foreground" Value="#111111"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value></Setter>
+            </Style>
+          </Grid.Resources>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="100,0,0,100">
+            <ButtonEx x:Name="PART_ButtonContext" Style="{StaticResource Pill}" Width="170" Height="60"/>
+            <ButtonEx x:Name="PART_ButtonOptions" Style="{StaticResource Pill}" Width="90" Height="60">
+              <TextBlock FontSize="40">&#x2022;&#x2022;&#x2022;</TextBlock>
+            </ButtonEx>
+          </StackPanel>
+        </Grid>"##,
+    );
+    let els = compiled(&[("Views/GameDetails.xaml", details)], &[]).details.expect("details").elements;
+    // The Play button has the focus: white face, the ring, dark label.
+    let face = rects_colored(&els, "#f2f2f2");
+    assert_eq!(face.len(), 1, "{els:#?}");
+    assert_eq!(face[0].get("border_color").and_then(T::as_str), Some("#00ff00"));
+    assert!(face[0].get("corner_radius").is_some());
+    let install = text_of(&els, "Install").expect("install");
+    assert_eq!(install["style"].get("color").and_then(T::as_str), Some("#111111"));
+    // The options button hasn't: its resting face and the label written inside it, whole.
+    assert_eq!(rects_colored(&els, "#80808040").len(), 1, "{els:#?}");
+    let dots = text_of(&els, "•••").expect("dots");
+    assert!((dots["style"]["font_size"].as_float().unwrap() * 1080.0 - 40.0).abs() < 0.5);
+}
+
+#[test]
+fn lists_of_the_games_tags_add_on_lists_and_separators() {
+    let details = wrap_details(
+        r##"<StackPanel VerticalAlignment="Top" Margin="100,100,0,0">
+          <ItemsControl ItemsSource="{Binding Game.Tags}">
+            <ItemsControl.ItemTemplate><DataTemplate>
+              <Border Padding="12,6"><TextBlock Text="{Binding Name}" FontSize="18"/></Border>
+            </DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{PluginSettings Plugin=HowLongToBeat, Path=MainStory}" FontSize="30"/>
+            <TextBlock Text="/" FontSize="30"/>
+            <TextBlock Text="{PluginSettings Plugin=HowLongToBeat, Path=Completionist}" FontSize="30"/>
+          </StackPanel>
+          <Image x:Name="GameLogo" Source="{Binding IconObject}" Width="64" Height="64"/>
+          <ButtonEx x:Name="PART_ButtonContext" Width="200" Height="50"/>
+          <ListView Width="1920" Height="600" ItemsSource="{PluginSettings Plugin=ScreenshotsVisualizer, Path=ListScreenshots}"/>
+        </StackPanel>"##,
+    );
+    let c = compiled(&[("Views/GameDetails.xaml", details)], &[]);
+    assert!(c.details_used(), "an add-on's empty list takes no room: {:?}", c.details.as_ref().map(|d| &d.stats));
+    let els = c.details.expect("details").elements;
+    let tags = text_of(&els, "{game.tags}").expect("tags");
+    assert!((tags["style"]["font_size"].as_float().unwrap() * 1080.0 - 18.0).abs() < 0.5);
+    assert!(text_of(&els, "/").is_none());
+    // The Image called "GameLogo" shows the game's icon (Playnite's main screen under the page
+    // adds its picture).
+    let pictures: Vec<&str> = by_type(&els, "image").iter().filter_map(|i| i.get("path").and_then(T::as_str)).collect();
+    assert!(pictures.contains(&"{art.icon}") && !pictures.contains(&"{art.logo}"), "{pictures:?}");
+}
+
+#[test]
+fn a_theme_details_page_goes_with_a_layout_family_only_in_place_of_its_main_screen() {
+    use super::super::fill::Family;
+    let main = wrap_main(r#"<Grid><TextBlock Text="No list here"/></Grid>"#);
+    let page = |panel_opacity: &str| {
+        wrap_details(&format!(
+            r#"<Grid Opacity="{panel_opacity}">
+              <TextBlock Text="{{Binding DisplayName}}" FontSize="50"/>
+              <ButtonEx x:Name="PART_ButtonContext" Width="200" Height="50" VerticalAlignment="Bottom"/>
+            </Grid>"#
+        ))
+    };
+    let c = compiled(&[("Views/Main.xaml", main.clone()), ("Views/GameDetails.xaml", page("1"))], &[]);
+    assert!(!c.main_ok());
+    assert!(c.details_with(Family::Row) && c.details_with(Family::Translated));
+    let c = compiled(&[("Views/GameDetails.xaml", page("1"))], &[]);
+    assert!(c.main_ok());
+    assert!(c.details_with(Family::Translated) && !c.details_with(Family::Row));
+    // A page whose panel only an add-on fades in shows no Play button: Lodestar's page instead.
+    let c = compiled(&[("Views/Main.xaml", main), ("Views/GameDetails.xaml", page("0"))], &[]);
+    assert!(!c.details_used());
 }

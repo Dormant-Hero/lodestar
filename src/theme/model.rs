@@ -898,7 +898,8 @@ pub enum Element {
         /// Which rows, in order: "recent", "favorites", "installed", "controller", "all",
         /// "platforms" (one row per console, most games first), "sources", "collections" (the
         /// user's own), or one collection by key ("platform:sony_playstation2", "steam",
-        /// "tag:RPG" …). Empty rows are skipped.
+        /// "tag:RPG" …). Empty rows are skipped, and so are categories the player hid; ones the
+        /// player added (Settings → Categories) join the rows of their kind.
         #[serde(default = "default_rows")]
         rows: Vec<String>,
         /// At most this many rows.

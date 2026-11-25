@@ -9,12 +9,14 @@ mod fonts;
 mod item;
 mod main_view;
 mod plugins;
+mod rows;
 
 use super::Mode;
 
 use super::fonts as pfonts;
 
 use super::look::*;
+use super::options::Choices;
 
 use super::source::Source;
 
@@ -59,18 +61,15 @@ fn stem(rel: &str) -> &str {
 /// Read a theme: its XAML over Playnite's default theme, `thememodifier.yaml`,
 /// `themeExtras.yaml`, its audio folder and videos.
 pub(crate) fn extract(source: &Source, mode: Mode) -> Extracted {
-    extract_with(source, mode, None)
+    extract_with(source, mode, &Default::default())
 }
 
-/// [`extract`] with the theme options' values laid over the theme (`overrides`: one resource
-/// dictionary, see options.rs).
-pub(crate) fn extract_with(source: &Source, mode: Mode, overrides: Option<String>) -> Extracted {
+/// [`extract`] with the theme options' values laid over the theme (see options.rs).
+pub(crate) fn extract_with(source: &Source, mode: Mode, chosen: &Choices) -> Extracted {
     let files = source.files();
-    let mut texts = Texts::load(source, &files, mode);
-    if let Some(x) = overrides {
-        texts.push_theme("thememodifier.xaml", x);
-    }
-    let tree = Tree::build(&texts, &files);
+    let texts = chosen_texts(source, &files, mode, chosen);
+    let mut tree = Tree::build(&texts, &files);
+    tree.settings = chosen.settings.clone();
     let find = |name: &str| {
         files
             .iter()
@@ -91,6 +90,15 @@ pub(crate) fn extract_with(source: &Source, mode: Mode, overrides: Option<String
     let resources = resources_of(&tree);
     let banner = look.plugins.banners.then(|| super::extras::banner_look(&tree, mode == Mode::Fullscreen));
     Extracted { look, resources, banner }
+}
+
+/// The theme's XAML over Playnite's default theme, with the chosen constants laid over it.
+pub(crate) fn chosen_texts(source: &Source, files: &[(String, u64)], mode: Mode, chosen: &Choices) -> Texts {
+    let mut texts = Texts::load(source, files, mode);
+    if let Some(x) = &chosen.constants {
+        texts.push_theme("thememodifier.xaml", x.clone());
+    }
+    texts
 }
 
 /// `--playnite-look`: the look of a theme as JSON (with how long reading it took).
@@ -176,12 +184,23 @@ pub(crate) fn look_of(tree: &Tree, modifier: Option<&str>) -> PlayniteLook {
     look
 }
 
+/// The cover look of an item container style other than the game list's own (the items of a
+/// row the theme lays out itself).
+pub(crate) fn item_look_of<'a, 'i>(tree: &'a Tree<'i>, style: Node<'a, 'i>) -> ItemLook {
+    X { t: tree }.item_look_from(Some(style), None, &["IsFocused", "IsSelected"])
+}
+
 /// The extractor's view of the tree.
 struct X<'a, 'i> {
     t: &'a Tree<'i>,
 }
 
 type N<'a, 'i> = Node<'a, 'i>;
+
+/// The property an element is filled with (a Rectangle's Fill, anything else's Background).
+fn fill_prop(n: Node) -> &'static str {
+    if tag(n) == "Rectangle" { "Fill" } else { "Background" }
+}
 
 /// Grid.Row / Grid.Column / spans of an element.
 fn grid_attr(n: Node, name: &str, default: usize) -> usize {
@@ -192,8 +211,10 @@ fn grid_attr(n: Node, name: &str, default: usize) -> usize {
 fn binds_name(v: &Value) -> bool {
     let Value::Binding(b) = v else { return false };
     let path = b.split(',').next().unwrap_or("").trim().trim_start_matches("Path=").trim();
-    let last = path.rsplit('.').next().unwrap_or(path);
-    matches!(last, "DisplayName" | "Name") && !path.contains("Platform") && !path.contains("Source")
+    let mut parts = path.rsplit('.');
+    // The game's own name, not that of one of its properties (`CompletionStatus.Name`,
+    // `Platforms[0].Name`, `Source.Name`).
+    matches!(parts.next(), Some("DisplayName" | "Name")) && parts.all(|p| matches!(p, "Game" | "SelectedGame"))
 }
 
 fn edge_alpha(b: &LookBrush) -> [f32; 4] {

@@ -665,7 +665,7 @@ fn draw_view(
     }
     let picked = row_specs
         .as_ref()
-        .map(|(s, m, _)| crate::theme::render::pick_rows(s, &data.colls, (*m).max(1)))
+        .map(|(s, m, _)| crate::theme::render::pick_rows(s, &data.colls, (*m).max(1), &[]))
         .unwrap_or_default();
     let per_row = row_specs.as_ref().map_or(30, |r| r.2.max(1));
     let rows: Vec<RowScene> = picked

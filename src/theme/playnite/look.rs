@@ -406,6 +406,42 @@ pub struct BackgroundPicture {
     pub area: Option<[f32; 4]>,
 }
 
+/// The game art the desktop Library view draws behind everything (PART_ImageBackground).
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct WindowArt {
+    /// Its placement, opacity, blur and darkening.
+    pub picture: BackgroundPicture,
+    /// Gradient opacity masks on it and on the containers around it (they multiply).
+    pub masks: Vec<LookBrush>,
+    /// Translucent layers the theme draws right over it (any brush, element Opacity folded).
+    pub layers: Vec<LookBrush>,
+    /// It sits in a row below the top panel instead of behind it.
+    pub below_top_bar: bool,
+    /// The theme's window picture is drawn after it, over it.
+    pub picture_over_art: bool,
+}
+
+/// A box drawn around the facts of a game page.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct FactsBox {
+    pub fill: LookBrush,
+    /// Its border brush and thickness (the thickest side), px.
+    pub border: Option<(LookBrush, f32)>,
+    pub radius: Option<f32>,
+}
+
+/// How the details view's game list draws its rows (DetailsViewItemStyle).
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct ListRows {
+    pub selected_fill: Option<LookBrush>,
+    /// A bar along the left edge of the selected row: its brush and width, px.
+    pub selected_bar: Option<(LookBrush, f32)>,
+    pub selected_text: Option<LookBrush>,
+    pub radius: Option<f32>,
+    pub text: Option<LookBrush>,
+    pub text_uninstalled: Option<LookBrush>,
+}
+
 /// The shape of the main game list.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -507,6 +543,19 @@ pub struct DesktopLook {
     pub background_picture: Option<LookBrush>,
     /// The selected game's background picture in the details view (opacity, mask, darken).
     pub details_picture: Option<BackgroundPicture>,
+    /// The selected game's art behind the whole window (the Library view's
+    /// PART_ImageBackground), with its darkening, masks and the layers over it.
+    pub window_art: Option<WindowArt>,
+    /// The details view's fill (LibraryDetailsView's root: under the list and the game).
+    pub game_list: Option<LookBrush>,
+    /// The game list column's own fill (the panel around PART_ListGames, or the list's).
+    pub list_fill: Option<LookBrush>,
+    /// A strip the grid item paints behind the game's name only.
+    pub caption_fill: Option<LookBrush>,
+    /// The box around the facts on the game page (DetailsViewGameOverview).
+    pub facts_box: Option<FactsBox>,
+    /// The game list's rows (DetailsViewItemStyle).
+    pub rows: Option<ListRows>,
     pub panel_separator: Option<LookBrush>,
     /// The details view title (PART_TextDisplayName) size.
     pub title_size: Option<f32>,

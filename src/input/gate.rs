@@ -24,6 +24,14 @@
 //! running), unfocused (never guess in the game's favour); otherwise focused until the first
 //! focus event arrived, and unfocused after one (a report that went missing again).
 //!
+//! DESKTOP MODE ([`desktop_pad`]) is stricter still, because many games read the pad even while
+//! they aren't focused: a press that moved around the library would act in the game too. The pad
+//! drives desktop mode only while a Lodestar window is reported focused (an unknown focus never
+//! counts), the window is visible, no game is up or on its way or just ended, a look for running
+//! games has finished since the last game ended and saw nothing, and the in-game menu isn't up.
+//! `background_input` doesn't apply there. It narrows what [`filter`] lets through, never widens
+//! it.
+//!
 //! Scripted screenshot runs never act on a real pad.
 
 use super::Nav;
@@ -185,6 +193,51 @@ pub fn filter(s: &Situation, mut navs: Vec<Nav>) -> Vec<Nav> {
         Gate::All => {}
     }
     navs
+}
+
+/// Desktop mode's own state next to the [`Situation`] (see [`desktop_pad`]).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DesktopPad {
+    /// Desktop mode, with Settings → Controller "Use the controller in desktop mode" on.
+    pub enabled: bool,
+    /// A launch is on its way (not started yet): a Steam launch waiting on an update dialog may
+    /// already read the pad.
+    pub launching: bool,
+    /// A game ended a moment ago.
+    pub settling: bool,
+    /// A look for running games has finished since the last game ended ([`looked_since`]).
+    pub looked: bool,
+    /// The in-game menu or the menu button screens are up (they take the pad).
+    pub overlay: bool,
+}
+
+/// The pad moves around desktop mode: only a reported-focused, visible Lodestar with nothing
+/// running and nothing seen running (see the module docs).
+pub fn desktop_pad(s: &Situation, d: DesktopPad) -> bool {
+    d.enabled
+        && !s.scripted
+        && s.focused == Some(true)
+        && !s.hidden
+        && !s.game_up
+        && d.looked
+        && !s.others_seen
+        && !d.launching
+        && !d.settling
+        && !d.overlay
+}
+
+/// The last look for running games (started at `look`) counts for [`DesktopPad::looked`]: it
+/// started after the last game this run ended (`ended`), so a look from before that game never
+/// stands for the time after it.
+pub fn looked_since(look: Option<std::time::Instant>, ended: Option<std::time::Instant>) -> bool {
+    look.is_some_and(|at| ended.is_none_or(|e| at >= e))
+}
+
+/// Desktop mode wants the look for running games while Lodestar is in the background (so a game
+/// left running behind it is known once it comes to the front), until there is one since the last
+/// game ended, and while the last one saw a game (so the pad comes back once that game is gone).
+pub fn desktop_look(s: &Situation, d: DesktopPad) -> bool {
+    d.enabled && !s.scripted && !s.hidden && !s.game_up && (s.focused != Some(true) || !d.looked || s.others_seen)
 }
 
 /// Guide presses closer together than this count once (a bouncy button, Steam's virtual pad
@@ -670,5 +723,196 @@ mod tests {
         for g in [Gate::Off, Gate::GuideOnly, Gate::All] {
             assert_eq!(Gate::from_u8(g.to_u8()), g);
         }
+    }
+
+    /// Desktop mode, the setting on, a clean look done.
+    fn desk() -> DesktopPad {
+        DesktopPad { enabled: true, looked: true, ..Default::default() }
+    }
+
+    /// Every situation and desktop state, built from the bits of `bits` and a focus report.
+    fn every_desktop_case() -> impl Iterator<Item = (Situation, DesktopPad)> {
+        [Some(true), Some(false), None].into_iter().flat_map(|focused| {
+            (0..1u16 << 11).map(move |bits| {
+                let on = |n: u16| bits & (1 << n) != 0;
+                let sit = Situation {
+                    focused,
+                    focus_seen: on(0),
+                    game_up: on(1),
+                    others_seen: on(2),
+                    others_clear: !on(2),
+                    hidden: on(3),
+                    scripted: on(4),
+                    background_input: on(5),
+                    ..s()
+                };
+                let d =
+                    DesktopPad { enabled: on(6), launching: on(7), settling: on(8), looked: on(9), overlay: on(10) };
+                (sit, d)
+            })
+        })
+    }
+
+    /// REGRESSION (critical, user-requested): the pad drives desktop mode only while Lodestar is
+    /// reported focused, visible, with no game up, on its way, just ended or seen running, a look
+    /// done, the in-game menu closed, the setting on, and never in scripted runs.
+    #[test]
+    fn desktop_pad_only_when_focused_and_nothing_runs() {
+        let mut allowed = 0;
+        for (sit, d) in every_desktop_case() {
+            if !desktop_pad(&sit, d) {
+                continue;
+            }
+            allowed += 1;
+            assert_eq!(sit.focused, Some(true), "{sit:?} {d:?}");
+            assert!(!sit.game_up && !sit.others_seen && !sit.hidden && !sit.scripted, "{sit:?} {d:?}");
+            assert!(d.enabled && d.looked && !d.launching && !d.settling && !d.overlay, "{sit:?} {d:?}");
+        }
+        // That idle window, whether a focus event came yet and whatever background input says.
+        assert_eq!(allowed, 4);
+        assert!(desktop_pad(&s(), desk()));
+    }
+
+    /// REGRESSION: background input lets the controller drive an unfocused controller mode, but
+    /// never desktop mode.
+    #[test]
+    fn desktop_pad_ignores_background_input() {
+        let st = Situation { focused: Some(false), background_input: true, others_clear: true, ..s() };
+        assert_eq!(filter(&st, ALL.to_vec()), ALL.to_vec());
+        assert!(!desktop_pad(&st, desk()));
+    }
+
+    /// An unknown focus counts as focused for controller mode before the first focus event, but
+    /// never for desktop mode.
+    #[test]
+    fn desktop_pad_never_trusts_an_unknown_focus() {
+        for focus_seen in [false, true] {
+            let st = Situation { focused: None, focus_seen, ..s() };
+            assert_eq!(st.is_focused(), !focus_seen);
+            assert!(!desktop_pad(&st, desk()), "{st:?}");
+        }
+    }
+
+    /// REGRESSION (critical): whenever the desktop rule lets the pad through, the safety rule
+    /// already lets all of it through: the desktop rule only ever narrows it.
+    #[test]
+    fn desktop_pad_never_widens_the_gate() {
+        let cases = situations().into_iter().flat_map(|sit| {
+            (0..32u8).map(move |b| {
+                let on = |n: u8| b & (1 << n) != 0;
+                (sit, DesktopPad { enabled: on(0), launching: on(1), settling: on(2), looked: on(3), overlay: on(4) })
+            })
+        });
+        for (sit, d) in cases.chain(every_desktop_case()) {
+            if desktop_pad(&sit, d) {
+                assert_eq!(gate(&sit), Gate::All, "{sit:?} {d:?}");
+                assert_eq!(filter(&sit, ALL.to_vec()), ALL.to_vec(), "{sit:?} {d:?}");
+            }
+        }
+    }
+
+    /// Settings in its own window, focused: that is Lodestar being used, as for the gate. A
+    /// stale or minimised dialog window isn't.
+    #[test]
+    fn focused_dialog_window_counts_for_the_desktop_pad() {
+        let w = |reported, minimised, latest| OtherWindow { reported, minimised, latest };
+        let focused = lodestar_focus(Some(false), false, Some(false), [w(Some(true), Some(false), None)]);
+        assert!(desktop_pad(&Situation { focused, ..s() }, desk()));
+        let stale = lodestar_focus(Some(false), false, Some(false), [w(Some(true), Some(false), Some(false))]);
+        assert!(!desktop_pad(&Situation { focused: stale, ..s() }, desk()));
+        let minimised = lodestar_focus(Some(false), false, Some(false), [w(Some(true), Some(true), None)]);
+        assert!(!desktop_pad(&Situation { focused: minimised, ..s() }, desk()));
+    }
+
+    /// REGRESSION: a look counts for the desktop pad only when it started after the last game
+    /// ended; before any game ended this run, any look does.
+    #[test]
+    fn only_a_look_after_the_last_game_counts() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let later = t0 + Duration::from_secs(1);
+        assert!(!looked_since(None, None), "no look yet");
+        assert!(looked_since(Some(t0), None), "no game ended this run");
+        assert!(looked_since(Some(later), Some(t0)));
+        assert!(!looked_since(Some(t0), Some(later)), "a look from before the game ended");
+        assert!(!looked_since(None, Some(t0)));
+    }
+
+    #[test]
+    fn desktop_look_wanted() {
+        // Unfocused: looking, so a game left running behind Lodestar is known when it comes back.
+        let unfocused = Situation { focused: Some(false), background_input: false, ..s() };
+        assert!(desktop_look(&unfocused, desk()));
+        // Focused: until there is a look since the last game ended, and while the last one saw
+        // a game.
+        assert!(desktop_look(&s(), DesktopPad { looked: false, ..desk() }));
+        assert!(desktop_look(&Situation { others_seen: true, others_clear: false, ..s() }, desk()));
+        // A focused, idle window with a clean look stays idle.
+        assert!(!desktop_look(&s(), desk()));
+        // Off, scripted, hidden or with a game up: never.
+        assert!(!desktop_look(&unfocused, DesktopPad { enabled: false, ..desk() }));
+        for st in [
+            Situation { scripted: true, ..unfocused },
+            Situation { hidden: true, ..unfocused },
+            Situation { game_up: true, ..unfocused },
+        ] {
+            assert!(!desktop_look(&st, desk()), "{st:?}");
+        }
+    }
+
+    /// What one frame hands desktop mode: the pad thread under that frame's gate, then the
+    /// frame's filter, then the desktop rule.
+    fn desktop_gets(st: &Situation, d: DesktopPad, presses: &[(u64, gilrs::Button)]) -> Vec<Nav> {
+        let navs = through(st, &crate::config::ControllerConfig::default(), presses, &[]);
+        if desktop_pad(st, d) { navs } else { vec![] }
+    }
+
+    /// REGRESSION (critical): a whole evening with only a controller. The library works in
+    /// front, a game in front gets the pad (only the menu button reaches Lodestar), the in-game
+    /// menu takes it, and the library gets it back only once the game is over and settled.
+    #[test]
+    fn desktop_round_trip_with_only_a_controller() {
+        use gilrs::Button::{DPadDown as Down, Mode as Home, South as A};
+        let cfg = crate::config::ControllerConfig::default();
+        // 1. In the library.
+        assert_eq!(desktop_gets(&s(), desk(), &[(0, Down)]), vec![Nav::Down]);
+        // 2. A game in front: only Home gets through, and not to the library.
+        let playing = Situation { game_up: true, focused: Some(false), ..s() };
+        assert_eq!(through(&playing, &cfg, &[(0, Down), (10, A), (20, Home)], &[]), vec![Nav::Guide]);
+        assert!(desktop_gets(&playing, desk(), &[(0, Down), (10, A)]).is_empty());
+        // 3. Home brought the in-game menu up over a focused Lodestar: the menu has the pad.
+        let menu = Situation { game_up: true, lodestar_menu: true, ..s() };
+        assert!(!desktop_pad(&menu, DesktopPad { overlay: true, ..desk() }));
+        assert_eq!(through(&menu, &cfg, &[(0, Down)], &[]), vec![Nav::Down]);
+        // 4. Quit the game: a moment of Home only. The look from before the game no longer
+        // counts, so Lodestar looks again, and the pad waits for that look even once settled.
+        let t0 = std::time::Instant::now();
+        let ended = t0 + std::time::Duration::from_secs(60);
+        let stale = DesktopPad { looked: looked_since(Some(t0), Some(ended)), ..desk() };
+        assert!(desktop_gets(&s(), DesktopPad { settling: true, ..stale }, &[(0, Down)]).is_empty());
+        assert!(desktop_gets(&s(), stale, &[(0, Down)]).is_empty());
+        assert!(desktop_look(&s(), stale));
+        // 5. Settled, focused, a clean look since the game ended: the library again, and no
+        // more looking.
+        let after = ended + std::time::Duration::from_millis(5);
+        let fresh = DesktopPad { looked: looked_since(Some(after), Some(ended)), ..desk() };
+        assert_eq!(desktop_gets(&s(), fresh, &[(0, Down)]), vec![Nav::Down]);
+        assert!(!desktop_look(&s(), fresh));
+
+        // (a) The game closed itself and the focus stayed elsewhere: Home only, until Home
+        // brought Lodestar to the front.
+        let behind = Situation { focused: Some(false), ..s() };
+        assert_eq!(through(&behind, &cfg, &[(0, Down), (20, Home)], &[]), vec![Nav::Down, Nav::Guide]);
+        assert!(desktop_gets(&behind, desk(), &[(0, Down)]).is_empty());
+        assert_eq!(desktop_gets(&s(), desk(), &[(0, Down)]), vec![Nav::Down]);
+        // (b) A game still seen running after the exit: no pad, the look keeps going until a
+        // clean one.
+        let seen = Situation { others_seen: true, others_clear: false, ..s() };
+        assert!(desktop_gets(&seen, desk(), &[(0, Down)]).is_empty());
+        assert!(desktop_look(&seen, desk()));
+        assert!(!desktop_look(&s(), desk()));
+        // (c) Hidden to the tray meanwhile: nothing until it is shown again.
+        let hidden = Situation { hidden: true, focused: effective_focus(Some(true), true, None), ..s() };
+        assert!(desktop_gets(&hidden, desk(), &[(0, Down)]).is_empty());
     }
 }

@@ -393,6 +393,31 @@ fn playnite_english(key: &str) -> Option<&'static str> {
         "LOCDescriptionLabel" => "Description",
         "LOCGameListSearchResults" => "Showing search results for:",
         "LOCGameListExtraFiltered" => "Additional filters are active",
+        "LOCNameLabel" => "Name",
+        "LOCLibraries" => "Libraries",
+        "LOCGameProviderTitle" => "Library",
+        "LOCGameInstallationStatus" => "Installation Status",
+        "LOCInstallSizeLabel" => "Install Size",
+        "LOCPlatformsTitle" => "Platforms",
+        "LOCGamePublishersTitle" => "Publishers",
+        "LOCGameDevelopersTitle" => "Developers",
+        "LOCGameCategoriesTitle" | "LOCCategoriesLabel" => "Categories",
+        "LOCGameReleaseYearTitle" => "Release Year",
+        "LOCGameDescriptionTitle" => "Description",
+        "LOCAgeRatingLabel" => "Age Rating",
+        "LOCAgeRatingsLabel" => "Age Ratings",
+        "LOCRegionLabel" => "Region",
+        "LOCRegionsLabel" => "Regions",
+        "LOCVersionLabel" => "Version",
+        "LOCNotesLabel" => "Notes",
+        "LOCLinksLabel" => "Links",
+        "LOCMediaLabel" => "Media",
+        "LOCDateAddedLabel" => "Date Added",
+        "LOCSelect" => "Select",
+        "LOCOKLabel" => "OK",
+        "LOCCancelLabel" => "Cancel",
+        "LOCClearLabel" => "Clear",
+        "LOCClose" | "LOCCloseLabel" => "Close",
         _ => return None,
     })
 }
@@ -453,6 +478,15 @@ mod tests {
         assert_eq!(s.get("LOCNotThere"), None);
         assert_eq!(s.get("NotALocKey"), None);
         assert_eq!(s.get("LOCTimePlayed").as_deref(), Some("Time played"));
+    }
+
+    #[test]
+    fn views_use_the_themes_strings_then_playnites_english() {
+        let s = ViewStrings::with(&[("LOCPlayGame", "Start")]);
+        assert_eq!(s.text("LOCPlayGame").as_deref(), Some("Start"));
+        assert_eq!(s.text("LOCInstallSizeLabel").as_deref(), Some("Install Size"));
+        assert_eq!(s.text("LOCCloseLabel").as_deref(), Some("Close"));
+        assert_eq!(s.text("LOCNotThere"), None);
     }
 
     #[test]

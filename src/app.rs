@@ -29,7 +29,7 @@ mod window;
 pub use window::App;
 pub(crate) use window::is_wayland;
 #[cfg(test)]
-use window::{desktop_key_frames, focus_left_for_game, toast_width};
+use window::{desktop_key_frames, focus_left_for_game, just_ended, toast_width};
 
 /// See `AppState::rescan_at`.
 const STEAM_FOLLOWUP_RESCAN: Duration = Duration::from_secs(20);
@@ -220,6 +220,8 @@ pub struct AppState {
     pub romm: crate::romm_app::RommState,
     /// Lodestar's own updates (update_app.rs).
     pub update: crate::update_app::UpdateState,
+    /// The first start's welcome step (welcome_app.rs).
+    pub welcome: crate::welcome_app::WelcomeState,
 }
 
 /// After a game ends, only the Home button reaches Lodestar for this long.
@@ -511,7 +513,8 @@ impl AppState {
                         first_ctx.config.disabled_sources.push(addon_key.to_string());
                     }
                     let mut report = scan::run_all(&first_ctx);
-                    let mut stats = db.merge_scan(&report.games, &report.ok_sources)?;
+                    let mut stats =
+                        db.merge_scan_with_shortcuts(&report.games, &report.ok_sources, &report.dropped_shortcuts)?;
                     if addons_on {
                         let _ = tx.send(BgMsg::ScanPartial {
                             per_source: report.per_source.iter().map(|(s, r)| (*s, r.found, r.error.clone())).collect(),
@@ -777,6 +780,7 @@ impl AppState {
         // Every UI write goes to the DB at once, so the DB (after the scan's commit)
         // has both the scan's and the user's changes. ~1 ms for a few hundred games.
         self.reload_library();
+        self.refresh_steam_owned();
         // New rows that a "Not a game" rule keeps out don't count as new games.
         let added = if added == 0 { 0 } else { self.library.games.iter().filter(|g| !known.contains(&g.id)).count() };
         let mut summary = ScanSummary {
@@ -942,6 +946,9 @@ impl AppState {
 
     /// After a scan: ask the fetcher for games never looked up that lack art or a description.
     pub(crate) fn queue_metadata(&mut self) {
+        if self.lookups_wait_for_welcome() {
+            return;
+        }
         self.queue_protondb();
         let want_steam = self.config.metadata.steam_store;
         let want_sgdb = self.config.metadata.steamgriddb_key.as_deref().is_some_and(|k| !k.is_empty());
@@ -1102,6 +1109,7 @@ impl AppState {
             shell: Default::default(),
             romm: Default::default(),
             update: Default::default(),
+            welcome: Default::default(),
             paths,
             config,
             db,

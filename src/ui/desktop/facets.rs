@@ -318,13 +318,8 @@ pub(crate) fn is_pc_other(g: &Game) -> bool {
     is_pc(g) && g.platform.as_deref().map(str::trim).is_none_or(|p| p.is_empty() || p.eq_ignore_ascii_case("pc"))
 }
 
-/// A game of the PLATFORMS → PC entry: a PC game (not emulated, not from a ROM server, not
-/// streamed: [`crate::library::is_pc_game`], the controller's "PC Games") whose platform, when
-/// set, is a PC one (Linux, Windows, macOS, PC, a browser) — not a console name.
-pub(crate) fn is_pc(g: &Game) -> bool {
-    crate::library::is_pc_game(g)
-        && g.platform.as_deref().is_none_or(|p| crate::ui::platform_icons::is_pc_label(platform_label(p)))
-}
+/// A game of the PLATFORMS → PC entry (the controller's PC category is the same).
+pub(crate) use crate::library::in_pc_category as is_pc;
 
 pub(crate) use crate::emulation::platforms::display_name as platform_label;
 
@@ -413,6 +408,8 @@ pub(crate) struct Counts {
     pub installed: usize,
     /// Visible games that aren't installed.
     pub not_installed: usize,
+    /// Visible games no longer in the account's Steam library (steam_owned.rs).
+    pub not_in_steam_library: usize,
     pub favorites: usize,
     pub recent: usize,
     pub hidden: usize,
@@ -458,6 +455,7 @@ impl Counts {
             c.all += 1;
             c.installed += g.installed as usize;
             c.not_installed += !g.installed as usize;
+            c.not_in_steam_library += lib.not_in_steam_library(g) as usize;
             c.favorites += g.favorite as usize;
             // Same predicate as the "Recently played" view itself.
             c.recent += recent.contains(g) as usize;
@@ -753,6 +751,33 @@ mod tests {
         // Nobody rated anything: no score section.
         let c = Counts::compute(&Library::new(vec![game(1, &[], 0, None)]));
         assert!(!c.shows(Facet::Score));
+    }
+
+    #[test]
+    fn not_in_the_steam_library_is_part_of_not_installed() {
+        let mut games: Vec<Game> = lib().games;
+        games[2].source_id = "1222680".into();
+        let mut owned = game(5, &[], 3600, None);
+        owned.source_id = "70".into();
+        owned.installed = false;
+        games.push(owned);
+        let mut l = Library::new(games);
+        let mut ui = DesktopUi::new();
+        ui.lib_sel = LibSel::NotInSteamLibrary;
+        ui.refresh_view_for(&l);
+        assert!(ids(&ui, &l).is_empty(), "no owned-games list: nothing is marked");
+        assert_eq!(Counts::compute(&l).not_in_steam_library, 0);
+
+        l.set_steam_owned(Some(std::sync::Arc::new([70].into())));
+        let c = Counts::compute(&l);
+        assert_eq!((c.all, c.not_installed, c.not_in_steam_library), (5, 2, 1), "still counted with the rest");
+        ui.refresh_view_for(&l);
+        assert_eq!(ids(&ui, &l), [3]);
+        // Bought again: the entry empties by itself.
+        l.set_steam_owned(Some(std::sync::Arc::new([70, 1_222_680].into())));
+        ui.refresh_view_for(&l);
+        assert!(ids(&ui, &l).is_empty());
+        assert_eq!(LibSel::from_key(LibSel::NotInSteamLibrary.key()), LibSel::NotInSteamLibrary);
     }
 
     #[test]

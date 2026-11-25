@@ -3,6 +3,7 @@
 
 use super::bind::{bind_art, parse_binding};
 use super::stack::{is_flow, varies};
+use super::tabs::{PresetItem, PresetLook};
 use super::*;
 
 impl Default for Ctx {
@@ -103,6 +104,72 @@ pub(super) fn shoulder_prompts(n: &LNode) -> Vec<Rect> {
     out
 }
 
+/// A theme's row of bottom-bar buttons: its box, how it sits in the room it was given, and
+/// whether its box was measured without some of its labels (set at runtime by the theme).
+#[derive(Clone, Copy, Debug)]
+pub(super) struct HintRow {
+    rect: Rect,
+    ha: Al,
+    unread: bool,
+}
+
+/// The theme's hint rows under `n`: its stacks of bottom-bar buttons and the buttons standing
+/// alone.
+pub(super) fn hint_rows(n: &LNode) -> Vec<HintRow> {
+    let mut rows = vec![];
+    collect_hint_rows(n, &mut rows);
+    rows
+}
+
+/// The hint row the help bar takes the place of, starting from the row `base` holding the
+/// first bottom-bar button: rows level with it join it (a menu hint on the left and the game's
+/// on the right make one row).
+fn joined_row(base: Rect, rows: &[HintRow]) -> HintRow {
+    let level = |r: &Rect| {
+        let overlap = (base.y + base.h).min(r.y + r.h) - base.y.max(r.y);
+        overlap > base.h.min(r.h) * 0.5
+    };
+    let mine: Vec<&HintRow> = rows.iter().filter(|r| level(&r.rect)).collect();
+    let rect = mine.iter().fold(base, |a, r| span(&a, &r.rect));
+    let unread = mine.iter().any(|r| r.unread);
+    match mine.as_slice() {
+        [one] => HintRow { rect, ha: one.ha, unread },
+        _ => HintRow { rect, ha: Al::Stretch, unread },
+    }
+}
+
+fn collect_hint_rows(n: &LNode, out: &mut Vec<HintRow>) {
+    if n.vis != Vis::Visible || n.data.opacity <= 0.01 {
+        return;
+    }
+    if matches!(n.data.kind, Kind::Help { .. }) || holds_hints(n) {
+        out.push(HintRow { rect: n.rect, ha: n.ha, unread: has_unread_hint(n) });
+        return;
+    }
+    for c in &n.children {
+        collect_hint_rows(c, out);
+    }
+}
+
+/// A shown bottom-bar button under `n` whose label Lodestar can't read.
+fn has_unread_hint(n: &LNode) -> bool {
+    n.vis == Vis::Visible
+        && (matches!(n.data.kind, Kind::Help { unread: true, .. }) || n.children.iter().any(has_unread_hint))
+}
+
+/// A horizontal stack of bottom-bar buttons: the help bar takes its place.
+fn holds_hints(n: &LNode) -> bool {
+    matches!(n.panel, Panel::Stack { horizontal: true })
+        && n.children.iter().any(|c| matches!(c.data.kind, Kind::Help { .. }))
+}
+
+/// The smallest box holding both.
+fn span(a: &Rect, b: &Rect) -> Rect {
+    let (x0, y0) = (a.x.min(b.x), a.y.min(b.y));
+    let (x1, y1) = ((a.x + a.w).max(b.x + b.w), (a.y + a.h).max(b.y + b.h));
+    Rect::new(x0, y0, x1 - x0, y1 - y0)
+}
+
 /// A theme's button prompt in `r`: one glyph, as tall as the box.
 pub(super) fn prompt_table(button: &str, color: Option<Color>, r: Rect) -> Table {
     let mut t = el_table("helpbar", r);
@@ -187,13 +254,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         let mut kids: Vec<&LNode> = n.children.iter().collect();
         kids.sort_by_key(|k| k.z);
         let clip = if n.data.clip { cx.clip.intersect(&r) } else { cx.clip };
-        let row = if matches!(n.panel, Panel::Stack { horizontal: true })
-            && n.children.iter().any(|c| matches!(c.data.kind, Kind::Help(_)))
-        {
-            Some(r)
-        } else {
-            cx.row
-        };
+        let row = if holds_hints(n) { Some(r) } else { cx.row };
         let scroll = if matches!(n.panel, Panel::Scroll { .. }) { Some(r.intersect(&cx.clip)) } else { cx.scroll };
         let width_set = n.width.is_some() || n.max[0].is_finite();
         let bounds = if width_set { cx.bounds.intersect(&r) } else { cx.bounds };
@@ -293,12 +354,12 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 }
                 return true;
             }
-            Kind::Video => {
+            Kind::Video(placeholder) => {
                 if area > 0.0 {
                     let mut t = el_table("image", r);
                     t.insert("path".into(), T::String(String::new()));
                     t.insert("fit".into(), T::String("cover".into()));
-                    t.insert("video".into(), T::String("@main_video".into()));
+                    t.insert("video".into(), T::String((*placeholder).into()));
                     self.decorate(&mut t, deco, out.len(), "video");
                     out.push(t);
                 }
@@ -318,6 +379,9 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 out.push(t);
                 self.stats.area_drawn += area;
             }
+            // The game list stays behind an open details page; Lodestar's page shows only
+            // the one game.
+            Kind::List if self.details_open => return true,
             Kind::List => {
                 if area > W * H * 0.01 {
                     self.stats.list = true;
@@ -343,10 +407,15 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 self.stats.area_drawn += area;
                 return true;
             }
-            Kind::Help(t) if area > 0.0 => {
-                // One help bar for the row of bottom buttons (the first one places it).
+            Kind::Help { look: t, .. } if area > 0.0 => {
+                // One help bar for the row of bottom buttons (the first one places it), over
+                // all of them.
                 if !out.iter().any(is_hint_bar) {
-                    let mut tbl = help_bar(t, cx.row.unwrap_or(r), n.scale);
+                    let row = joined_row(cx.row.unwrap_or(r), &self.hint_rows);
+                    // A row measured without some of its labels says nothing about the
+                    // room the hints have: it grows from the edge or centre it is set at.
+                    let ha = if row.unread { row.ha } else { Al::Stretch };
+                    let mut tbl = help_bar(t, row.rect, ha, n.scale);
                     self.decorate(&mut tbl, deco, out.len(), "help");
                     tbl.insert("name".into(), T::String("pn_help".into()));
                     out.push(tbl);
@@ -355,6 +424,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 return true;
             }
             Kind::Button(bt) if area > 0.0 => {
+                self.stats.play_button |= bt.context;
                 self.emit_button(n, bt, deco, cx, out);
                 self.stats.area_drawn += area;
                 return true;
@@ -364,9 +434,27 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         false
     }
 
-    /// A button: its background, then its label(s).
+    /// A button: its background, then its label(s); a template that draws installed games'
+    /// buttons differently gives one look per kind of game.
     fn emit_button(&mut self, n: &LNode, bt: &ButtonOut, deco: &Deco, cx: &Ctx, out: &mut Vec<Table>) {
-        let r = n.rect;
+        let Some(installed) = &bt.installed else {
+            self.emit_button_look(n, bt, deco, cx, out);
+            return;
+        };
+        for (look, on) in [(bt, false), (&**installed, true)] {
+            let cond = deco.cond.and(&installed_cond(on));
+            self.emit_button_look(n, look, &Deco { cond: &cond, ..*deco }, cx, out);
+        }
+    }
+
+    /// One look of a button: its face, then its label(s).
+    fn emit_button_look(&mut self, n: &LNode, bt: &ButtonOut, deco: &Deco, cx: &Ctx, out: &mut Vec<Table>) {
+        let r = match bt.band {
+            Some((top, h)) if h * n.scale < n.rect.h => {
+                Rect::new(n.rect.x, n.rect.y + top * n.scale, n.rect.w, h * n.scale)
+            }
+            _ => n.rect,
+        };
         let rad = (bt.radius * n.scale / H).min(0.5);
         let mut bg = el_table("rect", r);
         match &bt.fill {
@@ -398,6 +486,9 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             let mut tbl = self.text_table_at(inner, inner, &lt, n.scale, cx.clip, false);
             self.decorate(&mut tbl, deco, out.len(), "button_label");
             let both = deco.cond.and(&c);
+            if contradicts(&both) {
+                continue;
+            }
             if let Some(v) = both.visible_if {
                 tbl.insert("visible_if".into(), T::String(v));
             }
@@ -410,13 +501,10 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
 
     /// The label(s) of a button: Play / Install by the game's state for PART_ButtonContext.
     pub(super) fn button_labels(&self, bt: &ButtonOut) -> Vec<(String, Cond)> {
-        if bt.context {
+        if bt.context && !bt.own_text {
             let play = self.loc.text("LOCPlayGame").unwrap_or_else(|| "Play".into());
             let install = self.loc.text("LOCInstallGame").unwrap_or_else(|| "Install".into());
-            vec![
-                (play, Cond { visible_if: Some("{game.installed}".into()), hidden_if: None }),
-                (install, Cond { visible_if: None, hidden_if: Some("{game.installed}".into()) }),
-            ]
+            vec![(play, installed_cond(true)), (install, installed_cond(false))]
         } else {
             vec![(bt.label.text.clone(), Cond::default())]
         }
@@ -544,13 +632,57 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         tbl
     }
 
-    /// The filter preset tabs as a row of texts: each of `TABS`, plain or (when its collection
-    /// is the open one) bold in the current colour, then the open collection's own name when
-    /// it is none of them. The row keeps to `tab_room`, its text shrinking when it doesn't fit.
+    /// The filter preset tabs: each of `TABS` drawn at rest or (when its collection is the
+    /// open one) in the open look, then the open collection's own name when it is none of
+    /// them. The strip keeps to `tab_room`, its text shrinking when it doesn't fit.
     pub(super) fn tabs_table(&self, n: &LNode, tabs: &TabsOut, cx: &Ctx) -> Table {
         let r = n.rect.deflate_pub(n.padding);
-        let key = "{collection.key}";
-        let text = |label: &str, current: bool| -> T {
+        let look = &tabs.look;
+        let own = !look.items.is_empty();
+        let mut t = Table::new();
+        t.insert("type".into(), T::String("stack".into()));
+        let direction = if look.vertical { "vertical" } else { "horizontal" };
+        t.insert("direction".into(), T::String(direction.into()));
+        let (children, align) = if own {
+            (self.preset_buttons(n, look), look.align)
+        } else {
+            let gap = tabs.label.size * if look.vertical { 0.2 } else { 1.2 };
+            set_f(&mut t, "gap", gap * n.scale / H);
+            (self.tab_names(n, tabs, r), "center")
+        };
+        t.insert("align".into(), T::String(align.into()));
+        let line = if own { look.size[1] } else { tabs.label.size * 1.344 } * n.scale;
+        // A vertical strip (an icon rail) centres on its box; a row of the theme's buttons sits
+        // where they align, a row of names on its first line.
+        let (oy, y, span) = match (look.vertical, own, align) {
+            (true, ..) => (0.5, r.y + r.h / 2.0, [r.y, r.y + r.h]),
+            (false, true, "start") => (0.0, r.y, [r.y, r.y + line]),
+            (false, true, "end") => (1.0, r.y + r.h, [r.y + r.h - line, r.y + r.h]),
+            (false, true, _) => (0.5, r.y + r.h / 2.0, [r.y + (r.h - line) / 2.0, r.y + (r.h + line) / 2.0]),
+            (false, false, _) => {
+                let y = (r.y + (r.h.min(line * 2.0) / 2.0)).min(r.y + r.h);
+                (0.5, y, [y - line / 2.0, y + line / 2.0])
+            }
+        };
+        // A selector stretched over its slot shows its presets where its template aligns them.
+        let ha = if n.ha == Al::Stretch { look.across } else { n.ha };
+        let room = self.tab_room(r, ha, cx, span);
+        let (ox, x) = match ha {
+            Al::End => (1.0, room.x + room.w),
+            Al::Center => (0.5, room.x + room.w / 2.0),
+            _ => (0.0, room.x),
+        };
+        set_pair(&mut t, "pos", [x / W, y / H]);
+        set_pair(&mut t, "origin", [ox, oy]);
+        set_pair(&mut t, "size", [0.0, 0.0]);
+        set_f(&mut t, "max_width", room.w / W);
+        t.insert("children".into(), T::Array(children));
+        t
+    }
+
+    /// Lodestar's names: plain, the open one bold in the current colour.
+    fn tab_names(&self, n: &LNode, tabs: &TabsOut, r: Rect) -> Vec<T> {
+        let text = |label: &str, current: bool| -> Table {
             let mut lt = tabs.label.clone();
             lt.text = label.to_string();
             lt.bound = false;
@@ -562,40 +694,111 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             let mut t = self.text_table_at(r, r, &lt, n.scale, Rect::new(0.0, 0.0, W, H), false);
             t.remove("pos");
             set_pair(&mut t, "size", [0.0, 0.0]);
-            T::Table(t)
+            t
         };
         let mut children = vec![];
         for (k, label) in TABS {
             for current in [false, true] {
-                let T::Table(mut t) = text(label, current) else { continue };
-                let rule = format!("{key} == {k}");
-                t.insert((if current { "visible_if" } else { "hidden_if" }).into(), T::String(rule));
+                let mut t = text(label, current);
+                let (rule, cond) = tab_rule(k, current);
+                t.insert(rule.into(), T::String(cond));
                 children.push(T::Table(t));
             }
         }
-        if let T::Table(mut other) = text("{collection.name}", true) {
-            let rule: Vec<String> = TABS.iter().map(|(k, _)| format!("{key} != {k}")).collect();
-            other.insert("visible_if".into(), T::String(rule.join(" && ")));
-            children.push(T::Table(other));
+        let mut other = text("{collection.name}", true);
+        other.insert("visible_if".into(), T::String(other_rule(TABS.iter().map(|(k, _)| *k))));
+        children.push(T::Table(other));
+        children
+    }
+
+    /// The theme's preset buttons: per shown tab its look at rest and when open, then the
+    /// open collection's own name when it is none of them.
+    fn preset_buttons(&self, n: &LNode, look: &PresetLook) -> Vec<T> {
+        let mut children = vec![];
+        let mut keys = vec![];
+        for ((k, label), item) in TABS.iter().zip(&look.items) {
+            let Some(states) = item else { continue };
+            keys.push(*k);
+            for (state, current) in states.iter().zip([false, true]) {
+                let mut t = self.preset_button(state, label, n.scale);
+                let (rule, cond) = tab_rule(k, current);
+                t.insert(rule.into(), T::String(cond));
+                children.push(T::Table(t));
+            }
         }
+        if let Some(other) = &look.other {
+            let mut t = self.preset_button(other, "{collection.name}", n.scale);
+            t.insert("visible_if".into(), T::String(other_rule(keys.into_iter())));
+            children.push(T::Table(t));
+        }
+        children
+    }
+
+    /// One preset button: its plate holding its picture and / or its name.
+    fn preset_button(&self, item: &PresetItem, label: &str, scale: f32) -> Table {
         let mut t = Table::new();
         t.insert("type".into(), T::String("stack".into()));
         t.insert("direction".into(), T::String("horizontal".into()));
         t.insert("align".into(), T::String("center".into()));
-        set_f(&mut t, "gap", tabs.label.size * n.scale * 1.2 / H);
-        let line = tabs.label.size * n.scale * 1.344;
-        let y = (r.y + (r.h.min(line * 2.0) / 2.0)).min(r.y + r.h);
-        let room = self.tab_room(r, n.ha, cx, [y - line / 2.0, y + line / 2.0]);
-        let (ox, x) = match n.ha {
-            Al::End => (1.0, room.x + room.w),
-            Al::Center => (0.5, room.x + room.w / 2.0),
-            _ => (0.0, room.x),
-        };
-        set_pair(&mut t, "pos", [x / W, y / H]);
-        set_pair(&mut t, "origin", [ox, 0.5]);
-        set_pair(&mut t, "size", [0.0, 0.0]);
-        set_f(&mut t, "max_width", room.w / W);
-        t.insert("children".into(), T::Array(children));
+        t.insert("justify".into(), T::String("center".into()));
+        let mut kids = vec![];
+        if let Some(p) = &item.picture {
+            let mut pic = el_table("image", Rect::new(0.0, 0.0, p.size[0] * scale, p.size[1] * scale));
+            pic.remove("pos");
+            pic.insert("path".into(), T::String(p.path.clone()));
+            pic.insert("fit".into(), T::String("contain".into()));
+            if p.opacity < 1.0 {
+                set_f(&mut pic, "opacity", p.opacity);
+            }
+            kids.push(T::Table(pic));
+        }
+        if let Some(b) = item.blank {
+            let mut room = el_table("stack", Rect::new(0.0, 0.0, b[0] * scale, b[1] * scale));
+            room.remove("pos");
+            room.insert("children".into(), T::Array(vec![]));
+            kids.push(T::Table(room));
+        }
+        if let Some((text, opacity)) = &item.text {
+            let mut lt = text.clone();
+            lt.text = label.to_string();
+            let screen = Rect::new(0.0, 0.0, W, H);
+            let mut tt = self.text_table_at(screen, screen, &lt, scale, screen, false);
+            tt.remove("pos");
+            set_pair(&mut tt, "size", [0.0, 0.0]);
+            if *opacity < 1.0 {
+                set_f(&mut tt, "opacity", *opacity);
+            }
+            if !kids.is_empty() {
+                set_f(&mut t, "gap", text.size * 0.3 * scale / H);
+            }
+            kids.push(T::Table(tt));
+        }
+        if let Some(p) = &item.plate {
+            if let Some(v) = p.fill.as_ref().and_then(crate::theme::playnite::fill::brush_value) {
+                t.insert("background".into(), v);
+            }
+            if p.radius > 0.0 {
+                set_f(&mut t, "corner_radius", (p.radius * scale / H).min(0.5));
+            }
+            if let Some((c, w)) = p.border {
+                t.insert("border_color".into(), T::String(c.to_hex()));
+                set_f(&mut t, "border_width", (w * scale / H).max(0.0008));
+            }
+            if p.size[0] > 0.0 || p.size[1] > 0.0 {
+                set_pair(&mut t, "size", [p.size[0] * scale / W, p.size[1] * scale / H]);
+            }
+            if p.padding[0] > 0.0 || p.padding[1] > 0.0 {
+                set_pair(&mut t, "padding", [p.padding[0] * scale / H, p.padding[1] * scale / H]);
+            }
+        }
+        if item.margin.iter().any(|m| *m != 0.0) {
+            let m = item.margin.map(|v| T::Float(round(v * scale / H) as f64));
+            t.insert("margin".into(), T::Array(m.to_vec()));
+        }
+        if item.opacity < 1.0 {
+            set_f(&mut t, "opacity", item.opacity);
+        }
+        t.insert("children".into(), T::Array(kids));
         t
     }
 
@@ -642,7 +845,11 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         };
         let tiles = tile_panel(r, aspect);
         let mut t = Table::new();
-        if tiles.rows <= 1 {
+        let mut focus_scale = item.focus_scale;
+        if let Some(strip) = &self.strip {
+            t = strip.carousel(r);
+            focus_scale = Some(strip.focus_scale);
+        } else if tiles.rows <= 1 {
             // The theme's own item size when its slot holds it, else the slot's cover.
             let scale = item.focus_scale.unwrap_or(1.06).clamp(1.0, 1.5);
             let (iw, ih) = match item.size {
@@ -684,7 +891,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         t.insert("item_text_style".into(), T::Table(st));
         t.insert("controller_badge".into(), T::Boolean(true));
         t.insert("favorite_badge".into(), T::Boolean(true));
-        if let Some(s) = item.focus_scale.filter(|s| (*s - 1.0).abs() > 0.005) {
+        if let Some(s) = focus_scale.filter(|s| (*s - 1.0).abs() > 0.005) {
             let mut f = Table::new();
             set_f(&mut f, "scale", s);
             f.insert("duration_ms".into(), T::Integer(100));
@@ -721,11 +928,21 @@ fn image_table(img: &ImageOut, r: Rect) -> Table {
     t
 }
 
-/// The help bar in place of the row of bottom buttons `row`, in the buttons' text look.
-fn help_bar(t: &TextOut, row: Rect, scale: f32) -> Table {
+/// The help bar in place of the row of bottom buttons `row`, in the buttons' text look. With
+/// `ha` right or centre, it is as wide as Lodestar's hints and grows from that edge or centre,
+/// as WPF sizes such a row to its buttons.
+fn help_bar(t: &TextOut, row: Rect, ha: Al, scale: f32) -> Table {
     let mut tbl = el_table("helpbar", row);
-    set_pair(&mut tbl, "pos", [row.x / W, (row.y + row.h / 2.0) / H]);
-    set_pair(&mut tbl, "origin", [0.0, 0.5]);
+    let (ox, x) = match ha {
+        Al::End => (1.0, row.x + row.w),
+        Al::Center => (0.5, row.x + row.w / 2.0),
+        _ => (0.0, row.x),
+    };
+    set_pair(&mut tbl, "pos", [x / W, (row.y + row.h / 2.0) / H]);
+    set_pair(&mut tbl, "origin", [ox, 0.5]);
+    if ox > 0.0 {
+        set_pair(&mut tbl, "size", [0.0, row.h / H]);
+    }
     let mut st = Table::new();
     set_f(&mut st, "font_size", (t.size * scale / H).clamp(0.012, 0.04));
     if let Some(c) = t.color {
@@ -734,4 +951,26 @@ fn help_bar(t: &TextOut, row: Rect, scale: f32) -> Table {
     }
     tbl.insert("style".into(), T::Table(st));
     tbl
+}
+
+/// The rule showing a tab's look at rest (hidden while its collection is open) or when open.
+fn tab_rule(key: &str, current: bool) -> (&'static str, String) {
+    let cond = format!("{{collection.key}} == {key}");
+    (if current { "visible_if" } else { "hidden_if" }, cond)
+}
+
+/// The rule showing the open collection's own tab: it is none of `keys`.
+fn other_rule<'a>(keys: impl Iterator<Item = &'a str>) -> String {
+    keys.map(|k| format!("{{collection.key}} != {k}")).collect::<Vec<_>>().join(" && ")
+}
+
+/// Shown only for installed games (`on`), or only for the others.
+fn installed_cond(on: bool) -> Cond {
+    let key = Some("{game.installed}".to_string());
+    if on { Cond { visible_if: key, hidden_if: None } } else { Cond { visible_if: None, hidden_if: key } }
+}
+
+/// A rule that can never show: the same binding both required and hiding.
+fn contradicts(c: &Cond) -> bool {
+    c.visible_if.is_some() && c.visible_if == c.hidden_if
 }

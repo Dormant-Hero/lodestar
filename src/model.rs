@@ -154,7 +154,7 @@ impl Source {
             Source::Lutris => "Lutris",
             Source::Bottles => "Bottles",
             Source::Itch => "itch.io",
-            Source::Desktop => "Desktop",
+            Source::Desktop => "Shortcuts",
             Source::Manual => "Manual",
             Source::Epic => "Epic Games",
             Source::Gog => "GOG",
@@ -170,6 +170,15 @@ impl Source {
             Source::Addon => "Add-on",
             Source::Emulator => "Emulators",
             Source::Romm => "RomM",
+        }
+    }
+
+    /// The name a source was shown under before it was renamed, for themes that still look it up
+    /// by that name (a `Desktop.png` logo, `{game.source} == Desktop`).
+    pub fn former_name(self) -> Option<&'static str> {
+        match self {
+            Source::Desktop => Some("Desktop"),
+            _ => None,
         }
     }
 }
@@ -884,6 +893,18 @@ pub struct ScannedGame {
     /// tags, collections, playtime …) to this game's row and go (`Db::merge_scan`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub absorbs: Vec<(Source, String)>,
+}
+
+/// A shortcut a scan leaves out because it starts another library's game (a `.desktop` file that
+/// runs a Steam, Heroic, Lutris or Faugus game, a Steam shortcut to a Faugus game). A library row
+/// the shortcut has from an earlier scan folds into that game's row
+/// (`Db::merge_scan_with_shortcuts`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DroppedShortcut {
+    /// The shortcut's own source and id.
+    pub shortcut: (Source, String),
+    /// The game it starts. A Heroic target may be stored as Epic, GOG or Amazon.
+    pub target: (Source, String),
 }
 
 impl ScannedGame {

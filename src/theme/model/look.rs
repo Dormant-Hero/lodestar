@@ -12,7 +12,7 @@
 //!     the GradientOrigin at the centre): offset 0 at the centre, 1 on the ellipse, the last
 //!     colour beyond it. Replaces `angle`.
 
-use super::{Color, Fit};
+use super::{Color, Fit, is_false};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// One colour stop: `[colour, offset]` in TOML.
@@ -279,6 +279,27 @@ pub struct SelectionBorder {
     pub width: f32,
 }
 
+/// How the desktop game lists draw a row: the selected one's fill, bar along its left edge and
+/// text, its corners, and the text of installed and uninstalled games.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RowStyle {
+    /// None: no fill when a bar marks the selection, else the palette's selection fill.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_fill: Option<Color>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_bar: Option<SelectionBorder>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_text: Option<Color>,
+    /// Corner radius in points.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub radius: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<Color>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_uninstalled: Option<Color>,
+}
+
 fn default_selection_width() -> f32 {
     3.0
 }
@@ -338,10 +359,41 @@ pub struct DesktopStyle {
     /// Show the selected game's background art, blurred, behind the whole window (Playnite's
     /// "background image" look). The user can force it on/off in settings.
     pub background_image: bool,
+    /// With `background_image`: only in the details view, as Playnite shows it unless the
+    /// user also asks for it in the grid. The user's own on / off setting covers every view.
+    #[serde(skip_serializing_if = "is_false")]
+    pub background_image_details_only: bool,
+    /// How opaque the game's art is drawn over the window background (default fully).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_image_opacity: Option<f32>,
     /// How much the background is darkened (0 = not at all, 1 = black).
     pub background_dim: f32,
+    /// The colour the game's art is darkened towards, evenly over the whole picture (default
+    /// the palette's background, a little more towards the bottom).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_dim_color: Option<Color>,
+    /// Opacity masks over the game's art (the stops' alpha; several multiply), so it fades
+    /// out towards its edges.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub background_image_masks: Vec<Gradient>,
+    /// Layers the theme lays over the game's art (translucent colours or gradients), after
+    /// the darkening.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub background_image_layers: Vec<Brush>,
+    /// The game's art starts under the top bar instead of behind it.
+    #[serde(skip_serializing_if = "is_false")]
+    pub background_image_below_bar: bool,
+    /// `background_picture` is drawn over the game's art (a vignette or texture) instead of
+    /// under it.
+    #[serde(skip_serializing_if = "is_false")]
+    pub background_picture_over_art: bool,
     /// Opacity of the panels over the background (0..1). The game grid area uses less.
     pub panel_opacity: f32,
+    /// Panels without a fill of their own (top bar, side panel, lists, details) let the window
+    /// background show through, as Playnite's desktop panels do, instead of Lodestar's panel
+    /// colours.
+    #[serde(skip_serializing_if = "is_false")]
+    pub see_through_panels: bool,
     /// Buttons, fields, checkboxes: corner radius in points (default 5).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub control_radius: Option<f32>,
@@ -358,6 +410,29 @@ pub struct DesktopStyle {
     /// covers" switch still hides them).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cover_title: Option<CoverTitle>,
+    /// A tile behind each grid cover and its name (Playnite's GridItemBackgroundBrush).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tile_fill: Option<Brush>,
+    /// A strip behind the game's name under a grid cover.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caption_fill: Option<Brush>,
+    /// The game list (details view list column, list view) when the window shows through
+    /// the other panels (default none / Lodestar's list colour).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_fill: Option<Brush>,
+    /// The box around the facts on a game page (default a faint one over a see-through
+    /// page, else the palette's surface).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card_fill: Option<Brush>,
+    /// Its border (default none).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card_border: Option<SelectionBorder>,
+    /// Its corner radius in points (default 8).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card_radius: Option<f32>,
+    /// The rows of the game lists (default Lodestar's: a filled, rounded selection).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rows: Option<RowStyle>,
     /// Border of the selected cover (default the palette's selection colour, 3 pt).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selection_border: Option<SelectionBorder>,
@@ -373,6 +448,9 @@ pub struct DesktopStyle {
     /// Top bar and status bar (default a shade darker than the background).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topbar_fill: Option<Brush>,
+    /// The Play button (default the palette's accent).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub play_fill: Option<Brush>,
     /// The game details panel and page (default the palette's surface / background).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details_fill: Option<Brush>,
@@ -394,18 +472,34 @@ impl Default for DesktopStyle {
     fn default() -> Self {
         DesktopStyle {
             background_image: false,
+            background_image_details_only: false,
+            background_image_opacity: None,
             background_dim: 0.55,
+            background_dim_color: None,
+            background_image_masks: Vec::new(),
+            background_image_layers: Vec::new(),
+            background_image_below_bar: false,
+            background_picture_over_art: false,
             panel_opacity: 0.78,
+            see_through_panels: false,
             control_radius: None,
             window_radius: None,
             cover_radius: None,
             cover_gap: None,
             cover_title: None,
+            tile_fill: None,
+            caption_fill: None,
+            list_fill: None,
+            card_fill: None,
+            card_border: None,
+            card_radius: None,
+            rows: None,
             selection_border: None,
             hover_darken: None,
             window_gradient: None,
             sidebar_fill: None,
             topbar_fill: None,
+            play_fill: None,
             details_fill: None,
             background_picture: None,
             details_background_dim: None,

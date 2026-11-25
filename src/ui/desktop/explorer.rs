@@ -67,7 +67,8 @@ impl DesktopUi {
         });
     }
 
-    /// LIBRARY: All games, Installed, Not installed, Favourites, Recently played, Hidden.
+    /// LIBRARY: All games, Installed, Not installed (and under it, Not in your Steam library),
+    /// Favourites, Recently played, Hidden.
     fn library_rows(&mut self, ui: &mut Ui, st: &AppState) {
         let pal = self.pal;
         let no_extra = self.no_extra_filters();
@@ -75,6 +76,9 @@ impl DesktopUi {
         let mut lib_rows = vec![(LibSel::All, "All games", c.all), (LibSel::Installed, "Installed", c.installed)];
         if c.not_installed > 0 {
             lib_rows.push((LibSel::NotInstalled, "Not installed", c.not_installed));
+        }
+        if c.not_in_steam_library > 0 {
+            lib_rows.push((LibSel::NotInSteamLibrary, "Not in your Steam library", c.not_in_steam_library));
         }
         lib_rows.push((LibSel::Favorites, "Favourites", c.favorites));
         lib_rows.push((LibSel::Recent, "Recently played", c.recent));
@@ -85,7 +89,17 @@ impl DesktopUi {
         let mut art_for: Option<(LibSel, &str)> = None;
         for (sel, label, n) in lib_rows {
             let foc = self.side_nav.is(|e| *e == Entry::Lib(sel));
-            let r = row(ui, label, n, self.lib_sel == sel && no_extra, foc, &pal, None);
+            let selected = self.lib_sel == sel && no_extra;
+            let r = if sel == LibSel::NotInSteamLibrary {
+                // A part of Not installed: indented under it.
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    row(ui, label, n, selected, foc, &pal, None)
+                })
+                .inner
+            } else {
+                row(ui, label, n, selected, foc, &pal, None)
+            };
             if foc {
                 self.side_nav.reveal(&r);
             }
@@ -105,6 +119,7 @@ impl DesktopUi {
                 LibSel::All => true,
                 LibSel::Installed => g.installed,
                 LibSel::NotInstalled => !g.installed,
+                LibSel::NotInSteamLibrary => st.library.not_in_steam_library(g),
                 LibSel::Favorites => g.favorite,
                 LibSel::Recent => recent.contains(g),
             });
@@ -230,7 +245,7 @@ impl DesktopUi {
         if !add {
             self.clear_extras();
         }
-        if !matches!(self.lib_sel, LibSel::Installed | LibSel::NotInstalled) {
+        if !(self.lib_sel == LibSel::Installed || self.lib_sel.not_installed()) {
             self.lib_sel = LibSel::All;
         }
         match v {
@@ -280,10 +295,11 @@ impl DesktopUi {
     /// Hidden / Not installed entries, tags and the field selections, each field with any of
     /// its picked values, or with Match all every one (tags, and the fields a game can have
     /// several values of). Across fields, all must match.
-    pub(crate) fn extra_match(&self, g: &crate::model::Game) -> bool {
+    pub(crate) fn extra_match(&self, lib: &crate::library::Library, g: &crate::model::Game) -> bool {
         match self.lib_sel {
             LibSel::Hidden if !g.hidden => return false,
             LibSel::NotInstalled if g.installed => return false,
+            LibSel::NotInSteamLibrary if !lib.not_in_steam_library(g) => return false,
             _ => {}
         }
         if !self.src_sel.is_empty() && !self.src_sel.iter().any(|s| s.matches(g)) {
@@ -309,7 +325,7 @@ impl DesktopUi {
         f.tags.clear();
         f.show_hidden |= with_hidden;
         let mut v = lib.filter(&f);
-        v.retain(|&i| self.extra_match(&lib.games[i]));
+        v.retain(|&i| self.extra_match(lib, &lib.games[i]));
         v
     }
 

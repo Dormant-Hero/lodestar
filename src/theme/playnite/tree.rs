@@ -4,7 +4,12 @@
 //!
 //! - dictionary-level resources by `x:Key` (inline MergedDictionaries included); a theme's
 //!   definition wins over the default's, Constants.xaml over its other files;
-//! - implicit styles (`<Style TargetType="{x:Type Main}">` without a key) per type name;
+//! - implicit styles (`<Style TargetType="{x:Type Main}">` without a key) per type name, the
+//!   last one loaded, except that a variant of the type's own file never replaces it
+//!   (`Views/GameDetails_Plex.xaml` next to `Views/GameDetails.xaml`: Playnite loads a theme's
+//!   files by the default theme's file names, so a variant only counts when another file
+//!   merges it in);
+//! - `BasedOn="{StaticResource {x:Type Button}}"`: the implicit style defined before it;
 //! - local scopes (`<ControlTemplate.Resources>`, `<Style.Resources>` …) before the global one;
 //! - `StaticResource` / `DynamicResource` chains (markup and `<StaticResource ResourceKey>`
 //!   elements) with a depth / loop guard; `BasedOn` style chains; `TemplateBinding` to the
@@ -106,6 +111,13 @@ impl Texts {
         let mut files: Vec<XamlText> = defaults::files(mode)
             .map(|f| XamlText { rel: f.rel.to_string(), text: Cow::Borrowed(f.text), layer: Layer::Default })
             .collect();
+        if mode == Mode::Fullscreen {
+            files.push(XamlText {
+                rel: "App.xaml".into(),
+                text: fullscreen_app_resources().into(),
+                layer: Layer::Default,
+            });
+        }
         files.sort_by_key(|f| rank(&f.rel));
         theme.sort_by_key(|(r, _)| rank(r));
         files.extend(theme.into_iter().map(|(rel, text)| XamlText {
@@ -115,6 +127,19 @@ impl Texts {
         }));
         Texts { files, skipped: vec![], mode: Some(mode) }
     }
+}
+
+/// Resources Playnite's fullscreen app defines itself (its App.xaml, not a theme file) that
+/// themes read: the size its views are designed for (`{StaticResource DesignWidth}` on a
+/// full-screen overlay), which Playnite then scales to the screen.
+fn fullscreen_app_resources() -> String {
+    let [w, h] = super::layout::SCREEN;
+    format!(
+        r#"<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <sys:Double x:Key="DesignWidth">{w}</sys:Double>
+  <sys:Double x:Key="DesignHeight">{h}</sys:Double>
+</ResourceDictionary>"#
+    )
 }
 
 impl Texts {
@@ -142,7 +167,10 @@ pub(crate) struct Tree<'i> {
     pub mode: Mode,
     pub docs: Vec<Doc<'i>>,
     keyed: HashMap<String, At>,
+    /// The implicit style that applies, per type name.
     implicit: HashMap<String, At>,
+    /// Every implicit style per type name, in load order (for `BasedOn` a type).
+    implicit_all: HashMap<String, Vec<At>>,
     /// The theme's files (for `{ThemeFile …}` paths).
     pub files: Vec<(String, u64)>,
     pub coverage: Coverage,
@@ -152,6 +180,10 @@ pub(crate) struct Tree<'i> {
     /// A toggle's `IsChecked` set by the theme is its value (false: unknown, the user flips
     /// it; one bound to a setting stays known).
     pub toggles_at_rest: std::cell::Cell<bool>,
+    /// The theme's ThemeOptions variables at their defaults (its options.yaml).
+    pub add_on_options: super::settings::AddOnOptions,
+    /// The Playnite settings the player chose for this theme (the rest read their defaults).
+    pub settings: super::settings::PlayerSettings,
 }
 
 /// A parsed `{…}` markup extension (or a literal).
@@ -203,6 +235,34 @@ pub(crate) fn local_type(s: &str) -> &str {
     let s = s.trim();
     let s = s.strip_prefix("{x:Type").and_then(|r| r.strip_suffix('}')).map(str::trim).unwrap_or(s);
     s.rsplit(':').next().unwrap_or(s).trim()
+}
+
+/// The type a resource key names when it is a type (`{x:Type Button}`, the key of an implicit
+/// style).
+fn type_key(key: &str) -> Option<&str> {
+    match markup(key) {
+        Markup::Type(_) => Some(local_type(key)),
+        _ => None,
+    }
+}
+
+/// The document is the theme's file for type `ty` (`Views/GameDetails.xaml` for GameDetails).
+fn file_is_for(doc: &Doc, ty: &str) -> bool {
+    doc.layer == Layer::Theme && stem(doc.rel).eq_ignore_ascii_case(ty)
+}
+
+/// The document is named as a variant of the file for type `ty` (`GameDetails_Plex.xaml`,
+/// `GameDetails-old.xaml`; not `ButtonEx.xaml` for Button, another type's file).
+fn file_is_variant_of(doc: &Doc, ty: &str) -> bool {
+    let s = stem(doc.rel);
+    s.get(..ty.len()).is_some_and(|head| head.eq_ignore_ascii_case(ty))
+        && s[ty.len()..].starts_with(['_', '-', ' ', '.'])
+}
+
+/// A file's name without folder and extension.
+fn stem(rel: &str) -> &str {
+    let name = base_name(rel);
+    name.rsplit_once('.').map_or(name, |(s, _)| s)
 }
 
 /// A typed value.
@@ -377,6 +437,11 @@ pub(crate) fn content<'t, 'i>(n: Node<'t, 'i>) -> impl Iterator<Item = Node<'t, 
 }
 
 /// The property element `<X.prop>` of `n` (any owner type prefix).
+/// A trigger's Setters: its own children, or inside `<X.Setters>` (both are valid XAML).
+pub(crate) fn setters<'t, 'i>(trigger: Node<'t, 'i>) -> impl Iterator<Item = Node<'t, 'i>> {
+    content(trigger).chain(prop_elem(trigger, "Setters").into_iter().flat_map(content)).filter(|c| tag(*c) == "Setter")
+}
+
 pub(crate) fn prop_elem<'t, 'i>(n: Node<'t, 'i>, prop: &str) -> Option<Node<'t, 'i>> {
     n.children().find(|c| {
         c.is_element()
@@ -449,7 +514,8 @@ impl<'i> Tree<'i> {
             }
         }
         let mut keyed = HashMap::new();
-        let mut implicit = HashMap::new();
+        let mut implicit: HashMap<String, At> = HashMap::new();
+        let mut implicit_all: HashMap<String, Vec<At>> = HashMap::new();
         for (i, d) in docs.iter().enumerate() {
             match d.layer {
                 Layer::Default => cov.default_files += 1,
@@ -462,7 +528,12 @@ impl<'i> Tree<'i> {
                 } else if tag(n) == "Style"
                     && let Some(tt) = attr(n, "TargetType")
                 {
-                    implicit.insert(local_type(tt).to_string(), at);
+                    let ty = local_type(tt);
+                    let own_file = |at: &At| docs.get(at.doc).is_some_and(|d| file_is_for(d, ty));
+                    if implicit.get(ty).is_none_or(|old| !own_file(old) || !file_is_variant_of(d, ty)) {
+                        implicit.insert(ty.to_string(), at);
+                    }
+                    implicit_all.entry(ty.to_string()).or_default().push(at);
                 }
             }
             if d.layer == Layer::Theme {
@@ -492,10 +563,13 @@ impl<'i> Tree<'i> {
             docs,
             keyed,
             implicit,
+            implicit_all,
             files: files.to_vec(),
             coverage: cov,
             resolving: std::cell::Cell::new(0),
             toggles_at_rest: std::cell::Cell::new(true),
+            add_on_options: Default::default(),
+            settings: Default::default(),
         }
     }
 
@@ -528,6 +602,14 @@ impl<'i> Tree<'i> {
         self.node(*self.implicit.get(local_type(type_name))?)
     }
 
+    /// The implicit style for a type name defined before `style` (what a StaticResource to
+    /// `{x:Type T}` finds while `style` is being loaded).
+    fn implicit_before<'t>(&'t self, type_name: &str, style: Node<'t, 'i>) -> Option<Node<'t, 'i>> {
+        let doc = self.docs.iter().position(|d| std::ptr::eq(&d.doc, style.document()))?;
+        let before = |at: &&At| at.doc < doc || (at.doc == doc && at.node.get() < style.id().get());
+        self.node(*self.implicit_all.get(local_type(type_name))?.iter().rev().find(before)?)
+    }
+
     /// A resource as seen from `at`: local `<X.Resources>` scopes up the tree first.
     pub fn resource_from<'t>(&'t self, at: Node<'t, 'i>, key: &str) -> Option<Node<'t, 'i>> {
         for a in at.ancestors().filter(|a| a.is_element()) {
@@ -544,7 +626,7 @@ impl<'i> Tree<'i> {
                 break;
             }
         }
-        self.resource(key)
+        self.resource(key).or_else(|| self.implicit_style(type_key(key)?))
     }
 
     /// The raw value of a property set on the element itself: an attribute or the content of
@@ -641,7 +723,10 @@ impl<'i> Tree<'i> {
     pub fn based_on<'t>(&'t self, style: Node<'t, 'i>) -> Option<Node<'t, 'i>> {
         let b = attr(style, "BasedOn")?;
         let n = match markup(b) {
-            Markup::Resource(k) => self.resource_from(style, &k)?,
+            Markup::Resource(k) => match type_key(&k) {
+                Some(ty) => self.implicit_before(ty, style)?,
+                None => self.resource_from(style, &k)?,
+            },
             Markup::Type(t) => self.implicit_style(&t)?,
             _ => return None,
         };
@@ -839,8 +924,8 @@ impl<'i> Tree<'i> {
             if let Some(t) = prop_elem(cur, "Triggers") {
                 let mut hit = None;
                 for trig in content(t) {
-                    let setters: Vec<Node> = content(trig)
-                        .filter(|c| tag(*c) == "Setter" && attr(*c, "TargetName").is_none())
+                    let setters: Vec<Node> = setters(trig)
+                        .filter(|c| attr(*c, "TargetName").is_none())
                         .filter(|set| {
                             attr(*set, "Property").map(str::trim).is_some_and(|p| {
                                 p == prop || (!prop.contains('.') && p.rsplit('.').next() == Some(prop))
@@ -850,22 +935,7 @@ impl<'i> Tree<'i> {
                     if setters.is_empty() {
                         continue;
                     }
-                    let ok = match tag(trig) {
-                        "DataTrigger" => self.static_condition(el, trig),
-                        // False as soon as one condition is; unknown when one can't be told.
-                        "MultiDataTrigger" => prop_elem(trig, "Conditions").and_then(|c| {
-                            let mut known = true;
-                            for cond in content(c).filter(|c| tag(*c) == "Condition") {
-                                match self.static_condition(el, cond) {
-                                    Some(false) => return Some(false),
-                                    Some(true) => {}
-                                    None => known = false,
-                                }
-                            }
-                            known.then_some(true)
-                        }),
-                        _ => None,
-                    };
+                    let ok = self.static_trigger(el, trig);
                     if ok != Some(true) {
                         continue;
                     }
@@ -882,9 +952,30 @@ impl<'i> Tree<'i> {
         None
     }
 
+    /// Whether a DataTrigger / MultiDataTrigger holds by what the theme fixes (None: it
+    /// depends on something that changes at runtime). A MultiDataTrigger is false as soon as
+    /// one condition is, unknown when one can't be told.
+    pub(crate) fn static_trigger(&self, el: Node, trig: Node) -> Option<bool> {
+        match tag(trig) {
+            "DataTrigger" => self.static_condition(el, trig),
+            "MultiDataTrigger" => prop_elem(trig, "Conditions").and_then(|c| {
+                let mut known = true;
+                for cond in content(c).filter(|c| tag(*c) == "Condition") {
+                    match self.static_condition(el, cond) {
+                        Some(false) => return Some(false),
+                        Some(true) => {}
+                        None => known = false,
+                    }
+                }
+                known.then_some(true)
+            }),
+            _ => None,
+        }
+    }
+
     /// A trigger / condition's `Binding` against its `Value`: Some(true / false) when the
     /// theme fixes it, None when it depends on something that changes at runtime.
-    fn static_condition(&self, el: Node, cond: Node) -> Option<bool> {
+    pub(crate) fn static_condition(&self, el: Node, cond: Node) -> Option<bool> {
         let binding = attr(cond, "Binding")?;
         let want = attr(cond, "Value")?.trim();
         let got = self.static_binding(el, binding)?;
@@ -911,8 +1002,10 @@ impl<'i> Tree<'i> {
 
     fn resolve_binding(&self, el: Node, binding: &str) -> Option<String> {
         let inner = binding.trim().strip_prefix('{')?.strip_suffix('}')?.trim();
-        if let Markup::Settings(s) = markup(binding) {
-            return super::settings::setting(&s).map(|v| v.text());
+        match markup(binding) {
+            Markup::Settings(s) => return self.settings.get(&s).map(|v| v.text()),
+            Markup::Plugin(p) => return super::settings::plugin_value(&p, &self.add_on_options),
+            _ => {}
         }
         let rest = inner.strip_prefix("Binding")?.trim();
         let parts = split_top(rest);
@@ -1022,16 +1115,11 @@ impl<'i> Tree<'i> {
             Value::Num(n) => Some(n.to_string()),
             Value::Text(t) => Some(t),
             Value::Null => Some(String::new()),
-            Value::Setting(s) => super::settings::setting(&s).map(|v| v.text()),
+            Value::Setting(s) => self.settings.get(&s).map(|v| v.text()),
             Value::Binding(b) if !b.starts_with("TemplateBinding:") => {
                 self.static_binding(owner, &format!("{{Binding {b}}}"))
             }
-            Value::Plugin(p) => match super::settings::plugin(&p) {
-                super::settings::Plugin::Value(v) => super::settings::plugin_text(&p, &v),
-                super::settings::Plugin::Fallback(f) => Some(f),
-                super::settings::Plugin::Missing => Some(String::new()),
-                super::settings::Plugin::PerGame(_) => None,
-            },
+            Value::Plugin(p) => super::settings::plugin_value(&p, &self.add_on_options),
             _ => None,
         }
     }
@@ -1283,6 +1371,63 @@ pub(crate) mod tests {
         assert_eq!(tree.get(c, "BorderThickness").unwrap().max_side(), Some(2.0));
         let l = tree.resource("Loop1").unwrap();
         assert_eq!(tree.setter(l, "Anything"), None);
+    }
+
+    #[test]
+    fn a_style_based_on_a_type_takes_the_implicit_style_before_it() {
+        let buttons = dict(
+            r##"<Style TargetType="{x:Type Button}">
+              <Setter Property="FontSize" Value="30" />
+              <Setter Property="Foreground" Value="#FF00FF00" />
+            </Style>"##,
+        );
+        let derived = dict(
+            r##"<Style TargetType="{x:Type ButtonEx}" BasedOn="{StaticResource {x:Type Button}}">
+              <Setter Property="FontSize" Value="40" />
+            </Style>
+            <Style x:Key="Plain" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}" />
+            <Style TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+              <Setter Property="FontSize" Value="50" />
+            </Style>"##,
+        );
+        let t = texts(
+            Mode::Fullscreen,
+            &[("DefaultControls/Button.xaml", buttons), ("DerivedStyles/ButtonEx.xaml", derived)],
+        );
+        let tree = Tree::build(&t, &[]);
+        let ex = tree.implicit_style("ButtonEx").unwrap();
+        assert_eq!(tree.setter(ex, "FontSize").and_then(|v| v.num()), Some(40.0));
+        assert_eq!(tree.setter(ex, "Foreground").and_then(|v| v.color()), Some(Color([0, 255, 0, 255])));
+        let plain = tree.resource("Plain").unwrap();
+        assert_eq!(tree.setter(plain, "FontSize").and_then(|v| v.num()), Some(30.0));
+        // The later Button style restyles the earlier one and is the one Buttons get.
+        let button = tree.implicit_style("Button").unwrap();
+        assert_eq!(tree.setter(button, "FontSize").and_then(|v| v.num()), Some(50.0));
+        assert_eq!(tree.setter(button, "Foreground").and_then(|v| v.color()), Some(Color([0, 255, 0, 255])));
+    }
+
+    #[test]
+    fn a_views_own_file_wins_over_a_variant_and_design_size_resolves() {
+        let view = |bg: &str| {
+            dict(&format!(
+                r##"<Style TargetType="{{x:Type GameDetails}}">
+                  <Setter Property="Background" Value="{bg}" />
+                  <Setter Property="Width" Value="{{StaticResource DesignWidth}}" />
+                </Style>"##
+            ))
+        };
+        let t = texts(
+            Mode::Fullscreen,
+            &[("Views/GameDetails.xaml", view("#FF0000FF")), ("Views/GameDetails_Alt.xaml", view("#FFFF0000"))],
+        );
+        let tree = Tree::build(&t, &[]);
+        let style = tree.implicit_style("GameDetails").unwrap();
+        assert_eq!(tree.setter(style, "Background").and_then(|v| v.color()), Some(Color([0, 0, 255, 255])));
+        assert_eq!(tree.setter(style, "Width").and_then(|v| v.num()), Some(1920.0));
+        assert_eq!(
+            tree.resource("DesignHeight").and_then(|n| tree.eval_node(n, 0)).and_then(|v| v.num()),
+            Some(1080.0)
+        );
     }
 
     #[test]

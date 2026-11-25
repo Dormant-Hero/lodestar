@@ -1,6 +1,7 @@
 //! The cover look: the game list's item style and template (`ListGameItemStyle` /
 //! `GridViewItemTemplate` …), its focus triggers, frame, glow, caption and badges.
 
+use super::super::settings::{SVal, plugin_text};
 use super::*;
 
 /// What an item's focus / selection, hover and "show game titles" triggers switch on.
@@ -28,10 +29,19 @@ pub(super) enum TriggerKind {
 impl<'a, 'i> X<'a, 'i> {
     /// The cover look from an item container style and an item template.
     pub(super) fn item_look(&self, style_key: &str, template_key: &str, focus_props: &[&str]) -> ItemLook {
-        let mut look = ItemLook::default();
         let style = self.t.resource(style_key).filter(|n| tag(*n) == "Style");
+        self.item_look_from(style, self.t.template_of(template_key), focus_props)
+    }
+
+    /// The cover look from an item container style (its template) and an item template.
+    pub(super) fn item_look_from(
+        &self,
+        style: Option<N<'a, 'i>>,
+        item_tpl: Option<N<'a, 'i>>,
+        focus_props: &[&str],
+    ) -> ItemLook {
+        let mut look = ItemLook::default();
         let tpl = style.and_then(|s| self.t.template(s));
-        let item_tpl = self.t.template_of(template_key);
         let root = tpl.and_then(|t| self.t.template_root(t));
         let owners: Vec<N> = [style, tpl, item_tpl].into_iter().flatten().collect();
         let ft = self.focus_triggers(&owners, focus_props);
@@ -296,12 +306,14 @@ impl<'a, 'i> X<'a, 'i> {
                     let el = self.named_in(scopes, target.trim());
                     let v = self.t.setter_value(set, p);
                     let colour = match p {
-                        "Visibility" if v.as_ref().and_then(|v| v.text()) == Some("Visible") => el.and_then(|e| {
-                            // The layer's own Opacity dims its colour.
-                            let c = self.brush(e, "Background")?.average()?;
-                            let o = self.num(e, "Opacity").unwrap_or(1.0).clamp(0.0, 1.0);
-                            Some(Color([c.0[0], c.0[1], c.0[2], (c.0[3] as f32 * o).round() as u8]))
-                        }),
+                        "Visibility" if v.as_ref().and_then(|v| v.text()) == Some("Visible") => {
+                            el.filter(|e| !self.covers_part(*e)).and_then(|e| {
+                                // The layer's own Opacity dims its colour.
+                                let c = self.brush(e, "Background")?.average()?;
+                                let o = self.num(e, "Opacity").unwrap_or(1.0).clamp(0.0, 1.0);
+                                Some(Color([c.0[0], c.0[1], c.0[2], (c.0[3] as f32 * o).round() as u8]))
+                            })
+                        }
                         "Opacity" if el == cover && cover.is_some() => v
                             .and_then(|v| v.num())
                             .filter(|o| *o < 1.0)
@@ -318,6 +330,15 @@ impl<'a, 'i> X<'a, 'i> {
                 }
             }
         }
+    }
+
+    /// A layer sized to part of the item (a band along the bottom, a corner badge): Lodestar's
+    /// scrim darkens the whole cover, so such a layer isn't one.
+    fn covers_part(&self, el: N<'a, 'i>) -> bool {
+        let sized = |size: &str, align: &str| {
+            self.num(el, size).is_some() && self.align(el, align).is_some_and(|a| a != Align::Stretch)
+        };
+        sized("Height", "VerticalAlignment") || sized("Width", "HorizontalAlignment")
     }
 
     /// The corner radius of the Border a VisualBrush mask draws (`Visual="{Binding
@@ -350,11 +371,11 @@ impl<'a, 'i> X<'a, 'i> {
         let mut best: Option<(u8, Caption)> = None;
         for scope in scopes {
             for el in scope.descendants().filter(|n| n.is_element() && tag(*n) == "TextBlock") {
-                if !self.t.local(el, "Text").as_ref().is_some_and(binds_name) {
+                if !self.t.local(el, "Text").as_ref().is_some_and(binds_name) || self.only_without_cover(el, *scope) {
                     continue;
                 }
                 let vis = self.t.get(el, "Visibility");
-                let hid = self.hidden_up_to(el, *scope);
+                let hid = self.hidden_up_to(el, *scope).or_else(|| self.off_by_setting(el, *scope));
                 let named_up = |set: &BTreeSet<String>| {
                     std::iter::once(el).chain(el.ancestors()).filter_map(|a| name_of(a)).any(|n| set.contains(n))
                 };
@@ -439,6 +460,41 @@ impl<'a, 'i> X<'a, 'i> {
         best.map(|(_, c)| c)
     }
 
+    /// The element or a panel around it (up to `scope`) whose Visibility follows a setting that
+    /// is off ("show game titles" at Playnite's default): hidden until a trigger shows it.
+    fn off_by_setting(&self, el: N<'a, 'i>, scope: N<'a, 'i>) -> Option<N<'a, 'i>> {
+        let off = |a: &N<'a, 'i>| matches!(self.t.get(*a, "Visibility"), Some(Value::Setting(s)) if hides(self.t.settings.value(&s)));
+        el.ancestors().filter(|a| a.is_element() && !tag(*a).contains('.')).take_while(|a| *a != scope).find(off)
+    }
+
+    /// The text (or a panel around it) is collapsed for a game that has a cover: its Visibility
+    /// follows `CoverImage`, directly or through another element's `IsVisible`, and its
+    /// converter hides it when there is one. Lodestar writes the name on its own placeholder for
+    /// games without a cover, so such a name isn't the item's caption.
+    fn only_without_cover(&self, el: N<'a, 'i>, scope: N<'a, 'i>) -> bool {
+        std::iter::once(el)
+            .chain(el.ancestors())
+            .take_while(|a| *a != scope)
+            .filter(|a| a.is_element())
+            .any(|a| self.shown_with_cover(a, scope, PROXY_HOPS) == Some(false))
+    }
+
+    /// Whether an element whose Visibility follows the game's cover shows for a game that has
+    /// one. None: its Visibility doesn't follow the cover (within `hops` proxies, so elements
+    /// that point at each other end).
+    fn shown_with_cover(&self, el: N<'a, 'i>, scope: N<'a, 'i>, hops: u8) -> Option<bool> {
+        let Some(Value::Binding(b)) = self.t.local(el, "Visibility") else { return None };
+        if b.contains("CoverImage") {
+            return Some(!hides(plugin_text(&b, &SVal::Text("cover.jpg".into()))));
+        }
+        let proxy = b.split(',').find_map(|p| p.trim().strip_prefix("ElementName=")).map(str::trim)?;
+        if !b.contains("IsVisible") || hops == 0 {
+            return None;
+        }
+        let proxy_shown = self.shown_with_cover(self.t.named(scope, proxy)?, scope, hops - 1)?;
+        Some(!hides(plugin_text(&b, &SVal::Bool(proxy_shown))))
+    }
+
     /// Whether two elements sit in the same cell of their nearest common Grid (so one is drawn
     /// over the other) rather than stacked.
     pub(super) fn same_cell(&self, a: N<'a, 'i>, b: N<'a, 'i>) -> bool {
@@ -458,13 +514,17 @@ impl<'a, 'i> X<'a, 'i> {
         cell(ca) == cell(cb) || span(ca) > 1 || span(cb) > 1
     }
 
-    /// A trigger on Playnite's "show game titles" setting being on.
-    pub(super) fn shows_titles(&self, trig: N<'a, 'i>) -> bool {
-        let on = |n: N| {
-            attr(n, "Binding").is_some_and(|b| matches!(markup(b), Markup::Settings(s) if s.contains("ShowGameTitles")))
-                && attr(n, "Value").is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))
+    /// A trigger on Playnite's "show game titles" / "show names under covers" setting that
+    /// holds with the theme's settings (titles as the player chose them, off by default; names
+    /// on, Lodestar's switch shows or hides them).
+    fn shows_titles(&self, trig: N<'a, 'i>) -> bool {
+        let on_titles = |n: N| {
+            attr(n, "Binding").is_some_and(|b| {
+                matches!(markup(b), Markup::Settings(s) if s.contains("ShowGameTitles") || s.contains("ShowNamesUnderCovers"))
+            })
         };
-        on(trig) || prop_elem(trig, "Conditions").is_some_and(|c| content(c).any(on))
+        let names_titles = on_titles(trig) || prop_elem(trig, "Conditions").is_some_and(|c| content(c).any(on_titles));
+        names_titles && self.t.static_trigger(trig, trig) == Some(true)
     }
 
     pub(super) fn trigger_kind(&self, trig: N<'a, 'i>, focus_props: &[&str]) -> TriggerKind {
@@ -489,7 +549,9 @@ impl<'a, 'i> X<'a, 'i> {
         TriggerKind::None
     }
 
-    /// A DataTrigger / MultiDataTrigger condition `{Binding path} = value`.
+    /// A DataTrigger / MultiDataTrigger on `{Binding path} = value`. A MultiDataTrigger also
+    /// needs its other conditions: one the theme or Playnite's defaults make false (the
+    /// "darken games that aren't installed" setting, off by default) means it never fires.
     pub(super) fn condition_is(&self, trig: N<'a, 'i>, path: &str, value: &str) -> bool {
         let check = |n: N| {
             let binds = attr(n, "Binding").is_some_and(|b| match markup(b) {
@@ -503,6 +565,20 @@ impl<'a, 'i> X<'a, 'i> {
         if check(trig) {
             return true;
         }
-        prop_elem(trig, "Conditions").is_some_and(|c| content(c).any(check))
+        let Some(conditions) = prop_elem(trig, "Conditions") else {
+            return false;
+        };
+        let conditions: Vec<N> = content(conditions).filter(|c| tag(*c) == "Condition").collect();
+        conditions.iter().any(|c| check(*c))
+            && conditions.iter().all(|c| check(*c) || self.t.static_condition(trig, *c) != Some(false))
     }
+}
+
+/// How many elements a Visibility may follow through `ElementName=…, Path=IsVisible` to reach
+/// the cover.
+const PROXY_HOPS: u8 = 3;
+
+/// A Visibility (or the boolean bound to one) that leaves the element out.
+fn hides(v: Option<String>) -> bool {
+    v.is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "false" | "collapsed" | "hidden"))
 }

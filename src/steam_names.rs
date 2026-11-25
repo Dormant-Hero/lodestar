@@ -7,10 +7,21 @@
 //!     `IStoreService/GetAppList` needs a key, so only the apps that are needed are asked for.
 //!     Known names are kept; apps the store doesn't know are asked again after a week.
 //!   * with the user's own Steam Web API key: every game the account owns
-//!     (`IPlayerService/GetOwnedGames`, `include_appinfo=1`, `include_played_free_games=1`),
-//!     also games never started on this PC. For the key owner's own account Steam answers even
-//!     when the profile is private; for another account its "Game details" must be public.
-//!     Refreshed at most once a day, or at once when the key changes.
+//!     (`IPlayerService/GetOwnedGames`), also games never started on this PC. For the key
+//!     owner's own account Steam answers even when the profile is private; for another account
+//!     its "Game details" must be public. Refreshed at most once a day, or at once when the key
+//!     changes. The list also tells which games played here left the library (an ended
+//!     subscription, see steam_owned.rs), so what it counts as owned matters:
+//!       - `include_appinfo=1`: names, for games Steam's own files don't name.
+//!       - `include_played_free_games=1`: free games are left out unless this is set, and then
+//!         only the played ones come; a played free-to-play game is owned like any other.
+//!       - `skip_unvetted_apps=0`: Steam leaves out some owned games by default (profile-limited
+//!         ones), which would then look as if they had left the library.
+//!       - not `include_free_sub`: the free licence package holds free apps never played,
+//!         which would all be listed as games. Free games without play time aren't marked
+//!         instead (steam_owned.rs).
+//!       - not `include_family_licenses`: a Steam Family member's games would be listed as the
+//!         account's own. They are marked, and Steam shows their Install button.
 //!
 //! The key goes only into the request URL; error texts (transport errors quote the URL) are
 //! passed through `config::redact` before they are logged or shown. Screenshot runs
@@ -129,7 +140,7 @@ pub fn parse_get_items(v: &serde_json::Value, asked: &[u32], now: i64) -> Vec<(u
 
 pub fn owned_url(key: &str, account: u32) -> String {
     format!(
-        "{API}/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=1&include_played_free_games=1&format=json",
+        "{API}/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=1&include_played_free_games=1&skip_unvetted_apps=0&format=json",
         net::encode(key),
         STEAMID64_BASE + account as u64
     )

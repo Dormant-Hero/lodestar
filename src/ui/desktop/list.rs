@@ -171,6 +171,7 @@ impl DesktopUi {
 
         let running = st.running_game();
         let sel_pos = self.sel_pos;
+        let row_look = super::style::RowLook::of(&st.desktop_theme.file.desktop, &pal);
         let scroll_to = std::mem::take(&mut self.scroll_to_sel);
         let stripe = self.fills.stripe;
         let b = Blocks::new(spans, items.len(), 1, ROW_H, GROUP_H, (0.0, 0.0));
@@ -196,7 +197,7 @@ impl DesktopUi {
                 let selected = sel_pos == Some(pos) || self.in_multi(g.id);
                 let p = ui.painter();
                 if selected {
-                    p.rect_filled(rect, 0.0, pal.sel_bg);
+                    row_look.paint_selected(p, rect, 0);
                     if self.multi.len() > 1 && sel_pos == Some(pos) {
                         // The focused game of a multi-selection (shown in the details).
                         p.rect_stroke(
@@ -296,7 +297,7 @@ impl DesktopUi {
         let mut acts = vec![];
         let n_multi = if in_multi { self.multi.len() } else { 0 };
         let cur = self.coll_sel;
-        resp.context_menu(|ui| {
+        self.game_menu_popup(resp, pos).show(|ui| {
             if n_multi > 1 {
                 let ids = self.multi_ids_in(&st.library, view);
                 multi_menu(ui, &st.library, &ids, cur, &pal, &mut acts)
@@ -315,6 +316,7 @@ impl DesktopUi {
         let pal = self.pal;
         let running = st.running_game();
         let sel_pos = self.sel_pos;
+        let row_look = super::style::RowLook::of(&st.desktop_theme.file.desktop, &pal);
         let scroll_to = std::mem::take(&mut self.scroll_to_sel);
         let b = Blocks::new(spans, items.len(), 1, COMPACT_ROW_H, COMPACT_GROUP_H, (6.0, 6.0));
         let content_h = b.total_h;
@@ -340,7 +342,7 @@ impl DesktopUi {
                 let p = ui.painter();
                 let inner = rect.shrink2(vec2(6.0, 1.0));
                 if selected {
-                    p.rect_filled(inner, 4.0, pal.sel_bg);
+                    row_look.paint_selected(p, inner, 4);
                     if self.multi.len() > 1 && sel_pos == Some(pos) {
                         // The focused game of a multi-selection (shown in the details).
                         p.rect_stroke(inner, 4.0, egui::Stroke::new(1.5, pal.selection), egui::StrokeKind::Inside);
@@ -350,13 +352,7 @@ impl DesktopUi {
                 }
                 let ir = Rect::from_min_size(pos2(inner.left() + 6.0, inner.center().y - 11.0), vec2(22.0, 22.0));
                 paint_small_icon(p, &mut st.images, g, ir, &pal, !g.installed);
-                let fg = if !g.installed {
-                    pal.dim
-                } else if selected {
-                    pal.text
-                } else {
-                    mix(pal.text, pal.dim, 0.15)
-                };
+                let fg = row_look.text_for(selected, g.installed);
                 // Consoles get their device icon at the right (PC games, the usual case,
                 // stay unmarked).
                 let console = g.emu.as_ref().and_then(|e| crate::emulation::platforms::by_id(&e.platform));
@@ -404,7 +400,7 @@ impl DesktopUi {
                 let mut acts = vec![];
                 let n_multi = if in_multi { self.multi.len() } else { 0 };
                 let cur = self.coll_sel;
-                resp.context_menu(|ui| {
+                self.game_menu_popup(&resp, pos).show(|ui| {
                     if n_multi > 1 {
                         let ids = self.multi_ids_in(&st.library, view);
                         multi_menu(ui, &st.library, &ids, cur, &pal, &mut acts)

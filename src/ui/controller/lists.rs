@@ -99,7 +99,7 @@ pub(super) fn jump_letter(games: &[Game], list: &[usize], sel: usize, forward: b
 
 impl ControllerUi {
     pub(super) fn refresh_collections(&mut self, lib: &Library) {
-        let memo = (lib.generation, self.show_hidden);
+        let memo = (lib.generation, self.show_hidden, hash_of(&self.categories));
         if self.colls_gen == Some(memo) {
             return;
         }
@@ -108,7 +108,7 @@ impl ControllerUi {
         let mut used: HashSet<GameId> = HashSet::new();
         self.colls.clear();
         self.colls_games.clear();
-        let mut colls = lib.collections();
+        let mut colls = lib.chosen_collections(&self.categories);
         if self.show_hidden && lib.games.iter().any(|g| g.hidden) {
             colls.push(hidden_collection());
         }
@@ -138,12 +138,7 @@ impl ControllerUi {
                     art.cover = by_recent.iter().find_map(|&j| lib.games[j].art.cover.clone());
                 }
             }
-            let name = match &c.kind {
-                _ if is_hidden_collection(&c) => c.name.clone(),
-                CollectionKind::Tag(t) => format!("#{t}"),
-                CollectionKind::Platform(id) => console_label(id),
-                _ => c.name.clone(),
-            };
+            let name = card_name(&c);
             self.colls.push(CollectionItem { count: games.len(), name, collection: c, art });
             self.colls_games.push(games);
         }
@@ -186,6 +181,24 @@ impl ControllerUi {
         let at = tabs.iter().position(|&i| i == cur)?;
         let n = tabs.len();
         Some(tabs[if forward { (at + 1) % n } else { (at + n - 1) % n }])
+    }
+
+    /// The categories the player added that are listed (indices into `colls`): a theme's home
+    /// rows show them beside the rows it picked itself (`pick_rows`). PC counts as added once
+    /// the player hid a store, also where it is listed anyway (a library with emulated games):
+    /// hiding the stores is how a player asks for PC in their place.
+    pub(super) fn added_categories(&self) -> Vec<usize> {
+        let c = &self.categories;
+        // Hiding Emulators, RomM or streamed games isn't asking for PC games instead.
+        let stores_hidden = c.hidden.iter().any(|k| {
+            Source::from_key(k).is_some_and(|s| !matches!(s, Source::Emulator | Source::Romm | Source::Moonlight))
+        });
+        (0..self.colls.len())
+            .filter(|&i| {
+                let coll = &self.colls[i].collection;
+                c.added.contains(&coll.key()) || (stores_hidden && coll.kind == CollectionKind::Pc)
+            })
+            .collect()
     }
 
     pub(super) fn cur_key(&self) -> Option<String> {
@@ -254,6 +267,17 @@ impl ControllerUi {
             self.list_id = new_id;
         }
         self.list_key = Some(key);
+    }
+}
+
+/// A collection's name on its card and in Settings → Categories: tags with a "#", consoles
+/// without their maker.
+pub(super) fn card_name(c: &Collection) -> String {
+    match &c.kind {
+        _ if is_hidden_collection(c) => c.name.clone(),
+        CollectionKind::Tag(t) => format!("#{t}"),
+        CollectionKind::Platform(id) => console_label(id),
+        _ => c.name.clone(),
     }
 }
 

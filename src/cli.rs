@@ -386,7 +386,8 @@ fn theme_options(paths: &Paths, key: &str, set: Option<&str>) -> i32 {
             if o.section.is_empty() { String::new() } else { format!(" — {}", o.section) }
         );
     }
-    println!("{} more only change parts Lodestar draws its own way", spec.others());
+    let others = spec.others();
+    println!("{others} more only change{} parts Lodestar draws its own way", if others == 1 { "s" } else { "" });
     0
 }
 
@@ -401,7 +402,9 @@ fn scan_and_report(paths: &Paths, config: &Config) -> i32 {
         }
     }
     println!("{} duplicates dropped, total {} in {:?}", report.duplicates_dropped, report.games.len(), report.elapsed);
-    match db::Db::open(&paths.db_file()).and_then(|mut d| d.merge_scan(&report.games, &report.ok_sources)) {
+    match db::Db::open(&paths.db_file())
+        .and_then(|mut d| d.merge_scan_with_shortcuts(&report.games, &report.ok_sources, &report.dropped_shortcuts))
+    {
         Ok(stats) => println!("library: {stats:?}"),
         Err(e) => eprintln!("library update failed: {e:#}"),
     }
@@ -495,7 +498,7 @@ fn parse_size(s: &str) -> Option<[f32; 2]> {
 }
 
 /// `--inject` inputs; `right*20` is the same input 20 times (a held direction).
-fn parse_navs(s: &str) -> Vec<Nav> {
+pub(crate) fn parse_navs(s: &str) -> Vec<Nav> {
     s.split(',')
         .flat_map(|t| {
             let (t, n) = match t.split_once('*') {

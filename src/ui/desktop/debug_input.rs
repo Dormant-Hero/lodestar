@@ -1,5 +1,14 @@
 //! Testing hooks for scripted screenshots: injected keys, text and pointer events
 //! (`LODESTAR_DESKTOP_KEYS`) and the dialogs / pages opened on start (`LODESTAR_DESKTOP_OPEN`).
+//!
+//! Controller presses in desktop mode: `pad:<name>` (the `--inject` names, `pad:down*5` five
+//! times) go through the pad's rule (input/gate.rs `desktop_pad`) in a made-up situation:
+//! `game:up` / `game:down` (a game up; down also starts the settle after a game), `focus:off` /
+//! `focus:on` (default on; egui is told the window has the focus or not, too), `seen:on` /
+//! `seen:off` (a look for running games finished just now and saw a game, or nothing; the first
+//! of these tokens stands for a clean look then, and after `game:down` the pad waits for the
+//! next `seen:`, as it waits for a new look in a real run). `wait:<ms>` pauses the keys for that
+//! long.
 
 use super::*;
 
@@ -160,8 +169,12 @@ impl DesktopUi {
 
     /// Send the next `LODESTAR_DESKTOP_KEYS` key, one every third frame once the window has
     /// settled.
-    pub(super) fn debug_next_key(&mut self, ctx: &egui::Context) {
+    pub(super) fn debug_next_key(&mut self, ctx: &egui::Context, st: &mut AppState) {
         if self.debug_keys.is_empty() || self.frame <= 25 || !self.frame.is_multiple_of(3) {
+            return;
+        }
+        // Keys after "open:" are for what it opens.
+        if self.debug_open_now || self.pad_script_waits(ctx) {
             return;
         }
         let k = self.debug_keys.remove(0);
@@ -172,8 +185,15 @@ impl DesktopUi {
                 self.debug_open = Some(what.to_string());
                 self.debug_open_now = true;
             }
+            None if self.pad_script_key(st, &k) => ctx.request_repaint(),
             None => inject_debug_key(ctx, &k),
         }
+    }
+
+    /// The screenshot waits for the keys (`*N` and `wait:` make more frames than one per key)
+    /// and for the pad presses they made.
+    pub(crate) fn debug_keys_pending(&self) -> bool {
+        !self.debug_keys.is_empty() || self.pad_pending()
     }
 
     /// Per frame: cancel a bulk download at `LODESTAR_DESKTOP_BULK_CANCEL_AT`, and open the

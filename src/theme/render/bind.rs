@@ -487,7 +487,10 @@ impl<'a> Binder<'a> {
         }
         let mut s = String::with_capacity(tpl.len() + 16);
         self.resolve_into(tpl, false, &mut s, true);
+        // A theme made before a source was renamed has its picture under the old name.
+        let renamed = self.renamed_source(tpl).map(|src| s.replace(src.display(), src.former_name().unwrap_or("")));
         out.push(s);
+        out.extend(renamed);
         // A theme's own console picture that is missing falls back to Lodestar's.
         if self.collection_art.is_some() && (tpl.contains("{collection.art.") || tpl.contains("{game.consoleart.")) {
             let mut s = String::with_capacity(tpl.len() + 16);
@@ -496,6 +499,17 @@ impl<'a> Binder<'a> {
                 out.push(s);
             }
         }
+    }
+
+    /// The renamed source `tpl` prints by name (`{game.source}`, a source's `{collection.name}`).
+    fn renamed_source(&self, tpl: &str) -> Option<Source> {
+        let game = self.game.filter(|g| g.emu.is_none() && tpl.contains("{game.source}")).map(|g| g.source);
+        let coll =
+            self.collection.filter(|_| tpl.contains("{collection.name}")).and_then(|c| match c.collection.kind {
+                crate::library::CollectionKind::Source(s) => Some(s),
+                _ => None,
+            });
+        game.into_iter().chain(coll).find(|s| s.former_name().is_some())
     }
 
     /// The part of the picture an image element shows ("focus"): the game's background
@@ -597,8 +611,8 @@ impl<'a> Binder<'a> {
         match (op, nums) {
             ("==", (Some(a), Some(b))) => a == b,
             ("!=", (Some(a), Some(b))) => a != b,
-            ("==", _) => l.eq_ignore_ascii_case(&r),
-            ("!=", _) => !l.eq_ignore_ascii_case(&r),
+            ("==", _) => same_text(&l, &r),
+            ("!=", _) => !same_text(&l, &r),
             (">=", (Some(a), Some(b))) => a >= b,
             ("<=", (Some(a), Some(b))) => a <= b,
             (">", (Some(a), Some(b))) => a > b,
@@ -610,6 +624,19 @@ impl<'a> Binder<'a> {
     fn truthy(&self, t: &str) -> bool {
         !self.resolve(t.trim(), true).trim().is_empty()
     }
+}
+
+/// Text comparison of conditions: equal ignoring case, and a renamed source's old name equals
+/// its new one (a theme's `{game.source} == Desktop` still matches).
+fn same_text(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b)
+        || Source::ALL.into_iter().any(|s| {
+            s.former_name().is_some_and(|old| {
+                let new = s.display();
+                (a.eq_ignore_ascii_case(new) && b.eq_ignore_ascii_case(old))
+                    || (a.eq_ignore_ascii_case(old) && b.eq_ignore_ascii_case(new))
+            })
+        })
 }
 
 /// Stable machine key of a completion status (`{game.completionkey}`, image paths, `visible_if`).
@@ -972,6 +999,39 @@ mod tests {
         assert_eq!(b(&g), "1");
         g.meta.players = Some("1-4".into());
         assert_eq!(b(&g), "1-4");
+    }
+
+    /// The "Desktop" source is shown as "Shortcuts" now; a theme written for the old name keeps
+    /// its `Desktop.png` logo and its `== Desktop` rules.
+    #[test]
+    fn a_renamed_source_still_finds_what_its_old_name_found() {
+        let g = Game { source: Source::Desktop, ..Game::blank("Doom") };
+        let b = Binder::default().with_game(Some(&g));
+        assert_eq!(b.resolve("{game.source}", false), "Shortcuts");
+        let mut out = vec![];
+        b.path_candidates("logos/{game.source}.png", &mut out);
+        assert_eq!(out, ["logos/Shortcuts.png", "logos/Desktop.png"]);
+        assert!(b.condition("{game.source} == Desktop") && b.condition("{game.source} == shortcuts"));
+        assert!(!b.condition("{game.source} != Desktop"));
+        assert_eq!(b.resolve("{game.sourcekey}", false), "desktop", "the key never changes");
+        let item = CollectionItem {
+            collection: Collection {
+                kind: crate::library::CollectionKind::Source(Source::Desktop),
+                name: "Shortcuts".into(),
+            },
+            name: "Shortcuts".into(),
+            count: 1,
+            art: Art::default(),
+        };
+        let mut out = vec![];
+        Binder::default().with_collection(Some(&item)).path_candidates("art/{collection.name}.png", &mut out);
+        assert_eq!(out, ["art/Shortcuts.png", "art/Desktop.png"]);
+        // Other sources get no second guess.
+        let steam = Game { source: Source::Steam, ..Game::blank("Doom") };
+        let mut out = vec![];
+        Binder::default().with_game(Some(&steam)).path_candidates("logos/{game.source}.png", &mut out);
+        assert_eq!(out, ["logos/Steam.png"]);
+        assert!(!Binder::default().with_game(Some(&steam)).condition("{game.source} == Desktop"));
     }
 
     #[test]

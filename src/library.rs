@@ -8,6 +8,8 @@ use crate::model::*;
 use crate::search;
 use std::collections::HashMap;
 
+mod categories;
+pub use categories::Category;
 pub mod user;
 pub use user::UserCollection;
 
@@ -30,10 +32,18 @@ pub struct Library {
     /// Bumped when `achievements` changes (not `generation`: only lists sorted by achievements
     /// are sorted again, see `view_generation`).
     pub achievements_generation: u64,
+    /// The account's owned Steam games (None: no list, nothing is marked; see steam_owned.rs).
+    steam_owned: Option<crate::steam_owned::OwnedSet>,
 }
 
 fn named_platform(g: &Game) -> Option<&'static str> {
-    g.platform.as_deref().and_then(crate::emulation::platforms::by_name).map(|p| p.id)
+    g.platform.as_deref().and_then(platform_named).map(|p| p.id)
+}
+
+/// The platform a game's platform text names. A bare "PC" names none of the PC platforms:
+/// stores say it of Linux and Windows games alike.
+fn platform_named(name: &str) -> Option<&'static crate::emulation::platforms::Platform> {
+    if name.trim().eq_ignore_ascii_case("pc") { None } else { crate::emulation::platforms::by_name(name) }
 }
 
 impl Library {
@@ -63,6 +73,19 @@ impl Library {
     pub fn set_achievement_counts(&mut self, counts: std::sync::Arc<HashMap<GameId, (u32, u32)>>) {
         self.achievements = counts;
         self.achievements_generation += 1;
+    }
+
+    /// A new owned-games list. Bumps the generation when it changes what is marked.
+    pub fn set_steam_owned(&mut self, owned: Option<crate::steam_owned::OwnedSet>) {
+        if self.steam_owned != owned {
+            self.steam_owned = owned;
+            self.generation += 1;
+        }
+    }
+
+    /// `g` played here but is not in the account's Steam library any more (steam_owned.rs).
+    pub fn not_in_steam_library(&self, g: &Game) -> bool {
+        crate::steam_owned::not_in_library(g, self.steam_owned.as_deref())
     }
 
     /// What a list sorted by `sort` depends on: the generation, and for Sort → Achievements also
@@ -182,46 +205,10 @@ impl Library {
         }
     }
 
-    /// Collections for controller mode, in display order. Empty collections are omitted, and
-    /// stores with fewer than [`MIN_STORE_GAMES`] games (see [`CollectionKind::Pc`]).
+    /// Collections for controller mode, in display order, as listed when the player chose
+    /// nothing (see [`Library::categories`]).
     pub fn collections(&self) -> Vec<Collection> {
-        let mut out = vec![];
-        let visible = |g: &&Game| !g.hidden;
-        let mut push = |kind: CollectionKind, name: String| {
-            let c = Collection { kind, name };
-            if (0..self.games.len()).any(|i| visible(&&self.games[i]) && self.in_collection(&c, i)) {
-                out.push(c);
-            }
-        };
-        push(CollectionKind::Recent, "Continue Playing".into());
-        push(CollectionKind::Favorites, "Favourites".into());
-        push(CollectionKind::Installed, "Installed".into());
-        push(CollectionKind::Controller, "Controller-friendly".into());
-        push(CollectionKind::All, "All Games".into());
-        // PC games apart from emulated ones (when everything is PC, it would only repeat All).
-        let visible_games = || self.games.iter().filter(visible);
-        if visible_games().any(is_pc_game) && visible_games().any(|g| !is_pc_game(g)) {
-            push(CollectionKind::Pc, "PC Games".into());
-        }
-        for u in &self.user {
-            push(CollectionKind::User(u.clone()), u.name.clone());
-        }
-        for s in self.sources_present() {
-            // A store with only a game or two isn't a collection of its own (its games are in
-            // PC Games and All Games): a row of one-game stores was mostly noise.
-            let n = visible_games().filter(|g| g.source == s).count();
-            if n >= MIN_STORE_GAMES || matches!(s, Source::Emulator | Source::Romm) {
-                push(CollectionKind::Source(s), s.display().into());
-            }
-        }
-        for p in self.platforms_present() {
-            let name = platform_label(&p);
-            push(CollectionKind::Platform(p), name);
-        }
-        for t in self.all_tags() {
-            push(CollectionKind::Tag(t.clone()), t);
-        }
-        out
+        self.categories().into_iter().filter(|c| c.default).map(|c| c.collection).collect()
     }
 
     /// Indices of games in a collection (respecting hidden), sorted for that collection.
@@ -449,13 +436,22 @@ pub fn is_pc_game(g: &Game) -> bool {
         && g.platform.as_deref() != Some(crate::cloud::PLATFORM)
 }
 
+/// A game of the PC category (desktop PLATFORMS → PC, controller "PC Games"): a PC game whose
+/// platform, when set, is a PC one (Linux, Windows, macOS, PC, a browser), not a console name.
+pub fn in_pc_category(g: &Game) -> bool {
+    is_pc_game(g)
+        && g.platform
+            .as_deref()
+            .is_none_or(|p| crate::ui::platform_icons::is_pc_label(crate::emulation::platforms::display_name(p)))
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CollectionKind {
     All,
     Installed,
     /// Games with full or partial controller support (Steam data or the user's setting).
     Controller,
-    /// Every PC game (not emulated, not streamed), whatever store it came from: one home for a
+    /// Every PC game ([`in_pc_category`]), whatever store it came from: one home for a
     /// theme's "pc" art instead of a dozen store collections all borrowing it.
     Pc,
     Favorites,
@@ -481,7 +477,7 @@ impl Collection {
             CollectionKind::All => true,
             CollectionKind::Installed => g.installed,
             CollectionKind::Controller => g.controller().is_some_and(|c| c.is_playable()),
-            CollectionKind::Pc => is_pc_game(g),
+            CollectionKind::Pc => in_pc_category(g),
             CollectionKind::Favorites => g.favorite,
             // `last_played` is already None for games that don't count as played (see
             // `db::trusted_last_played`).
@@ -489,8 +485,7 @@ impl Collection {
             CollectionKind::Source(s) => g.source == *s,
             CollectionKind::Tag(t) => has_tag(g, t),
             CollectionKind::Platform(id) => {
-                g.emu.as_ref().is_some_and(|e| e.platform == *id)
-                    || g.platform.as_deref().and_then(crate::emulation::platforms::by_name).is_some_and(|p| p.id == id)
+                g.emu.as_ref().is_some_and(|e| e.platform == *id) || named_platform(g) == Some(id.as_str())
             }
             CollectionKind::User(u) => u.contains(g),
         }

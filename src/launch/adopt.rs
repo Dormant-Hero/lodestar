@@ -225,6 +225,16 @@ impl Launcher {
         self.others_look.is_some_and(|(at, others)| !others && at.elapsed() < fresh)
     }
 
+    /// When the last finished scan for running games started (None before the first one).
+    pub fn others_looked_at(&self) -> Option<std::time::Instant> {
+        self.others_look.map(|(at, _)| at)
+    }
+
+    /// A scan for running games is under way.
+    pub fn looking(&self) -> bool {
+        self.running_scan.is_some()
+    }
+
     /// The last scan for running games saw something that looks like a game (see
     /// `others_clear`).
     pub fn others_seen(&self) -> bool {

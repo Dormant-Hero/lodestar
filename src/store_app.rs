@@ -4,7 +4,10 @@
 //!
 //! CONTRACT (desktop + controller UIs):
 //!   st.can_install(id) -> bool        not installed and its store / add-on can install it
-//!   st.install_game(id)               Steam: steam://install/<id>; Epic/GOG/Amazon: Heroic (or the CLI);
+//!   st.install_label(&Game)           what the Install button says ("Install", "Download" for RomM,
+//!                                     "Open in Steam" for a game no longer in the Steam library)
+//!   st.install_game(id)               Steam: steam://install/<id> (a game no longer in the account's
+//!                                     Steam library: its page in Steam); Epic/GOG/Amazon: Heroic (or the CLI);
 //!                                     Battle.net/EA/Ubisoft…: open the launcher in its prefix; add-on: `install`
 //!   st.can_uninstall(id) -> bool
 //!   st.uninstall_game(id)             same, never deletes files itself
@@ -13,6 +16,7 @@
 //!                                     (toast + rescan). Cheap (one uncontended lock).
 //! All of these respect AppState::no_launch (screenshot runs never open anything). Pure helpers:
 //!   install_plan(&Game) / uninstall_plan(&Game) -> Option<Plan>   what the buttons would do
+//!   install_plan_in(&Library, &Game)  install_plan, with the owned-games list (steam_owned.rs)
 //!   store_page_for(&Game, &StoreUrls)  store-page lookup
 //!   invalidate_store_urls()           scanners call it; the next store_page() re-reads the caches
 //!
@@ -102,6 +106,20 @@ pub fn install_plan(g: &Game) -> Option<Plan> {
         return None;
     }
     plan(g, Verb::Install)
+}
+
+/// What Install does for `g` in `lib`: a Steam game that is no longer in the account's Steam
+/// library opens in Steam (installing it would only get "No licenses" from Steam), others as
+/// [`install_plan`].
+pub fn install_plan_in(lib: &crate::library::Library, g: &Game) -> Option<Plan> {
+    if lib.not_in_steam_library(g) {
+        let appid = g.steam_appid()?;
+        return Some(Plan {
+            action: StoreAction::Steam(crate::steam_owned::steam_page_uri(appid)),
+            message: format!("Opening {} in Steam", g.display_name()),
+        });
+    }
+    install_plan(g)
 }
 
 /// What Uninstall does for `g`, if anything (pure; no file system access).
@@ -307,8 +325,19 @@ impl AppState {
             if g.source == Source::Romm {
                 return self.romm_can_download(g);
             }
-            install_plan(g).is_some() && self.addon_ready(g)
+            install_plan_in(&self.library, g).is_some() && self.addon_ready(g)
         })
+    }
+
+    /// The Install button's word for `g` (see the CONTRACT).
+    pub fn install_label(&self, g: &Game) -> &'static str {
+        if g.source == Source::Romm {
+            "Download"
+        } else if self.library.not_in_steam_library(g) {
+            "Open in Steam"
+        } else {
+            "Install"
+        }
     }
 
     /// An add-on game's add-on is installed, valid and switched on (others: always true). Keeps
@@ -331,7 +360,7 @@ impl AppState {
             self.romm_download(id);
             return;
         }
-        match install_plan(g) {
+        match install_plan_in(&self.library, g) {
             Some(p) => self.run_store_plan(p),
             None => {
                 let msg = format!("{} can't be installed from Lodestar", g.display_name());
@@ -614,6 +643,21 @@ mod tests {
         let shortcut = game(Source::Steam, "shortcut:123", true, None);
         assert_eq!(uninstall_plan(&shortcut), None, "non-Steam shortcuts aren't Steam's to uninstall");
         assert_eq!(store_page_for(&shortcut, &StoreUrls::new()), None);
+    }
+
+    #[test]
+    fn install_of_a_game_no_longer_in_the_steam_library_opens_it_in_steam() {
+        let mut heat = game(Source::Steam, "1222680", false, Some(LaunchSpec::Steam { appid: 1_222_680 }));
+        heat.playtime_secs = 19 * 3600;
+        let mut lib = crate::library::Library::new(vec![heat.clone()]);
+        let install = Some(StoreAction::Steam("steam://install/1222680".into()));
+        assert_eq!(action(install_plan_in(&lib, &heat)), install, "no owned-games list: Install as always");
+        lib.set_steam_owned(Some(std::sync::Arc::new([70].into())));
+        let open = Some(StoreAction::Steam("steam://nav/games/details/1222680".into()));
+        assert_eq!(action(install_plan_in(&lib, &heat)), open);
+        // Owned again: Install again.
+        lib.set_steam_owned(Some(std::sync::Arc::new([70, 1_222_680].into())));
+        assert_eq!(action(install_plan_in(&lib, &heat)), install);
     }
 
     #[test]

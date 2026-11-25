@@ -22,11 +22,18 @@ pub(super) fn is_flow(n: &LNode) -> bool {
     }
 }
 
-/// It holds a per-game text that can push what follows (wrapping, or not the last part).
+/// It holds a per-game part that can push what follows: a text (wrapping, or not the last part)
+/// or a part shown only for some games.
 pub(super) fn varies(n: &LNode) -> bool {
     let visible: Vec<&LNode> = n.children.iter().filter(|c| c.vis == Vis::Visible).collect();
     if visible.len() < 2 {
         return false;
+    }
+    // A part shown only for some games (Play for installed ones, Install for the others)
+    // leaves its place to what follows.
+    if visible[..visible.len() - 1].iter().any(|c| c.data.cond.visible_if.is_some() || c.data.cond.hidden_if.is_some())
+    {
+        return true;
     }
     let mut found = false;
     for (i, c) in visible.iter().enumerate() {
@@ -40,6 +47,25 @@ pub(super) fn varies(n: &LNode) -> bool {
         });
     }
     found
+}
+
+/// A button whose template paints a band narrower than its box (`Face::band`): the band's height,
+/// the rest of the box kept as margin above and below so the flow doesn't move.
+fn narrow_to_band(t: &mut Table, n: &LNode, (top, h): (f32, f32)) {
+    let (top, h) = (top * n.scale, h * n.scale);
+    if h >= n.rect.h {
+        return;
+    }
+    let mut m = [0.0f32; 4];
+    if let Some(a) = t.get("margin").and_then(T::as_array) {
+        for (i, v) in a.iter().take(4).enumerate() {
+            m[i] = v.as_float().unwrap_or(0.0) as f32;
+        }
+    }
+    m[1] += top / H;
+    m[3] += (n.rect.h - top - h).max(0.0) / H;
+    t.insert("margin".into(), T::Array(m.iter().map(|v| T::Float(round(*v) as f64)).collect()));
+    set_pair(t, "size", [n.rect.w / W, h / H]);
 }
 
 pub(super) fn set_margin(t: &mut Table, n: &LNode) {
@@ -174,7 +200,9 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 t
             }
             Kind::Prompt(b, color) => prompt_table(b, *color, r),
-            Kind::Clock(_) | Kind::List | Kind::Help(_) | Kind::Video | Kind::Tabs(_) => return None,
+            Kind::Clock(_) | Kind::List | Kind::Mirror(_) | Kind::Help { .. } | Kind::Video(_) | Kind::Tabs(_) => {
+                return None;
+            }
             Kind::Drop(what) => {
                 // Left out of the flow (counted like anywhere else).
                 self.stats.drop(what, c.rect.intersect(&cx.clip).area());
@@ -192,7 +220,10 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 }
                 t
             }
+            // One look per kind of game needs two backgrounds in place: not a flowing part.
+            Kind::Button(bt) if bt.installed.is_some() => return None,
             Kind::Button(bt) => {
+                self.stats.play_button |= bt.context;
                 let mut t = Table::new();
                 t.insert("type".into(), T::String("stack".into()));
                 t.insert("align".into(), T::String("center".into()));
@@ -289,6 +320,9 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         };
         if !matches!(c.data.kind, Kind::None) || c.children.is_empty() {
             set_margin(&mut t, c);
+        }
+        if let Kind::Button(ButtonOut { band: Some(band), .. }) = &c.data.kind {
+            narrow_to_band(&mut t, c, *band);
         }
         let idx = self.names;
         self.names += 1;

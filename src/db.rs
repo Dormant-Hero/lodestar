@@ -271,7 +271,8 @@ impl Db {
     ///     a collection, or a "Keep" — not fetched metadata / artwork. A missing game that loses
     ///     its user data is removed by the next scan. A game seen again stops being missing.
     ///
-    /// Sources not listed are left untouched.
+    /// Sources not listed are left untouched. A scan's dropped shortcuts go through
+    /// [`Db::merge_scan_with_shortcuts`].
     ///
     /// Data safety rules:
     ///   * a source that succeeded but returned *no* games (e.g. `games.json` caught mid-rewrite),
@@ -283,6 +284,21 @@ impl Db {
     ///     favourite/tags/playtime/overrides follow it — only when the match is unambiguous;
     ///   * a custom name keeps deciding the sort order.
     pub fn merge_scan(&mut self, scanned: &[ScannedGame], scanned_sources: &[Source]) -> Result<MergeStats> {
+        self.merge_scan_with_shortcuts(scanned, scanned_sources, &[])
+    }
+
+    /// [`Db::merge_scan`], also folding away the rows of shortcuts the scan dropped as duplicates
+    /// of another library's game (`ScanReport::dropped_shortcuts`): a `.desktop` file or Steam
+    /// shortcut that starts a Faugus game was listed as a game of its own by older versions. Its
+    /// row would otherwise stay behind as a missing game next to the real one; instead what the
+    /// user gave it moves to that game ([`fold`]) and the row goes. Only a shortcut seen this
+    /// scan counts: one whose file is gone stays a missing game for the user to decide on.
+    pub fn merge_scan_with_shortcuts(
+        &mut self,
+        scanned: &[ScannedGame],
+        scanned_sources: &[Source],
+        dropped: &[DroppedShortcut],
+    ) -> Result<MergeStats> {
         let now = now_unix();
         // IMMEDIATE: take the write lock before reading. With a deferred transaction, a UI write
         // on the app's other connection between our first read and first write makes the upgrade
@@ -303,6 +319,7 @@ impl Db {
             upsert_scanned(&tx, g, &ok, &mut renames, now, &mut stats)?;
         }
         absorb_replaced(&tx, &games, &seen)?;
+        stats.removed += fold_shortcuts(&tx, dropped, &ok, &seen)?;
         retire_unseen(&tx, &games, &ok, &seen, now, &mut stats)?;
         tx.commit()?;
         Ok(stats)
@@ -974,13 +991,51 @@ fn absorb_replaced(conn: &Connection, games: &[&ScannedGame], seen: &HashSet<(So
                 continue; // still listed by its own source this scan
             }
             let Some(from) = id_of(*src, sid)?.filter(|f| *f != to) else { continue };
-            emu_dupes::move_user_data(conn, from, to)?;
-            emu_dupes::replace_in_collections(conn, from, Some(to))?;
-            conn.execute("DELETE FROM games WHERE id = ?1", [from])?;
+            fold::fold_into(conn, from, to)?;
             log::info!("library: {} {sid} is now {} (its data moved along)", src.key(), g.name);
         }
     }
     Ok(())
+}
+
+/// Rows of shortcuts this scan left out as duplicates fold into the game they start (see
+/// [`Db::merge_scan_with_shortcuts`]). The game's library must have scanned fine: a library that
+/// failed keeps its old rows, and nothing is matched against them. Returns how many rows went.
+fn fold_shortcuts(
+    conn: &Connection,
+    dropped: &[DroppedShortcut],
+    ok: &HashSet<Source>,
+    seen: &HashSet<(Source, String)>,
+) -> Result<usize> {
+    let mut id_of = conn.prepare_cached("SELECT id FROM games WHERE source = ?1 AND source_id = ?2")?;
+    let mut id_of = |src: Source, sid: &str| -> Result<Option<i64>> {
+        Ok(id_of.query_row(params![src.key(), sid], |r| r.get::<_, i64>(0)).optional()?)
+    };
+    let mut folded = 0;
+    for d in dropped {
+        let (src, sid) = &d.shortcut;
+        if seen.contains(&d.shortcut) {
+            continue; // listed as a game of its own after all
+        }
+        let Some(from) = id_of(*src, sid)? else { continue };
+        // Heroic shortcuts name the app, not the store it is stored under now.
+        let stores: &[Source] = match d.target.0 {
+            Source::Heroic => &[Source::Heroic, Source::Epic, Source::Gog, Source::Amazon],
+            _ => std::slice::from_ref(&d.target.0),
+        };
+        let mut to = None;
+        for store in stores.iter().filter(|s| ok.contains(s)) {
+            to = id_of(*store, &d.target.1)?;
+            if to.is_some() {
+                break;
+            }
+        }
+        let Some(to) = to.filter(|t| *t != from) else { continue };
+        fold::fold_into(conn, from, to)?;
+        log::info!("library: {} {sid} was a shortcut to game {to}; folded into it", src.key());
+        folded += 1;
+    }
+    Ok(folded)
 }
 
 /// Games that disappeared from successfully scanned sources: uninstalled, missing or removed
@@ -1101,6 +1156,7 @@ pub fn fnv1a(bytes: &[u8]) -> u64 {
 
 mod emu_dupes;
 mod emu_roms;
+mod fold;
 
 #[cfg(test)]
 mod tests;
@@ -1122,3 +1178,6 @@ mod emu_tests;
 
 #[cfg(test)]
 mod missing_tests;
+
+#[cfg(test)]
+mod shortcut_tests;

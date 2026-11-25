@@ -79,6 +79,9 @@ pub(crate) struct SettingsDlg {
     pub(super) open_addons: Option<super::addons::Section>,
     show_key: bool,
     key_edit: Option<String>,
+    /// Metadata: the SteamGridDB key was edited, or Check was clicked, so whether it works is
+    /// asked (never merely because the page is open).
+    check_key: bool,
     pub(super) scan_changed: bool,
     /// Emulation page state (owned by `emulation_ui.rs`).
     pub(super) emu: super::emulation_ui::EmuPage,
@@ -100,6 +103,7 @@ impl SettingsDlg {
             open_addons: None,
             show_key: false,
             key_edit: None,
+            check_key: false,
             scan_changed: false,
             emu: Default::default(),
             ach: Default::default(),

@@ -29,7 +29,11 @@ pub(super) fn parse_binding(raw: &str) -> Bind {
                 match k.trim() {
                     "Path" => b.path = v,
                     "ElementName" => b.element = Some(v),
-                    "RelativeSource" | "Source" => b.relative = true,
+                    "RelativeSource" => {
+                        b.relative = true;
+                        b.relative_mode = Some(relative_mode(&v));
+                    }
+                    "Source" => b.relative = true,
                     "Converter" => {
                         b.converter = Some(match tree::markup(&v) {
                             Markup::Resource(r) => r,
@@ -46,6 +50,16 @@ pub(super) fn parse_binding(raw: &str) -> Bind {
         }
     }
     b
+}
+
+/// The mode of a `{RelativeSource …}`: `Self`, `TemplatedParent`, `FindAncestor` (also when
+/// only `AncestorType` is given) …
+fn relative_mode(v: &str) -> String {
+    let inner = v.trim().trim_start_matches('{').trim_end_matches('}').trim();
+    let inner = inner.strip_prefix("RelativeSource").unwrap_or(inner).trim();
+    let first = inner.split(',').next().unwrap_or("").trim();
+    let mode = first.strip_prefix("Mode=").unwrap_or(first).trim();
+    if mode.contains('=') { "FindAncestor".into() } else { mode.to_string() }
 }
 
 /// The binding path without the view model prefixes (`SelectedGame.`, `Game.` …).
@@ -161,4 +175,17 @@ pub(super) fn bind_art(b: &Bind) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// The game's picture an Image named `name` with a bound Source shows: what the binding names
+/// (an `IconObject` in an Image called "GameLogo" is the icon), else the logo when the
+/// element or the path says so (ExtraMetadataLoader's logo paths). A platform's or a
+/// library's picture is none of the game's.
+pub(super) fn image_art(name: &str, b: &Bind) -> Option<&'static str> {
+    let path = b.path.to_ascii_lowercase();
+    if ["platform", "library", "source"].iter().any(|w| path.contains(w)) {
+        return None;
+    }
+    bind_art(b)
+        .or_else(|| (name.to_ascii_lowercase().contains("logo") || path.contains("logo")).then_some("{art.logo}"))
 }

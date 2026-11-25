@@ -52,13 +52,31 @@ pub fn rail_entries(entries: &[RailEntry]) -> &[RailEntry] {
     if entries.is_empty() { DEFAULTS.get_or_init(RailEntry::defaults) } else { entries }
 }
 
+/// The named row group a collection belongs to, for placing the categories a player added.
+fn row_group(k: &CollectionKind) -> &'static str {
+    match k {
+        CollectionKind::Platform(_) | CollectionKind::Pc => "platforms",
+        CollectionKind::Source(_) => "sources",
+        CollectionKind::User(_) | CollectionKind::Tag(_) => "collections",
+        CollectionKind::All => "all",
+        CollectionKind::Recent | CollectionKind::Favorites | CollectionKind::Installed | CollectionKind::Controller => {
+            "filters"
+        }
+    }
+}
+
 /// Which collections a `rows` element shows (indices into `colls`), following its `rows`
 /// list: named groups ("recent", "platforms" …; "platforms:2" = at most two of them) or
 /// collection keys. Empty collections and duplicates are skipped; at most `max` rows.
-pub fn pick_rows(specs: &[String], colls: &[CollectionItem], max: usize) -> Vec<usize> {
+/// `added` are categories the player asked for (Settings → Categories). Named groups leave
+/// them out; one the list doesn't name by key goes right after the theme's last row of its
+/// group (PC before the PC platforms), else after the last row, and doesn't count against
+/// `max` or a group's limit (the theme's choice of rows stays whole).
+pub fn pick_rows(specs: &[String], colls: &[CollectionItem], max: usize, added: &[usize]) -> Vec<usize> {
     let mut out: Vec<usize> = Vec::new();
     let kinds = |pred: &dyn Fn(&CollectionKind) -> bool, by_count: bool| {
-        let mut v: Vec<usize> = (0..colls.len()).filter(|&i| pred(&colls[i].collection.kind)).collect();
+        let mut v: Vec<usize> =
+            (0..colls.len()).filter(|&i| pred(&colls[i].collection.kind) && !added.contains(&i)).collect();
         if by_count {
             // Stable: equal counts keep the library's (alphabetical) order.
             v.sort_by_key(|&i| std::cmp::Reverse(colls[i].count));
@@ -100,6 +118,20 @@ pub fn pick_rows(specs: &[String], colls: &[CollectionItem], max: usize) -> Vec<
                 taken += 1;
             }
         }
+    }
+    for &i in added {
+        if i >= colls.len() || colls[i].count == 0 || out.contains(&i) {
+            continue;
+        }
+        let kind = &colls[i].collection.kind;
+        let pc_platform =
+            |&o: &usize| matches!(&colls[o].collection.kind, CollectionKind::Platform(id) if id.starts_with("pc_"));
+        let group = row_group(kind);
+        let at = match out.iter().position(pc_platform) {
+            Some(p) if *kind == CollectionKind::Pc => p,
+            _ => out.iter().rposition(|&o| row_group(&colls[o].collection.kind) == group).map_or(out.len(), |p| p + 1),
+        };
+        out.insert(at, i);
     }
     out
 }
@@ -528,13 +560,56 @@ mod tests {
         ];
         let s = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         // Empty rows are skipped; consoles come most games first.
-        assert_eq!(pick_rows(&s(&["recent", "favorites", "platforms"]), &colls, 6), vec![0, 5, 4]);
-        assert_eq!(pick_rows(&s(&["recent", "platforms"]), &colls, 2), vec![0, 5]);
-        assert_eq!(pick_rows(&s(&["platforms:1", "sources:0", "all"]), &colls, 6), vec![5, 2]);
+        assert_eq!(pick_rows(&s(&["recent", "favorites", "platforms"]), &colls, 6, &[]), vec![0, 5, 4]);
+        assert_eq!(pick_rows(&s(&["recent", "platforms"]), &colls, 2, &[]), vec![0, 5]);
+        assert_eq!(pick_rows(&s(&["platforms:1", "sources:0", "all"]), &colls, 6, &[]), vec![5, 2]);
         // Collection keys; no duplicates.
-        assert_eq!(pick_rows(&s(&["Platform:nintendo_gamecube", "steam", "pc", "nope"]), &colls, 6), vec![4, 3]);
-        assert_eq!(pick_rows(&s(&["all", "all"]), &colls, 6), vec![2]);
-        assert!(pick_rows(&s(&["recent"]), &colls, 0).is_empty());
+        assert_eq!(pick_rows(&s(&["Platform:nintendo_gamecube", "steam", "pc", "nope"]), &colls, 6, &[]), vec![4, 3]);
+        assert_eq!(pick_rows(&s(&["all", "all"]), &colls, 6, &[]), vec![2]);
+        assert!(pick_rows(&s(&["recent"]), &colls, 0, &[]).is_empty());
+    }
+
+    /// Categories the player added go beside the theme's rows of their kind, else last, and
+    /// never push the theme's own rows out.
+    #[test]
+    fn added_categories_join_the_rows() {
+        let colls = vec![
+            item(CollectionKind::Recent, "Continue Playing", 4),
+            item(CollectionKind::All, "All Games", 40),
+            item(CollectionKind::Pc, "PC Games", 40),
+            item(CollectionKind::Platform("pc_linux".into()), "PC (Linux)", 12),
+            item(CollectionKind::Source(Source::Gog), "GOG", 6),
+            item(CollectionKind::Source(Source::Steam), "Steam", 30),
+            item(CollectionKind::Source(Source::Desktop), "Shortcuts", 2),
+        ];
+        let s = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // A sources-only theme: PC has no row of its kind, so it comes last.
+        assert_eq!(pick_rows(&s(&["recent", "sources:2", "all"]), &colls, 4, &[2]), vec![0, 5, 4, 1, 2]);
+        // A small store the player added sits after the theme's store rows.
+        assert_eq!(pick_rows(&s(&["sources:2", "all"]), &colls, 6, &[6]), vec![5, 4, 6, 1]);
+        // A theme naming PC (Linux) by key places it; PC goes above it, and it isn't repeated.
+        assert_eq!(pick_rows(&s(&["platform:pc_linux", "all"]), &colls, 6, &[2, 3]), vec![2, 3, 1]);
+        // The theme picked nothing with games: the added categories are still rows.
+        assert_eq!(pick_rows(&s(&["favorites"]), &colls, 6, &[2]), vec![2]);
+    }
+
+    /// An added PC platform or store isn't one of the theme's own "platforms:2" or "sources"
+    /// rows: those stay whole, and PC goes above its PC platforms.
+    #[test]
+    fn added_categories_leave_the_themes_groups_whole() {
+        let colls = vec![
+            item(CollectionKind::All, "All Games", 70),
+            item(CollectionKind::Pc, "PC Games", 40),
+            item(CollectionKind::Platform("pc_linux".into()), "PC (Linux)", 34),
+            item(CollectionKind::Platform("sony_playstation2".into()), "PlayStation 2", 20),
+            item(CollectionKind::Platform("nintendo_gamecube".into()), "GameCube", 10),
+            item(CollectionKind::Source(Source::Steam), "Steam", 30),
+            item(CollectionKind::Source(Source::Desktop), "Shortcuts", 2),
+        ];
+        let s = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(pick_rows(&s(&["platforms:2", "all"]), &colls, 3, &[2]), vec![3, 4, 2, 0]);
+        assert_eq!(pick_rows(&s(&["sources:1", "all"]), &colls, 2, &[6]), vec![5, 6, 0]);
+        assert_eq!(pick_rows(&s(&["platforms:2", "all"]), &colls, 3, &[1, 2]), vec![3, 4, 1, 2, 0]);
     }
 
     #[test]

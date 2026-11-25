@@ -103,6 +103,7 @@ impl ControllerUi {
                     Act::Setting(Setting::StartMode),
                 ));
                 v.push(Item::action("Launchers", Act::LaunchersMenu));
+                v.push(Item::value("Categories", Self::categories_summary(st), Act::CategoriesMenu));
             }
             1 => {
                 v.push(Item::value("Theme", st.controller_theme.file.theme.name.clone(), Act::ThemeMenu));

@@ -95,12 +95,21 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
         if ui.small_button(if d.show_key { "Hide" } else { "Show" }).clicked() {
             d.show_key = !d.show_key;
         }
+        if !d.check_key && !key.trim().is_empty() && ui.small_button("Check").clicked() {
+            d.check_key = true;
+        }
         if r.changed() {
             let k = key.trim().to_string();
             st.config.metadata.steamgriddb_key = if k.is_empty() { None } else { Some(k) };
+            d.check_key = true;
             ch = true;
         }
     });
+    if d.check_key
+        && let Some(c) = st.sgdb_key_check(key)
+    {
+        ui.horizontal(|ui| crate::ui::desktop::welcome_ui::key_status(ui, &c, pal));
+    }
     ui.add_space(10.0);
     heading(ui, "More sources with your own key", pal);
     ch |= crate::ui::desktop::sources_ui::keyed_sources(ui, st, &mut d.show_key, pal);
@@ -116,4 +125,34 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
         });
     }
     ch
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn draw(st: &mut AppState, d: &mut SettingsDlg) {
+        let ctx = st.ctx().clone();
+        let pal = Pal::default();
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            page(ui, st, d, &pal);
+        });
+    }
+
+    /// Opening the page must not send the saved key to SteamGridDB: only an edit or Check does.
+    #[test]
+    fn the_saved_key_is_checked_only_when_asked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut st = AppState::for_test(tmp.path());
+        st.config.metadata.steamgriddb_key = Some("0123456789abcdef".into());
+        let mut d = SettingsDlg::new(Tab::Metadata);
+        for _ in 0..3 {
+            draw(&mut st, &mut d);
+        }
+        assert!(st.art_state.key_check.untouched(), "the page asked about the key on its own");
+        // Check (or an edit) asks once the field stays the same a moment.
+        d.check_key = true;
+        draw(&mut st, &mut d);
+        assert!(!st.art_state.key_check.untouched());
+    }
 }

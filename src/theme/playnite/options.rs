@@ -1,8 +1,11 @@
 //! Theme options: a Playnite theme's `thememodifier.yaml` (the ThemeModifier add-on's list of
-//! Constants a user may change) as Lodestar settings. Each option is typed from the constant it
-//! names in the resolved theme: `sys:Boolean` / `Visibility` → a switch, an enum
-//! (HorizontalAlignment, Stretch …) → a choice, `Key(min,max)` → a slider, `Color` /
-//! `SolidColorBrush` → a colour, `sys:String` → a text.
+//! Constants a user may change) as Lodestar settings, and for fullscreen themes the Playnite
+//! settings that are the player's choice rather than the theme's (`settings::PLAYER_SETTINGS`,
+//! "Show game titles"), at Playnite's default until the player changes them. Each
+//! thememodifier option is typed from the constant it names in the resolved theme:
+//! `sys:Boolean` / `Visibility` → a switch, an enum (HorizontalAlignment, Stretch …) → a
+//! choice, `Key(min,max)` → a slider, `Color` / `SolidColorBrush` → a colour, `sys:String` →
+//! a text.
 //!
 //! Applying options re-runs the import with the chosen values laid over the theme's own
 //! constants (one extra resource dictionary after Constants.xaml, as Playnite would load the
@@ -21,8 +24,11 @@
 //!   pub fn read(theme_dir: &Path) -> Option<OptionsSpec>
 //!   pub(crate) fn spec_of(tree, yaml) -> OptionsSpec
 //!   pub(crate) fn overrides_xaml(spec, values) -> Option<String>
+//!   /// The chosen values as the importer reads them (constants dictionary + Playnite settings).
+//!   pub(crate) struct Choices; pub(crate) fn choices(spec, values) -> Choices
 
 use super::Mode;
+use super::settings::{self, PlayerSettings, SVal};
 use super::source::Source;
 use super::tree::{Texts, Tree, Value, tag};
 use crate::theme::Color;
@@ -36,6 +42,8 @@ pub const SNAPSHOT: &str = "playnite-source";
 pub const FILE: &str = "playnite-options.toml";
 /// Most options read from one thememodifier.yaml.
 const MAX_OPTIONS: usize = 200;
+/// The `element` of an option that stands for a Playnite setting, not a theme constant.
+const SETTING: &str = "Setting";
 
 /// What kind of control an option is.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -76,6 +84,11 @@ impl ThemeOption {
     /// The value in effect (`values` over the theme's own).
     pub fn value<'a>(&'a self, values: &'a BTreeMap<String, String>) -> &'a str {
         values.get(&self.key).map(String::as_str).unwrap_or(&self.default)
+    }
+
+    /// It stands for a Playnite setting (its key is the setting's path), not a theme constant.
+    pub fn is_setting(&self) -> bool {
+        self.element == SETTING
     }
 
     pub fn is_on(&self, values: &BTreeMap<String, String>) -> bool {
@@ -183,9 +196,10 @@ impl OptionsSpec {
         self.options.iter().filter(|o| o.effect)
     }
 
-    /// Options the theme has that only change parts Lodestar draws its own way.
+    /// Options the theme has that only change parts Lodestar draws its own way. A Playnite
+    /// setting that changes nothing isn't one: it's the player's, not the theme's.
     pub fn others(&self) -> usize {
-        self.options.iter().filter(|o| !o.effect).count()
+        self.options.iter().filter(|o| !o.effect && !o.is_setting()).count()
     }
 
     /// Only values that are real options and differ from the theme's own.
@@ -381,7 +395,7 @@ fn esc(s: &str) -> String {
 /// change).
 pub(crate) fn overrides_xaml(spec: &OptionsSpec, values: &BTreeMap<String, String>) -> Option<String> {
     let mut body = String::new();
-    for o in &spec.options {
+    for o in spec.options.iter().filter(|o| !o.is_setting()) {
         let Some(v) = values.get(&o.key) else { continue };
         let v = v.trim();
         if v.eq_ignore_ascii_case(o.default.trim()) {
@@ -404,6 +418,45 @@ pub(crate) fn overrides_xaml(spec: &OptionsSpec, values: &BTreeMap<String, Strin
              xmlns:sys=\"clr-namespace:System;assembly=mscorlib\">\n{body}</ResourceDictionary>\n"
         )
     })
+}
+
+/// The chosen values as the importer reads them.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Choices {
+    /// The chosen constants as one resource dictionary laid after the theme's own.
+    pub constants: Option<String>,
+    /// The Playnite settings the player chose.
+    pub settings: PlayerSettings,
+}
+
+pub(crate) fn choices(spec: &OptionsSpec, values: &BTreeMap<String, String>) -> Choices {
+    let mut settings = PlayerSettings::default();
+    for o in spec.options.iter().filter(|o| o.is_setting()) {
+        settings.set(&o.key, SVal::Bool(o.is_on(values)));
+    }
+    Choices { constants: overrides_xaml(spec, values), settings }
+}
+
+/// The Playnite settings a fullscreen theme offers as its options, at Playnite's defaults.
+fn player_options(mode: Mode) -> Vec<ThemeOption> {
+    if mode != Mode::Fullscreen {
+        return vec![];
+    }
+    settings::PLAYER_SETTINGS
+        .iter()
+        .map(|s| {
+            let on = matches!(settings::setting(s.key), Some(SVal::Bool(true)));
+            ThemeOption {
+                key: s.key.to_string(),
+                label: s.label.to_string(),
+                section: String::new(),
+                kind: Kind::Switch { on: "True".into(), off: "False".into() },
+                default: if on { "True" } else { "False" }.into(),
+                element: SETTING.into(),
+                effect: false,
+            }
+        })
+        .collect()
 }
 
 /// The values an option is tried with to see whether it changes anything.
@@ -444,24 +497,40 @@ pub(crate) fn mark_effects(
     let files = source.files();
     let mut texts = Texts::load(source, &files, mode);
     let base_n = texts.files.len();
-    let with = |texts: &mut Texts, values: &BTreeMap<String, String>| -> String {
+    // Text of the translated screens measured in Titillium Web (loaded once: it takes a while).
+    let mut measurer = None;
+    // `views`: the theme's own screens as Lodestar translates them count too. Only Playnite
+    // settings are tried on them: those screens are where the player sees such a setting
+    // (a game's name beside the list), and translating them takes longer than the look.
+    let mut with = |texts: &mut Texts, values: &BTreeMap<String, String>, views: bool| -> String {
         texts.files.truncate(base_n);
-        if let Some(x) = overrides_xaml(spec, values) {
+        let chosen = choices(spec, values);
+        if let Some(x) = chosen.constants {
             texts.push_theme("thememodifier.xaml", x);
         }
-        let tree = Tree::build(texts, &files);
-        fingerprint(&tree)
+        let mut tree = Tree::build(texts, &files);
+        tree.settings = chosen.settings;
+        let mut print = fingerprint(&tree);
+        if views {
+            let m = measurer.get_or_insert_with(|| super::compile::FontMeasurer::new(None, None));
+            print.push_str(&super::compile::views_print(&tree, source, m));
+        }
+        print
     };
-    let base = with(&mut texts, base_values);
+    let base = with(&mut texts, base_values, false);
+    let mut base_views = None;
     let mut effects = vec![false; spec.options.len()];
     for (i, o) in spec.options.iter().enumerate() {
+        let views = o.is_setting() && mode == Mode::Fullscreen;
+        let base: &str =
+            if views { base_views.get_or_insert_with(|| with(&mut texts, base_values, true)) } else { &base };
         let cur = o.value(base_values).to_string();
         for p in probes(o) {
             // Against the value in effect (a chosen value may already equal the probe).
             let p = if p.eq_ignore_ascii_case(&cur) { o.default.clone() } else { p };
             let mut vals = base_values.clone();
             vals.insert(o.key.clone(), p);
-            if with(&mut texts, &vals) != base {
+            if with(&mut texts, &vals, views) != base {
                 effects[i] = true;
                 break;
             }
@@ -488,7 +557,7 @@ pub(crate) fn fingerprint(tree: &Tree) -> String {
 
 /// The theme's options typed against the theme itself, with `values` (cleaned of anything
 /// that isn't an option or equals the theme's own value) and each option's effect marked.
-/// None: the theme has no thememodifier.yaml.
+/// None: the theme has no options (no thememodifier.yaml, and not a fullscreen theme).
 ///
 /// `known`: the options as an earlier import marked them — reused when the theme lists the same
 /// options, so applying a value is quick (`refresh_effects` marks them again afterwards).
@@ -503,12 +572,16 @@ pub(crate) fn prepare(
         .iter()
         .filter(|(f, _)| f.rsplit('/').next().is_some_and(|b| b.eq_ignore_ascii_case("thememodifier.yaml")))
         .min_by_key(|(f, _)| f.matches('/').count())
-        .and_then(|(f, _)| source.read_text(f, super::source::YAML_LIMIT))?;
-    let mut spec = {
+        .and_then(|(f, _)| source.read_text(f, super::source::YAML_LIMIT));
+    let mut spec = OptionsSpec { options: player_options(mode), ..Default::default() };
+    if let Some(yaml) = yaml {
         let texts = Texts::load(source, &files, mode);
         let tree = Tree::build(&texts, &files);
-        spec_of(&tree, &yaml)
-    };
+        spec.options.extend(spec_of(&tree, &yaml).options);
+    }
+    if spec.is_empty() {
+        return None;
+    }
     let values = spec.clean(values);
     let same = known.filter(|k| {
         k.options.len() == spec.options.len()
@@ -533,8 +606,9 @@ const KEPT_FILE_LIMIT: u64 = 32 << 20;
 
 /// Keep the theme's own files in the new theme (`dir`/[`SNAPSHOT`]) so options can be applied
 /// again later without the original package: its XAML and YAML, fonts and pictures (up to
-/// [`PICTURE_BUDGET`] bytes in all), and the videos / sounds already copied (`media`: theme
-/// file → the copy in `dir`) as hard links (left out where the file system can't link).
+/// [`PICTURE_BUDGET`] bytes in all, without [`is_preview`] ones), and the videos / sounds
+/// already copied (`media`: theme file → the copy in `dir`) as hard links (left out where the
+/// file system can't link).
 pub(crate) fn snapshot(
     source: &Source,
     files: &[(String, u64)],
@@ -554,7 +628,7 @@ pub(crate) fn snapshot(
             "xaml" | "yaml" | "yml" => *size <= super::tree::FILE_LIMIT,
             "ttf" | "otf" | "ttc" => *size <= super::FONT_LIMIT,
             "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif" | "ico" => {
-                let ok = *size <= budget;
+                let ok = *size <= budget && !is_preview(f);
                 if ok {
                     budget -= size;
                 }
@@ -580,9 +654,29 @@ pub(crate) fn snapshot(
     Ok(())
 }
 
+/// A picture of what an option looks like, for the settings screen of Playnite or of the
+/// theme's add-on ("Theme Options/1. Main Page Styles/Previews/…", "Themes Option/10.Preview/…").
+/// Themes only name them in their options lists, never in their views, and Lodestar's settings
+/// don't show them, yet they can take tens of megabytes.
+fn is_preview(path: &str) -> bool {
+    let mut folders = path.split('/').rev().skip(1);
+    folders.any(|c| {
+        let c = c.to_ascii_lowercase();
+        c.ends_with("preview") || c.ends_with("previews")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn option_previews_are_not_kept() {
+        assert!(is_preview("Theme Options/1. Main Page Styles/Previews/0. Default Theme.jpg"));
+        assert!(is_preview("Themes Option/10.Preview/Font/Roboto.jpg"));
+        assert!(!is_preview("Images/Previews.png"));
+        assert!(!is_preview("Images/Background.jpg"));
+    }
 
     const CONSTANTS: &str = r##"<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib">
@@ -606,6 +700,27 @@ mod tests {
         let texts = Texts::with_theme(Mode::Desktop, vec![("Constants.xaml".into(), CONSTANTS.into())]);
         let tree = Tree::build(&texts, &[]);
         spec_of(&tree, YAML)
+    }
+
+    #[test]
+    fn playnite_settings_are_options_of_fullscreen_themes_only() {
+        assert!(player_options(Mode::Desktop).is_empty());
+        let mut s = OptionsSpec { options: player_options(Mode::Fullscreen), ..Default::default() };
+        assert_eq!(s.options[0].key, "Fullscreen.ShowGameTitles");
+        // A setting that changes nothing isn't counted as one of the theme's options.
+        assert_eq!(s.others(), 0);
+        s.options.extend(spec().options);
+        let values: BTreeMap<String, String> = [
+            ("Fullscreen.ShowGameTitles".to_string(), "True".to_string()),
+            ("UseRound".to_string(), "False".to_string()),
+        ]
+        .into();
+        let c = choices(&s, &values);
+        assert_eq!(c.settings.get("Fullscreen.ShowGameTitles"), Some(SVal::Bool(true)));
+        // Only the theme's constant goes into its resources.
+        let x = c.constants.unwrap();
+        assert!(x.contains("UseRound") && !x.contains("ShowGameTitles"), "{x}");
+        assert_eq!(choices(&s, &BTreeMap::new()).settings.get("ShowGameTitles"), Some(SVal::Bool(false)));
     }
 
     #[test]

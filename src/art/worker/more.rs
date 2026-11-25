@@ -464,7 +464,11 @@ impl Engine {
         let Some(system) = q.libretro() else {
             return Ok(if confident { None } else { Some(vec![]) });
         };
-        let names = self.libretro_index(system, r)?;
+        let names = match self.libretro_index(system, r) {
+            Ok(n) => n,
+            Err(Fail::Limit(why)) if confident => return self.libretro_exact(q, system, slot, why, r),
+            Err(e) => return Err(e),
+        };
         let stems: Vec<&str> = if confident {
             names.matches_rom(q.rom_names, q.name).into_iter().take(1).collect()
         } else {
@@ -491,6 +495,29 @@ impl Engine {
             }
         }
         Ok(Some(out))
+    }
+
+    /// libretro while its name list is out of reach (the list comes from GitHub's API, which
+    /// allows 60 requests an hour per address; the images come from a host without that limit):
+    /// the ROM's own No-Intro / Redump names, exactly as the image files are named. A game none
+    /// of them fits is asked again once the list can be had (`Fail::Later`), as its title may
+    /// still match an image of another region.
+    fn libretro_exact(
+        &self,
+        q: &Query,
+        system: &str,
+        slot: ArtSlot,
+        why: String,
+        r: Req,
+    ) -> Result<Option<Found>, Fail> {
+        for n in q.rom_names {
+            let stem = libretro_file_name(n.trim());
+            let cover = libretro_image_url(system, LR_BOXART, &stem);
+            if !stem.is_empty() && self.exists(&cover, r)? {
+                return Ok(Some(tag(&nointro_title(&stem), libretro_pics(system, &stem, slot))));
+            }
+        }
+        Err(Fail::Later(why))
     }
 
     /// GameTDB by the game ID: the first region (see `regions`) that has the slot's main

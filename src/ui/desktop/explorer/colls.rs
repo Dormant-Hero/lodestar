@@ -10,7 +10,7 @@ use super::{row, section_games};
 use crate::app::AppState;
 use crate::library::UserCollection;
 use crate::library::user::{self, SmartRule};
-use crate::model::GameId;
+use crate::model::{GameId, Source};
 use crate::ui::platform_icons::Shape;
 use crate::ui::widgets::with_alpha;
 use egui::{Key, Ui};
@@ -104,7 +104,11 @@ impl DesktopUi {
             .and_then(|id| st.library.user_collection(id))
             .and_then(|c| c.rule.clone())
             .unwrap_or_default();
-        let not_installed = self.lib_sel == LibSel::NotInstalled;
+        // A rule can't say "not in the Steam library": that entry saves as not-installed Steam games.
+        let not_installed = self.lib_sel.not_installed();
+        if self.lib_sel == LibSel::NotInSteamLibrary && !r.sources.iter().any(|s| s == Source::Steam.key()) {
+            r.sources.push(Source::Steam.key().to_string());
+        }
         r.installed |= self.lib_sel == LibSel::Installed
             || (st.config.desktop.preset == crate::config::QuickPreset::Installed && !not_installed);
         r.not_installed |= not_installed;
@@ -285,7 +289,7 @@ impl DesktopUi {
         if self.lib_sel == LibSel::Installed {
             parts.push("Installed".into());
         }
-        if self.lib_sel == LibSel::NotInstalled {
+        if self.lib_sel.not_installed() {
             parts.push("Not installed".into());
         }
         parts.truncate(3);

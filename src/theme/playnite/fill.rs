@@ -158,6 +158,8 @@ pub(crate) struct Inputs {
     /// Theme videos copied (main view, details view) and their fit.
     pub main_video: Option<(String, Fit)>,
     pub details_video: Option<(String, Fit)>,
+    /// The theme's own game details page replaces Lodestar's (compile.rs).
+    pub details_translated: bool,
     pub sounds: std::collections::BTreeMap<String, String>,
     pub music: Vec<String>,
     /// The theme's own words for Playnite's standard labels (loc.rs; LOC key → text).
@@ -510,7 +512,7 @@ pub(crate) fn controller(
     if restyle.logos {
         notes.ok(Area::Covers, "Game logos instead of names where a game has one (Lodestar finds them itself)");
     }
-    if look.details.overlay.is_some() {
+    if look.details.overlay.is_some() && !inp.details_translated {
         notes.ok(Area::Layout, "The game details page: the theme's panel over the game's artwork");
     }
     if restyle.scales_text() {
@@ -1041,6 +1043,25 @@ pub(crate) fn desktop(look: &PlayniteLook, inp: &Inputs, notes: &mut Notes) -> a
     };
     let d = &look.desktop;
     let mut ds = Table::new();
+    // Playnite's desktop panels have no fill of their own unless the theme paints one: the
+    // window's background (and the game art over it) shows through them.
+    ds.insert("see_through_panels".into(), Value::Boolean(true));
+    if let Some(art) = &d.window_art {
+        window_art(&mut ds, art, art_dim_color(d, &inp.palette));
+        notes.ok(
+            Area::Background,
+            "The selected game's art behind the window in the details view, as Playnite shows it",
+        );
+    }
+    if let Some(b) = &d.facts_box {
+        facts_box(&mut ds, b);
+    }
+    if let Some(r) = &d.rows {
+        ds.insert("rows".into(), Value::Table(list_rows(r)));
+    }
+    if let Some(c) = d.grid.background.as_ref().filter(|b| !b.is_clear()).and_then(brush_value) {
+        ds.insert("tile_fill".into(), c);
+    }
     let pt = |px: f32| round(px.clamp(0.0, 40.0));
     if let Some(r) = d.control_radius {
         set_f(&mut ds, "control_radius", pt(r));
@@ -1054,15 +1075,16 @@ pub(crate) fn desktop(look: &PlayniteLook, inp: &Inputs, notes: &mut Notes) -> a
     if let Some(s) = d.grid.spacing {
         set_f(&mut ds, "cover_gap", ((s[0] + s[2]).max(s[1] + s[3])).clamp(0.0, 40.0));
     }
+    // Written even when the theme's item draws no name at all: a missing key means Lodestar's
+    // own default (names under the covers). Names that follow "show names under covers" are a
+    // caption here, and Lodestar's own switch shows or hides them.
     let title = match d.cover_title {
-        super::look::CoverTitle::None => None,
-        super::look::CoverTitle::Under => Some("under"),
-        super::look::CoverTitle::Overlay => Some("overlay"),
-        super::look::CoverTitle::Hover => Some("hover"),
+        super::look::CoverTitle::None => "none",
+        super::look::CoverTitle::Under => "under",
+        super::look::CoverTitle::Overlay => "overlay",
+        super::look::CoverTitle::Hover => "hover",
     };
-    if let Some(t) = title {
-        ds.insert("cover_title".into(), Value::String(t.into()));
-    }
+    ds.insert("cover_title".into(), Value::String(title.into()));
     if let Some(f) = &d.grid.focus_frame {
         let mut sb = Table::new();
         if let Some(c) = f.brush.as_ref().and_then(LookBrush::average) {
@@ -1077,9 +1099,12 @@ pub(crate) fn desktop(look: &PlayniteLook, inp: &Inputs, notes: &mut Notes) -> a
     let mut fills = vec![];
     for (key, b, what) in [
         ("window_gradient", &d.window_background, "window"),
+        ("list_fill", &d.list_fill, "game list"),
+        ("caption_fill", &d.caption_fill, "game names in the grid"),
         ("sidebar_fill", &d.sidebar, "side panel"),
         ("topbar_fill", &d.top_panel, "top bar"),
         ("details_fill", &d.details_background, "details panel"),
+        ("play_fill", &d.play_button, "Play button"),
     ] {
         if let Some(val) = b.as_ref().filter(|b| !b.is_clear()).and_then(brush_value) {
             ds.insert(key.into(), val);
@@ -1135,9 +1160,7 @@ pub(crate) fn desktop(look: &PlayniteLook, inp: &Inputs, notes: &mut Notes) -> a
     if d.grid.focus_frame.is_some() {
         shape.push("selection border");
     }
-    if title.is_some() {
-        shape.push("where game names go");
-    }
+    shape.push("where game names go");
     if !shape.is_empty() {
         notes.ok(Area::Covers, format!("The theme's {}", shape.join(", ")));
     }
@@ -1150,6 +1173,90 @@ pub(crate) fn desktop(look: &PlayniteLook, inp: &Inputs, notes: &mut Notes) -> a
         root.insert("desktop".into(), Value::Table(base));
     }
     Ok(v)
+}
+
+/// What the window's game art is darkened towards. Playnite darkens it towards black, which
+/// suits a dark window; under a light theme's see-through panels the same 70 % of black turns
+/// the whole window grey and its dark text unreadable, so a light window fades the art
+/// towards its own background instead.
+fn art_dim_color(d: &DesktopLook, palette: &Palette) -> Color {
+    let window_dark = d.window_background.as_ref().and_then(LookBrush::average).is_none_or(map::is_dark);
+    if palette.dark && window_dark { Color::BLACK } else { palette.background }
+}
+
+/// The game art behind the desktop window: its darkening (inside the picture, towards
+/// `dim_to`), its opacity, masks, place and the theme's layers over it.
+fn window_art(ds: &mut Table, art: &WindowArt, dim_to: Color) {
+    let pic = &art.picture;
+    ds.insert("background_image".into(), Value::Boolean(true));
+    ds.insert("background_image_details_only".into(), Value::Boolean(true));
+    set_f(ds, "background_dim", pic.darken.map_or(0.0, |c| c.0[3] as f32 / 255.0));
+    ds.insert("background_dim_color".into(), hex(dim_to));
+    let opacity = pic.opacity.unwrap_or(1.0).clamp(0.0, 1.0);
+    if opacity < 1.0 {
+        set_f(ds, "background_image_opacity", opacity);
+    }
+    let brushes = |list: &[LookBrush]| -> Vec<Value> { list.iter().filter_map(brush_value).collect() };
+    let masks = brushes(&art.masks);
+    if !masks.is_empty() {
+        ds.insert("background_image_masks".into(), Value::Array(masks));
+    }
+    let layers = brushes(&art.layers);
+    if !layers.is_empty() {
+        ds.insert("background_image_layers".into(), Value::Array(layers));
+    }
+    if art.below_top_bar {
+        ds.insert("background_image_below_bar".into(), Value::Boolean(true));
+    }
+    if art.picture_over_art {
+        ds.insert("background_picture_over_art".into(), Value::Boolean(true));
+    }
+}
+
+/// The box around the facts on a game page: fill, border, corners.
+fn facts_box(ds: &mut Table, b: &FactsBox) {
+    let Some(fill) = brush_value(&b.fill) else { return };
+    ds.insert("card_fill".into(), fill);
+    if let Some((c, w)) = b.border.as_ref().and_then(|(brush, w)| Some((brush.average()?, *w))) {
+        let mut t = Table::new();
+        t.insert("color".into(), hex(c));
+        set_f(&mut t, "width", w.clamp(0.5, 8.0));
+        ds.insert("card_border".into(), Value::Table(t));
+    }
+    if let Some(r) = b.radius {
+        set_f(ds, "card_radius", r.clamp(0.0, 40.0));
+    }
+}
+
+/// The game list's rows: the selected row's fill, bar and text, the text of installed and
+/// uninstalled games (gradients as their average: rows are drawn in one colour).
+fn list_rows(r: &ListRows) -> Table {
+    let mut t = Table::new();
+    let colour = |b: &Option<LookBrush>| b.as_ref().and_then(LookBrush::average).map(hex);
+    for (key, b) in [("selected_fill", &r.selected_fill), ("text", &r.text), ("text_uninstalled", &r.text_uninstalled)]
+    {
+        if let Some(c) = colour(b) {
+            t.insert(key.into(), c);
+        }
+    }
+    if let Some((c, w)) = r.selected_bar.as_ref().and_then(|(b, w)| Some((b.average()?, *w))) {
+        let mut bar = Table::new();
+        bar.insert("color".into(), hex(c));
+        set_f(&mut bar, "width", w.clamp(1.0, 12.0));
+        t.insert("selected_bar".into(), Value::Table(bar));
+    }
+    // The selected text was picked to stand out on the theme's fill or next to its bar; with
+    // neither in one colour (an image, a reveal not understood) the row gets Lodestar's own
+    // selection, and the theme's text could vanish on it.
+    if (t.contains_key("selected_fill") || t.contains_key("selected_bar"))
+        && let Some(c) = colour(&r.selected_text)
+    {
+        t.insert("selected_text".into(), c);
+    }
+    if let Some(radius) = r.radius {
+        set_f(&mut t, "radius", radius.clamp(0.0, 20.0));
+    }
+    t
 }
 
 #[cfg(test)]
@@ -1198,5 +1305,16 @@ mod tests {
         set_pair(&mut desc, "pos", [0.07, 0.485]);
         mid.apply(&mut desc, "pn_description");
         assert_eq!(desc.get("visible").and_then(Value::as_bool), Some(false));
+    }
+
+    #[test]
+    fn selected_text_needs_the_themes_fill_or_bar() {
+        let solid = |hex: &str| Some(LookBrush::solid(Color::parse(hex).unwrap()));
+        let picture =
+            LookBrush::Image { file: None, source: "plate.png".into(), stretch: Default::default(), opacity: 1.0 };
+        let r = ListRows { selected_fill: Some(picture), selected_text: solid("#000000"), ..Default::default() };
+        assert!(!list_rows(&r).contains_key("selected_text"), "a fill in no one colour: Lodestar's selection");
+        let r = ListRows { selected_fill: solid("#55cdff"), ..r };
+        assert_eq!(list_rows(&r).get("selected_text").and_then(Value::as_str), Some("#000000"));
     }
 }

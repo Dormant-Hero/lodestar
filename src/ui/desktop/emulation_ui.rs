@@ -35,7 +35,8 @@ pub(crate) mod switches;
 #[cfg(test)]
 mod tests;
 
-use catalog::{BiosJob, Catalog, ChipTone, LibFacts, Picked};
+pub(crate) use catalog::ChipTone;
+use catalog::{BiosJob, Catalog, LibFacts, Picked};
 pub(super) use emulator_add::console_combo;
 pub(super) use lists::allow_to_run;
 

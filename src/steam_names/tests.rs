@@ -84,6 +84,8 @@ fn store_types_and_urls() {
     let u = owned_url(KEY, ACCOUNT);
     assert!(u.contains("steamid=76561197960278073"), "{u}");
     assert!(u.contains("include_appinfo=1") && u.contains("include_played_free_games=1"));
+    // Profile-limited games are owned too (they'd look as if they had left the library).
+    assert!(u.contains("skip_unvetted_apps=0") && !u.contains("include_free_sub") && !u.contains("family"), "{u}");
     assert!(key_looks_complete(KEY) && key_looks_complete(&format!(" {KEY} ")));
     assert!(!key_looks_complete("0123") && !key_looks_complete(&KEY.replace('A', "Z")));
 }

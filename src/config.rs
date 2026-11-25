@@ -362,6 +362,11 @@ pub struct Config {
     /// The release the user chose to skip ("Skip this version"): automatic checks don't announce
     /// it; a newer one is announced again.
     pub skipped_update: Option<String>,
+    /// The first start's welcome step (a SteamGridDB key for artwork, welcome_app.rs) still waits
+    /// for an answer. Only a fresh install sets it (`Config::load` without a config file), so
+    /// configs from before it existed never show the step.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub welcome_pending: bool,
 }
 
 /// Achievements (achievements/mod.rs). Keys are kept like the other secrets (the config file is
@@ -699,6 +704,7 @@ impl Default for Config {
             achievements: AchievementsConfig::default(),
             check_updates: true,
             skipped_update: None,
+            welcome_pending: false,
         }
     }
 }
@@ -718,9 +724,11 @@ impl Config {
                     log::warn!("config {}: {e}; using defaults", path.display());
                     return Config::default();
                 }
-                // A first start: nothing from before to keep (see `emulator_dirs_checked`).
+                // A first start: nothing from before to keep (see `emulator_dirs_checked`), and
+                // the welcome step to show.
                 let mut c = Config::default();
                 c.emulation.emulator_dirs_checked = true;
+                c.welcome_pending = true;
                 return c;
             }
         };
@@ -927,6 +935,23 @@ mod tests {
         assert_eq!(back.metadata, m);
     }
 
+    /// Settings → Categories round trip: nothing is written while nothing was chosen; a wrong
+    /// value drops only itself.
+    #[test]
+    fn controller_categories_round_trip() {
+        let text = toml::to_string_pretty(&Config::default()).unwrap();
+        assert!(!text.contains("categories"), "{text}");
+        let mut c = Config::default();
+        c.controller.categories.set("steam", true, false);
+        c.controller.categories.set("pc", false, true);
+        let text = toml::to_string_pretty(&c).unwrap();
+        let back = Config::parse_lenient(&text).0;
+        assert_eq!(back.controller.categories, c.controller.categories);
+        let (bad, problems) = Config::parse_lenient("[controller]\ntheme = \"Shelf\"\ncategories = 5\n");
+        assert!(bad.controller.categories.is_empty() && !problems.is_empty());
+        assert_eq!(bad.controller.theme, "Shelf");
+    }
+
     #[test]
     fn config_of_a_removed_source_still_loads() {
         // A config from 0.16.2 and before: ScreenScraper's credentials and its place in the
@@ -969,6 +994,17 @@ emu_sources_off = ["ScreenScraper", "Steam"]
         assert_eq!(partial.start_mode, StartMode::Controller);
         assert_eq!(partial.desktop.view, DesktopView::List);
         assert_eq!(partial.desktop.cover_width, 170.0);
+    }
+
+    #[test]
+    fn desktop_navigation_defaults_on() {
+        let old: Config = toml::from_str("[controller]\nswap_ab = true\n").unwrap();
+        assert!(old.controller.desktop_navigation);
+        let off: Config = toml::from_str("[controller]\ndesktop_navigation = false\n").unwrap();
+        assert!(!off.controller.desktop_navigation);
+        let (bad, problems) = Config::parse_lenient("[controller]\ndesktop_navigation = \"maybe\"\nswap_ab = true\n");
+        assert!(bad.controller.desktop_navigation && bad.controller.swap_ab);
+        assert_eq!(problems.len(), 1, "{problems:?}");
     }
 
     #[test]
@@ -1223,12 +1259,29 @@ gs_sharpness = 5
         std::fs::remove_file(&bak).unwrap();
         let _ = Config::load(&path);
         assert!(!bak.exists());
-        // Missing file: defaults, no backup; a first start has nothing from before to check.
+        // Missing file: defaults, no backup; a first start has nothing from before to check,
+        // and shows the welcome step.
         let mut first = Config::default();
         first.emulation.emulator_dirs_checked = true;
+        first.welcome_pending = true;
         assert_eq!(Config::load(&dir.path().join("nope.toml")), first);
-        // Configs from before don't have the flag: they get the one-time check.
-        assert!(!Config::parse_lenient("[emulation]\nauto_emulators = false\n").0.emulation.emulator_dirs_checked);
+        // Configs from before don't have the flags: they get the one-time check, never the step.
+        let old = Config::parse_lenient("[emulation]\nauto_emulators = false\n").0;
+        assert!(!old.emulation.emulator_dirs_checked && !old.welcome_pending);
+    }
+
+    #[test]
+    fn welcome_flag_is_saved_only_while_pending() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut c = Config::load(&path);
+        c.save(&path).unwrap();
+        assert!(std::fs::read_to_string(&path).unwrap().contains("welcome_pending = true"));
+        assert!(Config::load(&path).welcome_pending, "unanswered: shown again next start");
+        c.welcome_pending = false;
+        c.save(&path).unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("welcome_pending"));
+        assert!(!Config::load(&path).welcome_pending);
     }
 
     #[test]

@@ -80,6 +80,13 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.18.0" date="2026-11-25" type="stable">
+      <description>
+        <p>Use a controller in desktop mode, choose which categories controller mode shows (including all PC games),
+          games no longer in your Steam library are marked, a first-start step for complete artwork, more covers for
+          emulated games, and imported Playnite themes look closer to their originals.</p>
+      </description>
+    </release>
     <release version="0.17.2" date="2026-11-25" type="stable">
       <description>
         <p>Fixes games added to Steam or the app menu by another launcher showing up twice, and new games sometimes

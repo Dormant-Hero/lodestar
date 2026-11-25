@@ -17,6 +17,8 @@ pub enum Purpose {
     Search,
     LaunchOptions(GameId),
     Command(GameId),
+    /// The welcome step's SteamGridDB key (welcome.rs).
+    ApiKey,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -285,6 +287,7 @@ impl Osk {
                 Purpose::Search => "Type to search",
                 Purpose::LaunchOptions(_) => "e.g. MANGOHUD=1 gamemoderun %command% -novid",
                 Purpose::Command(_) => "Program and arguments, e.g. /usr/bin/game --flag",
+                Purpose::ApiKey => "Paste the key with Ctrl+V, or type it",
             };
             if std::mem::take(&mut self.cursor_to_end) {
                 let id = Self::field_id();

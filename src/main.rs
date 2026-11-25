@@ -42,6 +42,7 @@ mod scan;
 mod search;
 mod steam_names;
 mod steam_names_app;
+mod steam_owned;
 mod store_app;
 #[cfg(test)]
 mod test_support;
@@ -51,6 +52,7 @@ mod tray_app;
 mod ui;
 mod update;
 mod update_app;
+mod welcome_app;
 mod winctl;
 
 use app::{LaunchOptions, Mode};

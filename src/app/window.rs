@@ -153,11 +153,15 @@ impl App {
             shell: Default::default(),
             romm: Default::default(),
             update: Default::default(),
+            welcome: Default::default(),
             paths,
             config,
             db,
         };
+        let had_games = !games.is_empty();
         st.set_games(games);
+        st.refresh_steam_owned();
+        st.init_welcome(had_games);
         // The tray and answering later starts: the real GUI only (never screenshot runs).
         st.init_shell(opts.screenshot.is_none(), instance);
         st.apply_launcher_settings();
@@ -300,8 +304,15 @@ impl App {
         // Settings → Input "Lodestar's menu button": with the button combination, Home is
         // left to Steam and emulators; the pad thread then ignores it.
         self.st.input.set_home_button(self.st.config.controller.home_opens_menu());
-        // Games started elsewhere while the controller drives Lodestar in the background.
-        self.st.background_look(sit.wants_background_look());
+        // Games started elsewhere while the controller drives Lodestar in the background (or
+        // could drive desktop mode once it is in front). After a game ended, desktop mode's pad
+        // waits for a look started since: that one doesn't wait for the interval.
+        // Only with a controller connected: without one, desktop mode looks for running games
+        // exactly as before (keyboard and mouse users see no new "is running" adoptions).
+        let pad_connected = !self.st.input.gamepads().is_empty();
+        let desktop_look = pad_connected && input::gate::desktop_look(&sit, self.desktop_pad_state(&sit));
+        let since = if desktop_look { self.st.game_ended_at } else { None };
+        self.st.background_look(sit.wants_background_look() || desktop_look, since);
         // Sounds and music (when turned on): controller mode, Lodestar in front, no game.
         let audio_active = self.st.mode == Mode::Controller
             && sit.is_focused()
@@ -337,7 +348,12 @@ impl App {
         let mut navs = if sit.scripted {
             // Scripted screenshot runs must never act on a real gamepad (evdev is read
             // regardless of which window has focus): a stray press could launch a real game.
-            if controller { input::keyboard_nav(ctx) } else { vec![] }
+            if controller {
+                self.desktop.drop_pad();
+                input::keyboard_nav(ctx)
+            } else {
+                self.scripted_desktop_pad(&sit)
+            }
         } else {
             let mut v = pads;
             if controller && sit.is_focused() {
@@ -347,9 +363,11 @@ impl App {
             // unless Lodestar is focused, and then only the Playing overlay's buttons.
             let mut v = input::gate::filter(&sit, v);
             // Just after a game ended: only Home, for a moment.
-            if self.st.game_ended_at.is_some_and(|t| t.elapsed() < GAME_END_SETTLE) && !sit.game_up {
+            if just_ended(self.st.game_ended_at, Instant::now(), sit.game_up) {
                 v.retain(|n| *n == Nav::Guide);
             }
+            // (In controller mode the rule says no: presses left from desktop mode are dropped.)
+            self.hand_to_desktop(&sit, self.desktop_pad_state(&sit), &v);
             v
         };
         // Injected navigation for scripted screenshots: one per frame once images settled.
@@ -384,6 +402,61 @@ impl App {
             navs.retain(|n| *n != Nav::Guide);
             let now = ctx.input(|i| i.time);
             self.controller.on_guide(&mut self.st, false, now);
+        }
+        navs
+    }
+
+    /// Desktop mode's side of the pad rule (input/gate.rs `desktop_pad`).
+    fn desktop_pad_state(&self, sit: &input::gate::Situation) -> input::gate::DesktopPad {
+        let launcher = &self.st.launcher;
+        input::gate::DesktopPad {
+            enabled: self.st.mode == Mode::Desktop && self.st.config.controller.desktop_navigation,
+            launching: launcher.running().is_some() && launcher.started().is_none(),
+            settling: just_ended(self.st.game_ended_at, Instant::now(), sit.game_up),
+            looked: input::gate::looked_since(launcher.others_looked_at(), self.st.game_ended_at),
+            overlay: self.controller.overlay_open(),
+        }
+    }
+
+    /// The pad's presses (already through the safety rule's filter) for desktop mode, when its
+    /// own rule allows; otherwise presses still waiting there are dropped too. Returns whether
+    /// the rule allowed.
+    fn hand_to_desktop(&mut self, sit: &input::gate::Situation, d: input::gate::DesktopPad, navs: &[Nav]) -> bool {
+        let allowed = input::gate::desktop_pad(sit, d);
+        if allowed {
+            self.desktop.take_pad(navs);
+        } else {
+            self.desktop.drop_pad();
+        }
+        allowed
+    }
+
+    /// Screenshot runs: the presses `LODESTAR_DESKTOP_KEYS` gave as `pad:…` (the real pad stays
+    /// ignored), through the same rules as the pad's, in the situation the hook's `game:`,
+    /// `focus:` and `seen:` make up. Returns what the safety rule let through, as the pad's
+    /// path does (the in-game menu gets it; Home goes the usual way).
+    fn scripted_desktop_pad(&mut self, sit: &input::gate::Situation) -> Vec<Nav> {
+        let (navs, made_up) = self.desktop.scripted_pad();
+        let sit = input::gate::Situation {
+            scripted: false,
+            focused: Some(made_up.focused),
+            game_up: made_up.game_up,
+            others_seen: made_up.seen,
+            others_clear: !made_up.seen,
+            ..*sit
+        };
+        // Screenshot runs never look for running games: the hook's `seen:` stands for the look.
+        let looked = input::gate::looked_since(Some(made_up.looked_at), self.st.game_ended_at);
+        let desktop = input::gate::DesktopPad { looked, ..self.desktop_pad_state(&sit) };
+        let pressed = navs.clone();
+        let mut navs = input::gate::filter(&sit, navs);
+        if just_ended(self.st.game_ended_at, Instant::now(), sit.game_up) {
+            navs.retain(|n| *n == Nav::Guide);
+        }
+        let allowed = self.hand_to_desktop(&sit, desktop, &navs);
+        if !pressed.is_empty() {
+            let to = if allowed { "the desktop" } else { "nothing (desktop rule)" };
+            log::info!("scripted pad {pressed:?}: {navs:?} past the safety rule, to {to}; {desktop:?}");
         }
         navs
     }
@@ -510,7 +583,10 @@ impl App {
             return;
         }
         let hide_test_pending = !matches!(self.hide_test, HideTest::Done) && hide_test_wanted();
-        let busy = self.st.scan.running || !self.opts.inject.is_empty() || hide_test_pending;
+        let busy = self.st.scan.running
+            || !self.opts.inject.is_empty()
+            || hide_test_pending
+            || self.desktop.debug_keys_pending();
         // A scan that takes very long (a hanging add-on runs up to its timeout) doesn't hold
         // the screenshot past the cap below.
         let capped = self.started.elapsed() > Duration::from_secs(25) && self.frames >= 20 + self.desktop_key_frames;
@@ -592,11 +668,16 @@ impl App {
 
 impl eframe::App for App {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        // Testing hook: scripted pointer events (LODESTAR_DESKTOP_KEYS hover / click).
-        if self.opts.screenshot.is_some()
-            && let Some(events) = crate::ui::desktop::take_debug_pointer(ctx)
-        {
+        // Testing hooks: scripted pointer events (LODESTAR_DESKTOP_KEYS hover / click) and the
+        // window focus the pad's made-up situation gives.
+        if self.opts.screenshot.is_none() {
+            return;
+        }
+        if let Some(events) = crate::ui::desktop::take_debug_pointer(ctx) {
             raw_input.events.extend(events);
+        }
+        if let Some(focused) = self.desktop.scripted_focus() {
+            raw_input.focused = focused;
         }
     }
 
@@ -748,6 +829,11 @@ const SCREENSHOT_MIN_SETTLE: Duration = Duration::from_millis(700);
 /// menus left open must then stop taking the pad, as for a focus that went to the game.
 pub(super) fn focus_left_for_game(game_up: bool, was: Option<bool>, now: Option<bool>) -> bool {
     game_up && was == Some(true) && now != Some(true)
+}
+
+/// A game ended a moment ago (and none is up again): only Home acts until it settles.
+pub(super) fn just_ended(ended_at: Option<Instant>, now: Instant, game_up: bool) -> bool {
+    !game_up && ended_at.is_some_and(|t| now.saturating_duration_since(t) < GAME_END_SETTLE)
 }
 
 /// Text width of the toast stack: fits the longest toast unwrapped when it can, at least 240 px

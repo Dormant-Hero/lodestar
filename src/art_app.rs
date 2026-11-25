@@ -31,6 +31,7 @@ use crate::art::*;
 use crate::model::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Default)]
 pub struct SearchState {
@@ -63,7 +64,35 @@ pub struct ArtState {
     /// (game, slot) downloads in flight from `set_art_from_url`.
     pub applying: Vec<(GameId, ArtSlot)>,
     pub bulk: Option<BulkStatus>,
+    /// The SteamGridDB key being typed into a key field and whether it works.
+    pub(crate) key_check: KeyCheckState,
 }
+
+/// `AppState::sgdb_key_check`'s state.
+#[derive(Default)]
+pub(crate) struct KeyCheckState {
+    /// The field's key and since when it reads so: asked about once it stays the same a moment.
+    typed: Option<(String, Instant)>,
+    /// The key asked about and its answer (`Checking` until it arrives).
+    answer: Option<(String, KeyCheck)>,
+}
+
+impl KeyCheckState {
+    /// The answer for `key` once it was asked about (`Checking` until it arrives).
+    pub(crate) fn answer_for(&self, key: &str) -> Option<KeyCheck> {
+        self.answer.as_ref().filter(|(k, _)| k == key.trim()).map(|(_, a)| a.clone())
+    }
+
+    /// No key was checked, nor is one waiting to be.
+    #[cfg(test)]
+    pub(crate) fn untouched(&self) -> bool {
+        self.typed.is_none() && self.answer.is_none()
+    }
+}
+
+/// How long a key field must stay unchanged before its key is checked (one request per paste,
+/// not one per typed character).
+const KEY_CHECK_DELAY: Duration = Duration::from_millis(600);
 
 /// State of the automatic artwork fill (see the module docs).
 #[derive(Default)]
@@ -232,10 +261,43 @@ impl AppState {
         self.art.cancel_bulk();
     }
 
+    /// Whether SteamGridDB accepts `key`, for a key field drawn every frame: the key is checked
+    /// in the background once it stays the same for a moment. None for an empty field.
+    pub fn sgdb_key_check(&mut self, key: &str) -> Option<KeyCheck> {
+        let key = key.trim();
+        if key.is_empty() {
+            return None;
+        }
+        let kc = &mut self.art_state.key_check;
+        if let Some(answer) = kc.answer_for(key) {
+            return Some(answer);
+        }
+        match &kc.typed {
+            Some((k, since)) if k == key => {
+                let left = KEY_CHECK_DELAY.saturating_sub(since.elapsed());
+                if left.is_zero() {
+                    kc.typed = None;
+                    kc.answer = Some((key.to_string(), KeyCheck::Checking));
+                    self.art.check_sgdb_key(key);
+                } else {
+                    self.ctx().request_repaint_after(left);
+                }
+            }
+            _ => {
+                kc.typed = Some((key.to_string(), Instant::now()));
+                self.ctx().request_repaint_after(KEY_CHECK_DELAY);
+            }
+        }
+        Some(KeyCheck::Checking)
+    }
+
     // ----- automatic fill -----
 
     /// A scan finished: fill missing art once the metadata fetcher is idle (`run_auto_art`).
     pub(crate) fn auto_art_after_scan(&mut self) {
+        if self.lookups_wait_for_welcome() {
+            return;
+        }
         if self.auto_art.allowed && self.config.art.auto_fill {
             self.auto_art.wanted = true;
         }
@@ -406,6 +468,13 @@ impl AppState {
                 }
                 ArtEvent::AutoGame { game, art, tried } => {
                     self.apply_auto_art(game, art, &tried);
+                }
+                ArtEvent::KeyChecked { key, check } => {
+                    if let Some((k, answer)) = &mut self.art_state.key_check.answer
+                        && *k == key
+                    {
+                        *answer = check;
+                    }
                 }
                 ArtEvent::AutoFinished { changed, error } => {
                     self.auto_art.running = false;

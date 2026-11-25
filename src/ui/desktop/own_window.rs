@@ -274,6 +274,11 @@ impl OwnWindows {
         self.slots.keys().copied().filter(|w| w.layer() > win.layer()).max_by_key(|w| w.layer())
     }
 
+    /// Some dialog has its own window (then the top one gets the controller, not the main window).
+    pub fn any(&self) -> bool {
+        !self.slots.is_empty()
+    }
+
     /// Remember the window's size / place / maximised (logical px, like the main window's).
     fn note_geom(&mut self, win: Win, vctx: &egui::Context) {
         let seen = crate::main_window::seen(vctx, false);
@@ -333,13 +338,18 @@ impl DesktopUi {
         Some(ctx.show_viewport_immediate(win.viewport_id(), builder, |ui, _class| {
             let vctx = ui.ctx().clone();
             ui.painter().rect_filled(ui.max_rect(), 0.0, pal.surface);
+            // The dialog on top takes input, the controller's too.
+            if covered.is_none() {
+                self.pad_pass(&vctx, st);
+            }
             // (The id is read outside `data_mut`: egui's lock isn't re-entrant.)
             let here = vctx.viewport_id();
             vctx.data_mut(|d| d.insert_temp(host_key(), Hosted(here, win.modal_id())));
             let r = draw(self, &vctx, st);
             vctx.data_mut(|d| d.remove::<Hosted>(host_key()));
-            if let Some(top) = covered {
-                self.own_veil(&vctx, st, top);
+            match covered {
+                Some(top) => self.own_veil(&vctx, st, top),
+                None => self.pad_end(&vctx),
             }
             self.own.note_geom(win, &vctx);
             let focus = vctx

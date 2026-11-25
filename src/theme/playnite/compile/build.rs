@@ -1,7 +1,9 @@
 //! The XAML element tree → layout nodes: placement properties, paint, inherited text
 //! properties and what each element draws (`Kind`).
 
-use super::bind::{bind_art, bind_text, game_path, parse_binding};
+use super::bind::{bind_text, game_key, game_path, image_art, parse_binding};
+use super::button::{ButtonState, Face};
+use super::strip;
 use super::*;
 
 impl Inherit {
@@ -90,17 +92,35 @@ pub(super) fn symbol_glyph(text: &str) -> Option<char> {
 }
 
 /// A label ("Sorting:") whose value next to it is a text Lodestar can't fill isn't drawn
-/// either: alone it reads as a value that is missing. It keeps its room in the layout.
+/// either: alone it reads as a value that is missing. A separator (":", "/", "•") next to an
+/// add-on's text goes too: without the add-on there is nothing on that side for it to
+/// separate. Both keep their room in the layout.
 pub(super) fn drop_orphan_labels(kids: &mut [LNode]) {
+    let shown = |k: &&LNode| k.vis != Vis::Collapsed && !matches!(&k.data.kind, Kind::Text(t) if t.text.is_empty());
     for i in 0..kids.len() {
-        let label = matches!(&kids[i].data.kind, Kind::Text(t) if !t.bound && t.text.trim_end().ends_with(':'));
-        let next = kids[i + 1..].iter().find(|k| k.vis != Vis::Collapsed);
-        let value_dropped =
-            next.is_some_and(|k| matches!(k.data.kind, Kind::Drop("text Lodestar has no data for" | "add-on text")));
-        if label && value_dropped {
+        let next = kids[i + 1..].iter().find(shown);
+        let before = kids[..i].iter().rev().find(shown);
+        let is = |k: Option<&LNode>, what: &[&str]| {
+            k.is_some_and(|k| matches!(k.data.kind, Kind::Drop(d) if what.contains(&d)))
+        };
+        let orphan = match &kids[i].data.kind {
+            Kind::Text(t) if t.bound => false,
+            Kind::Text(t) if is_separator(&t.text) => is(next, &["add-on text"]) || is(before, &["add-on text"]),
+            Kind::Text(t) => {
+                t.text.trim_end().ends_with(':') && is(next, &["text Lodestar has no data for", "add-on text"])
+            }
+            _ => false,
+        };
+        if orphan {
             kids[i].data.kind = Kind::None;
         }
     }
+}
+
+/// Punctuation between two texts (":", "/", "|", "•", "-").
+fn is_separator(text: &str) -> bool {
+    let t = text.trim();
+    !t.is_empty() && t.chars().count() <= 3 && t.chars().all(|c| !c.is_alphanumeric())
 }
 
 /// Playnite's prompt template key → help bar button name.
@@ -149,8 +169,11 @@ pub(super) fn icon_font(f: &str) -> bool {
     .any(|w| l.contains(w))
 }
 
-/// Room between the filter preset tabs as measured.
-pub(super) const TAB_GAP: &str = "    ";
+/// Playnite's notifications and update buttons, which it shows only while something is
+/// pending (never in Lodestar, which has neither).
+pub(super) fn is_pending_button(name: &str) -> bool {
+    matches!(name, "PART_ButtonNotifications" | "PART_ButtonProgramUpdate")
+}
 
 pub(super) fn spec(t: &TextOut) -> TextSpec {
     TextSpec { text: t.text.clone(), size: t.size, bold: t.font.is_some(), wrap: t.wrap, max_lines: None }
@@ -231,7 +254,14 @@ pub(super) fn masked(c: Color, mask: &LookBrush) -> LookBrush {
 }
 
 impl<'b, 't, 'i> Builder<'b, 't, 'i> {
+    /// A property's resting value: set on the element, else by a trigger that holds at rest
+    /// (the view's own triggers naming it, its style's property triggers), else by its style.
     pub(super) fn get(&self, el: X<'t, 'i>, prop: &str) -> Option<Value<'t, 'i>> {
+        if self.t.local(el, prop).is_none()
+            && let Some(v) = self.trigger_set(el, prop)
+        {
+            return Some(v);
+        }
         self.t.get(el, prop)
     }
 
@@ -239,7 +269,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
     /// layout clamps would panic on such bounds).
     pub(super) fn num(&self, el: X<'t, 'i>, prop: &str) -> Option<f32> {
         let v: f32 = match self.get(el, prop)? {
-            Value::Setting(s) => match setting(&s)? {
+            Value::Setting(s) => match self.t.settings.get(&s)? {
                 SVal::Num(n) => n,
                 _ => return None,
             },
@@ -255,7 +285,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             Value::Text(t) => Some(t),
             Value::Bool(b) => Some(b.to_string()),
             Value::Num(n) => Some(n.to_string()),
-            Value::Setting(s) => match setting(&s)? {
+            Value::Setting(s) => match self.t.settings.get(&s)? {
                 SVal::Text(t) => Some(t),
                 SVal::Bool(b) => Some(b.to_string()),
                 SVal::Num(n) => Some(n.to_string()),
@@ -270,6 +300,30 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
 
     pub(super) fn brush(&self, el: X<'t, 'i>, prop: &str) -> Option<LookBrush> {
         self.get(el, prop)?.brush().filter(|b| !b.is_clear() || matches!(b, LookBrush::Image { .. }))
+    }
+
+    /// An opacity mask as a brush: a gradient, or a VisualBrush showing a named element that
+    /// paints one (themes keep their fades in Borders of their own).
+    pub(super) fn opacity_mask(&self, el: X<'t, 'i>, prop: &str) -> Option<LookBrush> {
+        match self.get(el, prop)? {
+            Value::Node(vb) if tag(vb) == "VisualBrush" => {
+                let Markup::Binding(raw) = tree::markup(attr(vb, "Visual")?) else { return None };
+                let name = parse_binding(&raw).element?;
+                let shown = self.root.and_then(|r| self.t.named(r, &name))?;
+                self.brush(shown, "Background")
+            }
+            v => v.brush(),
+        }
+    }
+
+    /// The opacity mask of the panel that holds only this element: it fades what the panel
+    /// draws, which is the element.
+    fn holder_mask(&self, el: X<'t, 'i>) -> Option<LookBrush> {
+        let holder = el.parent_element()?;
+        if content(holder).count() != 1 {
+            return None;
+        }
+        self.opacity_mask(holder, "OpacityMask")
     }
 
     pub(super) fn grid_attr(&self, el: X<'t, 'i>, prop: &str, default: usize) -> usize {
@@ -398,18 +452,41 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         prompt_of(&key)
     }
 
-    /// The text of a button whose Content is an element (a TextBlock inside it): the text, or
-    /// for an icon-font glyph the symbol Lodestar draws for it.
-    pub(super) fn content_label(&self, el: X<'t, 'i>) -> Option<String> {
-        el.descendants().filter(|d| d.is_element() && tag(*d) == "TextBlock").find_map(|d| {
-            let t = attr(d, "Text").and_then(|t| self.literal_or_loc(t))?;
-            let t = t.trim();
-            if t.chars().any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c)) {
-                Some(icon_symbol(t).to_string())
-            } else {
-                (!t.is_empty()).then(|| t.to_string())
+    /// The text a button's content TextBlock shows (its `Text`, a text a trigger or its style
+    /// gives it, or the text written inside it), with that TextBlock. A label written as
+    /// several texts in a row ("Play" + " " + "Game") is read whole; an icon-font glyph gives
+    /// the symbol Lodestar draws for it.
+    pub(super) fn content_label(&self, el: X<'t, 'i>) -> Option<(String, X<'t, 'i>)> {
+        let mut blocks = el.descendants().filter(|d| d.is_element() && tag(*d) == "TextBlock");
+        let (first, text) =
+            blocks.by_ref().find_map(|d| Some((d, self.label_text(d).filter(|t| !t.trim().is_empty())?)))?;
+        let t = text.trim();
+        if t.chars().any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c)) {
+            return Some((icon_symbol(t).to_string(), first));
+        }
+        let mut label = text.clone();
+        for d in blocks.filter(|d| d.parent() == first.parent()) {
+            match attr(d, "Text") {
+                // A space between two words, which `literal_or_loc` would trim away.
+                Some(t) if !t.is_empty() && t.trim().is_empty() => label.push(' '),
+                _ => label.push_str(&self.label_text(d).unwrap_or_default()),
             }
-        })
+        }
+        let label = label.trim();
+        (!label.is_empty()).then(|| (label.to_string(), first))
+    }
+
+    /// A label TextBlock's literal or LOC text: its own, else what a trigger holding at rest or
+    /// its style sets, else the text written inside it.
+    fn label_text(&self, d: X<'t, 'i>) -> Option<String> {
+        let raw = attr(d, "Text")
+            .or_else(|| self.trigger_setter(d, "Text").and_then(|s| attr(s, "Value")))
+            .map(str::to_string)
+            .or_else(|| self.t.style_of(d).and_then(|s| raw_setter(self.t, s, "Text")));
+        match raw {
+            Some(raw) => self.literal_or_loc(&raw),
+            None => d.text().map(str::to_string),
+        }
     }
 
     pub(super) fn literal_or_loc(&self, raw: &str) -> Option<String> {
@@ -447,9 +524,9 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         let fill = self.fit_of(el, default_fit);
         let fit = fit_name(fill);
         let mask = self
-            .get(el, "ImageOpacityMask")
-            .or_else(|| self.get(el, "OpacityMask"))
-            .and_then(|v| v.brush())
+            .opacity_mask(el, "ImageOpacityMask")
+            .or_else(|| self.opacity_mask(el, "OpacityMask"))
+            .or_else(|| self.holder_mask(el))
             .and_then(|b| mask_edges(&b));
         let blur = self
             .get(el, "Effect")
@@ -480,25 +557,20 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         let src = self.get(el, "Source");
         match src {
             Some(Value::ThemeFile(f)) => self.file_image(&f, fill, fit, mask, blur),
+            // No picture set (a style fills it in from an add-on): nothing drawn.
+            Some(Value::Text(t)) if t.trim().is_empty() => (Kind::None, Content::None),
             Some(Value::Text(t)) => match tree::theme_file(&self.t.files, &t) {
                 Some(f) => self.file_image(&f, fill, fit, mask, blur),
                 None => (Kind::Drop("picture"), Content::None),
             },
             Some(Value::Brush(LookBrush::Image { file: Some(f), .. })) => self.file_image(&f, fill, fit, mask, blur),
-            Some(Value::Binding(raw)) => {
-                let b = parse_binding(&raw);
-                let logo = name.to_ascii_lowercase().contains("logo") || b.path.to_ascii_lowercase().contains("logo");
-                if logo {
-                    return art("{art.logo}", [800.0, 310.0], false, vec![]);
-                }
-                match bind_art(&b) {
-                    Some("{art.cover}") => art("{art.cover}", [600.0, 900.0], false, vec![]),
-                    Some("{art.hero}") => art("{art.hero}", [1920.0, 1080.0], true, vec!["{art.banner}".into()]),
-                    Some("{art.icon}") => art("{art.icon}", [256.0, 256.0], false, vec![]),
-                    Some("{art.logo}") => art("{art.logo}", [800.0, 310.0], false, vec![]),
-                    _ => (Kind::Drop("picture bound to something Lodestar doesn't have"), Content::None),
-                }
-            }
+            Some(Value::Binding(raw)) => match image_art(name, &parse_binding(&raw)) {
+                Some("{art.cover}") => art("{art.cover}", [600.0, 900.0], false, vec![]),
+                Some("{art.hero}") => art("{art.hero}", [1920.0, 1080.0], true, vec!["{art.banner}".into()]),
+                Some("{art.icon}") => art("{art.icon}", [256.0, 256.0], false, vec![]),
+                Some("{art.logo}") => art("{art.logo}", [800.0, 310.0], false, vec![]),
+                _ => (Kind::Drop("picture bound to something Lodestar doesn't have"), Content::None),
+            },
             _ => (Kind::None, Content::None),
         }
     }
@@ -528,7 +600,16 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         }
         let tg = tag(el).to_string();
         let name = name_of(el).unwrap_or("").to_string();
-        if OTHER_VIEWS.contains(&tg.as_str()) || name.starts_with("PART_Elem") && name != "PART_ElemBatteryStatus" {
+        // Playnite opens the page only in PART_ElemGameDetails; another GameDetails is a panel
+        // of the theme's own (a details column beside a list) drawn from its own template.
+        let page_host = tg == "GameDetails" && name == "PART_ElemGameDetails";
+        if page_host && let Some(page) = self.details_page.take() {
+            return self.details_page_in(el, page, up, depth);
+        }
+        let own_panel = tg == "GameDetails" && !page_host && self.own_template(el).is_some();
+        if OTHER_VIEWS.contains(&tg.as_str()) && !own_panel
+            || name.starts_with("PART_Elem") && name != "PART_ElemBatteryStatus"
+        {
             return None;
         }
         let mut n = LNode::new(Info { name: name.clone(), tag: tg.clone(), opacity: 1.0, ..Default::default() });
@@ -558,8 +639,51 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         Some(n)
     }
 
+    /// The GameDetails template `page` laid out where the main screen holds the page (`el`, its
+    /// PART_ElemGameDetails): the page's names, triggers and bindings (`Game.…`) inside it.
+    fn details_page_in(&mut self, el: X<'t, 'i>, page: X<'t, 'i>, up: &Inherit, depth: usize) -> Option<LNode> {
+        let mut n = LNode::new(Info {
+            name: "PART_ElemGameDetails".into(),
+            tag: "GameDetails".into(),
+            opacity: 1.0,
+            ..Default::default()
+        });
+        self.place(el, &mut n);
+        let inh = self.inherit(el, up);
+        n.children.extend(self.game_template(page, &inh, depth));
+        Some(n)
+    }
+
+    /// A GameDetails template laid out under its host: its own names and triggers, and
+    /// bindings relative to the game it shows.
+    fn game_template(&mut self, tpl: X<'t, 'i>, inh: &Inherit, depth: usize) -> Option<LNode> {
+        let outer = (
+            self.root.replace(tpl),
+            std::mem::replace(&mut self.tpl_triggers, template_triggers(self.t, tpl)),
+            self.main,
+        );
+        self.main = false;
+        let kid = self.t.template_root(tpl).and_then(|r| self.build(r, inh, depth + 1));
+        (self.root, self.tpl_triggers, self.main) = outer;
+        kid
+    }
+
+    /// The template a GameDetails element's own style gives it (not the page's: the implicit
+    /// GameDetails style is the page itself).
+    fn own_template(&self, el: X<'t, 'i>) -> Option<X<'t, 'i>> {
+        let Some(Value::Node(style)) = self.t.local(el, "Style") else { return None };
+        (tag(style) == "Style").then(|| self.t.template(style)).flatten()
+    }
+
     /// Size, margins, alignment and the panel-attached properties (Grid, DockPanel, Canvas).
+    /// The game list's own are read at its first game (`placing_list`).
     fn place(&self, el: X<'t, 'i>, n: &mut LNode) {
+        self.placing_list.set(name_of(el) == Some("PART_ListGameItems"));
+        self.place_box(el, n);
+        self.placing_list.set(false);
+    }
+
+    fn place_box(&self, el: X<'t, 'i>, n: &mut LNode) {
         n.width = self.num(el, "Width").filter(|v| *v >= 0.0);
         n.height = self.num(el, "Height").filter(|v| *v >= 0.0);
         n.min = [self.num(el, "MinWidth").unwrap_or(0.0), self.num(el, "MinHeight").unwrap_or(0.0)];
@@ -607,7 +731,11 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         }
         let opacity = self.num(el, "Opacity").unwrap_or(1.0).clamp(0.0, 1.0);
         let (fades, appear) = self.fade_in(el);
-        n.data.opacity = if opacity <= 0.01 && fades { 1.0 } else { opacity };
+        n.data.opacity = match self.resting_opacity(el) {
+            Some(o) => o,
+            None if opacity <= 0.01 && fades => 1.0,
+            None => opacity,
+        };
         if let Some(ms) = appear {
             n.data.appear_ms = Some(ms);
             self.stats.transitions += 1;
@@ -637,9 +765,7 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         }
         let mut fill = self.brush(el, fill_prop);
         // A solid fill faded by a gradient OpacityMask is that gradient.
-        if let (Some(LookBrush::Solid { color }), Some(mask)) =
-            (fill.clone(), self.get(el, "OpacityMask").and_then(|v| v.brush()))
-        {
+        if let (Some(LookBrush::Solid { color }), Some(mask)) = (fill.clone(), self.opacity_mask(el, "OpacityMask")) {
             fill = Some(masked(color, &mask));
         }
         n.data.fill = fill;
@@ -741,17 +867,22 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 n.content = Content::Fixed([W, 400.0]);
                 return true;
             }
-            "ListBoxEx" | "ListBox" | "ItemsControl" | "ListView" | "ComboBox" => {
-                n.data.kind = Kind::Drop("list driven by the theme's helpers");
+            "ListBoxEx" | "ListBox" | "ItemsControl" | "ListView" if strip::mirrors_game_list(self.t, el) => {
+                match self.strip(el) {
+                    Some(s) => {
+                        n.content = Content::Fixed([W, s.top + s.item[1] * s.focus_scale]);
+                        n.data.kind = Kind::Mirror(Box::new(s));
+                    }
+                    None => n.data.kind = Kind::Drop("list driven by the theme's helpers"),
+                }
+                return true;
+            }
+            "ListBoxEx" | "ListBox" | "ItemsControl" | "ItemsControlEx" | "ListView" | "ComboBox" => {
+                self.item_list(el, inh, n);
                 return true;
             }
             "FilterPresetSelector" => {
-                let (fg, current) = self.tab_colors();
-                let mut t = self.text_out(el, inh, String::new(), false);
-                t.color = fg.or(t.color);
-                let all: Vec<&str> = TABS.iter().map(|(_, l)| *l).collect();
-                n.content = Content::Text(TextSpec { text: all.join(TAB_GAP), ..spec(&t) });
-                n.data.kind = Kind::Tabs(TabsOut { label: t, current });
+                self.preset_strip(el, inh, n);
                 return true;
             }
             "ButtonEx" | "Button" => {
@@ -759,6 +890,11 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 return true;
             }
             "ContentControl" | "ContentPresenter" => return self.content_control(el, name, inh, n),
+            "GameDetails" => {
+                let tpl = self.own_template(el);
+                n.children.extend(tpl.and_then(|tpl| self.game_template(tpl, inh, depth)));
+                return true;
+            }
             "Border" | "Decorator" | "AdornerDecorator" | "Rectangle" | "Ellipse" => {}
             "Path" | "Polygon" | "Line" | "Polyline" => {
                 n.data.kind = Kind::Drop("drawn shape");
@@ -776,6 +912,42 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             }
         }
         false
+    }
+
+    /// A list of items other than the games: the game's genres / tags / … become one text in
+    /// the item template's text style; an add-on's list is empty without the add-on (no room
+    /// taken); anything else needs the theme's helpers.
+    fn item_list(&mut self, el: X<'t, 'i>, inh: &Inherit, n: &mut LNode) {
+        let source = match self.get(el, "ItemsSource") {
+            Some(Value::Plugin(_)) => {
+                n.data.kind = Kind::Drop("add-on panel");
+                return;
+            }
+            Some(Value::Binding(raw)) => parse_binding(&raw),
+            _ => {
+                n.data.kind = Kind::Drop("list driven by the theme's helpers");
+                return;
+            }
+        };
+        let key = (source.element.is_none() && !source.relative).then(|| game_key(&source.path)).flatten();
+        let label = prop_elem(el, "ItemTemplate").and_then(|t| {
+            t.descendants().find(|d| {
+                d.is_element()
+                    && tag(*d) == "TextBlock"
+                    && attr(*d, "Text").is_some_and(|v| matches!(tree::markup(v), Markup::Binding(b) if b.trim().is_empty() || parse_binding(&b).path.trim() == "Name"))
+            })
+        });
+        match (key, label) {
+            (
+                Some(k @ ("game.genres" | "game.tags" | "game.platform" | "game.developer" | "game.publisher")),
+                Some(tb),
+            ) => {
+                let t = self.text_out(tb, &self.inherit(tb, inh), format!("{{{k}}}"), true);
+                n.content = Content::Text(sample_spec(&t));
+                n.data.kind = Kind::Text(t);
+            }
+            _ => n.data.kind = Kind::Drop("list driven by the theme's helpers"),
+        }
     }
 
     /// A TextBlock or Label: the clock, the battery, symbol fonts, or its text (a literal, a
@@ -847,6 +1019,12 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
         false
     }
 
+    /// The placeholder of the video of the view being laid out (the details page's inside the
+    /// page, even where it sits in the main screen).
+    fn video_placeholder(&self) -> &'static str {
+        if self.main { MAIN_VIDEO } else { DETAILS_VIDEO }
+    }
+
     /// A MediaElement: the theme's own background video plays there; trailers and videos the
     /// theme's add-ons find per game don't exist in Lodestar.
     fn media_kind(&self, el: X<'t, 'i>) -> Kind {
@@ -854,8 +1032,10 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             // Sounds (a start-up chime, menu clicks) aren't pictures.
             Some(Value::ThemeFile(f)) if is_audio(&f) => Kind::None,
             Some(Value::Text(t)) if is_audio(&t) => Kind::None,
-            Some(Value::ThemeFile(_)) => Kind::Video,
-            Some(Value::Text(t)) if tree::theme_file(&self.t.files, &t).is_some() => Kind::Video,
+            Some(Value::ThemeFile(_)) => Kind::Video(self.video_placeholder()),
+            Some(Value::Text(t)) if tree::theme_file(&self.t.files, &t).is_some() => {
+                Kind::Video(self.video_placeholder())
+            }
             _ => Kind::Drop("video of the theme's add-ons"),
         }
     }
@@ -863,6 +1043,8 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
     /// A button: the Play / Install / options button, a bottom-bar prompt (→ the help bar),
     /// the main menu button, else dropped.
     fn button(&mut self, el: X<'t, 'i>, name: &str, inh: &Inherit, depth: usize, n: &mut LNode) {
+        // Playnite's ButtonEx draws its InputHint's glyph before its content: a hint, like
+        // the bottom bar's own buttons.
         let bottom = matches!(
             name,
             "PART_ButtonPlay"
@@ -871,29 +1053,69 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
                 | "PART_ButtonGameOptions"
                 | "PART_ButtonSearch"
                 | "PART_ButtonFilter"
-        );
+        ) || attr(el, "InputHint").is_some();
         let label = attr(el, "Content").and_then(|c| self.literal_or_loc(c));
         let big = n.height.is_some_and(|h| h >= 60.0);
-        if name == "PART_ButtonContext" || name == "PART_ButtonOptions" || (bottom && big && name == "PART_ButtonPlay")
-        {
+        // A big Play, Install or options button stands on the screen itself (a bar of small
+        // ones is the hint row). Playnite shows Play for installed games and Install otherwise.
+        let on_screen =
+            bottom && big && matches!(name, "PART_ButtonPlay" | "PART_ButtonInstall" | "PART_ButtonGameOptions");
+        if name == "PART_ButtonContext" || name == "PART_ButtonOptions" || on_screen {
+            let installed = Some("{game.installed}".to_string());
+            match name {
+                "PART_ButtonPlay" => n.data.cond = n.data.cond.and(&Cond { visible_if: installed, hidden_if: None }),
+                "PART_ButtonInstall" => n.data.cond = n.data.cond.and(&Cond { visible_if: None, hidden_if: installed }),
+                _ => {}
+            }
             // The options button often shows only an icon (Segoe's "More" dots): its
             // nearest symbol, never "Play", which would read as a second Play button.
+            let options = matches!(name, "PART_ButtonOptions" | "PART_ButtonGameOptions");
+            let content = if label.is_none() { self.content_label(el) } else { None };
             let label =
-                label.or_else(|| self.content_label(el)).or_else(|| (name == "PART_ButtonOptions").then(|| "…".into()));
-            let mut t = self.text_out(el, inh, label.clone().unwrap_or_else(|| "Play".into()), false);
-            t.align = Some("center");
-            let fill = self.brush(el, "Background");
-            let border = self
-                .get(el, "BorderThickness")
-                .and_then(|v| v.max_side())
-                .filter(|t| *t > 0.0)
-                .and_then(|th| self.brush(el, "BorderBrush").and_then(|b| b.average()).map(|c| (c, th)));
-            let radius = self.get(el, "CornerRadius").and_then(|v| v.max_side()).unwrap_or(0.0);
+                label.or_else(|| content.as_ref().map(|(t, _)| t.clone())).or_else(|| options.then(|| "…".into()));
+            let text = label.clone().unwrap_or_else(|| "Play".into());
+            // The content TextBlock's own size and colour where it sets them.
+            let t = match content {
+                Some((_, tb)) => self.text_out(tb, &self.inherit(tb, inh), text, false),
+                None => self.text_out(el, inh, text, false),
+            };
+            // The details page opens with the focus on its Play button.
+            let focused = self.details_open && name == "PART_ButtonContext";
+            let face = |installed| self.button_face(el, ButtonState { focused, installed: Some(installed) });
+            let (others, installed) = (face(false), face(true));
+            let context = name == "PART_ButtonContext";
+            // A TextBlock written inside the button keeps the colour and size it sets itself.
+            let sets = |p: &str| content.as_ref().is_some_and(|(_, tb)| self.t.local(*tb, p).is_some());
+            let (own_fg, own_size) = (sets("Foreground"), sets("FontSize"));
+            let look = |face: Option<&Face>| {
+                let mut out = self.button_out(el, &t, face, context);
+                if own_fg {
+                    out.label.color = t.color;
+                }
+                if own_size {
+                    out.label.size = t.size;
+                }
+                out
+            };
+            let mut out = look(others.as_ref());
+            if others != installed {
+                out.installed = Some(Box::new(look(installed.as_ref())));
+            }
             let pad = self.sides(el, "Padding");
-            n.padding = [pad[0].max(20.0), pad[1].max(8.0), pad[2].max(20.0), pad[3].max(8.0)];
-            n.content = Content::Text(TextSpec { text: "Install".into(), ..spec(&t) });
-            n.data.kind =
-                Kind::Button(ButtonOut { label: t, fill, border, radius, context: name == "PART_ButtonContext" });
+            // A button the theme sized itself gives its label the whole width, as WPF centres
+            // the content in it; a button sized by its label gets room around it.
+            let side = if n.width.is_some() { 0.0 } else { 20.0 };
+            n.padding = [pad[0].max(side), pad[1].max(8.0), pad[2].max(side), pad[3].max(8.0)];
+            // Measured with the longest label it shows (Lodestar's Play / Install, else the
+            // template's own words for each kind of game).
+            let longest = std::iter::once(&out)
+                .chain(out.installed.as_deref())
+                .filter(|o| o.own_text)
+                .map(|o| o.label.text.clone())
+                .max_by_key(|t| t.chars().count())
+                .unwrap_or_else(|| "Install".into());
+            n.content = Content::Text(TextSpec { text: longest, ..spec(&out.label) });
+            n.data.kind = Kind::Button(out);
             return;
         }
         if bottom {
@@ -901,7 +1123,8 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             let text = label.unwrap_or_default();
             n.content = Content::Text(TextSpec { text: text.clone(), ..spec(&t) });
             n.padding = [12.0, 6.0, 12.0, 6.0];
-            n.data.kind = Kind::Help(TextOut { text, ..t });
+            let unread = text.is_empty() && attr(el, "InputHint").is_some();
+            n.data.kind = Kind::Help { look: TextOut { text, ..t }, unread };
             return;
         }
         if name == "PART_ButtonMainMenu" {
@@ -929,8 +1152,51 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             }
             return;
         }
+        if is_pending_button(name) {
+            n.vis = Vis::Collapsed;
+            return;
+        }
         n.data.kind = Kind::Drop("button");
         n.content = Content::Fixed([48.0, 48.0]);
+    }
+
+    /// A Play / Install / options button drawn with `face` (its template's look in one
+    /// state), else with its own Background, border and corners; `t` is its label.
+    fn button_out(&self, el: X<'t, 'i>, t: &TextOut, face: Option<&Face>, context: bool) -> ButtonOut {
+        let mut label = TextOut { align: Some("center"), ..t.clone() };
+        let Some(face) = face else {
+            return ButtonOut {
+                label,
+                fill: self.brush(el, "Background"),
+                border: self
+                    .get(el, "BorderThickness")
+                    .and_then(|v| v.max_side())
+                    .filter(|t| *t > 0.0)
+                    .and_then(|th| self.brush(el, "BorderBrush").and_then(|b| b.average()).map(|c| (c, th))),
+                radius: self.get(el, "CornerRadius").and_then(|v| v.max_side()).unwrap_or(0.0),
+                band: None,
+                context,
+                own_text: false,
+                installed: None,
+            };
+        };
+        if let Some(fg) = face.fg.as_ref().and_then(LookBrush::average) {
+            label.color = Some(fg);
+        }
+        label.size = face.size.unwrap_or(label.size);
+        if let Some(text) = &face.text {
+            label.text = text.clone();
+        }
+        ButtonOut {
+            label,
+            fill: face.fill.clone(),
+            border: face.border,
+            radius: face.radius,
+            band: face.band,
+            context,
+            own_text: face.text.is_some(),
+            installed: None,
+        }
     }
 
     /// A ContentControl / ContentPresenter: a button prompt, the battery, a logo hook or an
@@ -965,34 +1231,6 @@ impl<'b, 't, 'i> Builder<'b, 't, 'i> {
             return true;
         }
         false
-    }
-
-    /// The filter preset tab colours: the theme's `ItemFilterQuickPreset` style (its text
-    /// colour, and the one its IsChecked / IsFocused triggers give), else the accent glyph colour
-    /// for the open tab.
-    pub(super) fn tab_colors(&self) -> (Option<Color>, Option<Color>) {
-        let colour = |v: Option<Value>| v.and_then(|v| v.brush()).and_then(|b| b.average());
-        let style = self.t.resource("ItemFilterQuickPreset");
-        let normal = style.and_then(|s| colour(self.t.setter(s, "Foreground")));
-        let mut current = None;
-        if let Some(tpl) = style.and_then(|s| self.t.template(s)) {
-            for state in ["IsChecked", "IsFocused"] {
-                let set =
-                    self.t.triggers(tpl).into_iter().filter(|tr| attr(*tr, "Property") == Some(state)).find_map(|tr| {
-                        content(tr).find(|c| {
-                            tag(*c) == "Setter"
-                                && attr(*c, "Property").is_some_and(|p| p.trim().ends_with("Foreground"))
-                        })
-                    });
-                if current.is_none()
-                    && let Some(set) = set
-                {
-                    current = colour(self.t.setter_value(set, "Foreground"));
-                }
-            }
-        }
-        let glyph = colour(self.t.resource("GlyphBrush").and_then(|r| self.t.eval_node(r, 0)));
-        (normal, current.or(glyph))
     }
 
     /// A static RenderTransform translation.

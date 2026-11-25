@@ -71,6 +71,9 @@ impl DesktopUi {
             self.debug_menu = None;
             egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&menu_resp));
         }
+        if std::mem::take(&mut self.pad.open_app_menu) {
+            egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&menu_resp));
+        }
         if std::mem::take(&mut self.open_add_menu) {
             // Insert: the app menu with its Add game submenu open.
             egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&menu_resp));
@@ -300,10 +303,14 @@ impl DesktopUi {
             }
         }
         if want != cur_preset {
-            d.preset = want;
-            d.installed_only = want == QuickPreset::Installed;
-            self.mark_config_dirty();
+            self.set_preset(d, want);
         }
+    }
+
+    pub(super) fn set_preset(&mut self, d: &mut DesktopConfig, p: QuickPreset) {
+        d.preset = p;
+        d.installed_only = p == QuickPreset::Installed;
+        self.mark_config_dirty();
     }
 
     fn search_box(&mut self, ui: &mut Ui) {

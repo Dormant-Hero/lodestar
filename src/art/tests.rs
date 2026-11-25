@@ -1071,3 +1071,59 @@ fn art_live_auto_library() {
         println!("{:<45} need {:<2} -> {:?}", r.name, r.need.len(), e.confident_store_match(&r.name, Req::UI));
     }
 }
+
+#[test]
+fn key_check_answers_without_touching_the_saved_key() {
+    let tmp = tempfile::tempdir().unwrap();
+    let url = sgdb_search_url("Portal");
+    let ok = br#"{"success":true,"data":[{"id":1,"name":"Portal"}]}"#;
+    let e = engine(FakeNet::default().ok(&url, ok), tmp.path(), Some("saved"));
+    assert_eq!(e.check_sgdb_key(" good "), KeyCheck::Works);
+    let e = engine(FakeNet::default().status(&url, 401), tmp.path(), Some("saved"));
+    assert_eq!(e.check_sgdb_key("bad"), KeyCheck::Rejected);
+    assert!(!e.is_rejected(SourceKind::SteamGridDb), "the saved key is another one");
+    let e = engine(FakeNet::default().net_err(&url), tmp.path(), None);
+    assert!(matches!(e.check_sgdb_key("k"), KeyCheck::Unreachable(why) if why.contains("refused")));
+}
+
+#[test]
+fn key_field_is_checked_once_it_stops_changing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let url = sgdb_search_url("Portal");
+    let net = FakeNet::default().ok(&url, br#"{"success":true,"data":[]}"#);
+    let (mut st, calls) = auto_state(tmp.path(), net);
+    assert_eq!(st.sgdb_key_check("  "), None);
+    assert_eq!(st.sgdb_key_check("abc"), Some(KeyCheck::Checking));
+    assert_eq!(st.sgdb_key_check("abcd"), Some(KeyCheck::Checking));
+    std::thread::sleep(std::time::Duration::from_millis(700));
+    assert_eq!(st.sgdb_key_check("abcd"), Some(KeyCheck::Checking));
+    let ok = st.poll_until(std::time::Duration::from_secs(5), |s| {
+        s.art_state.key_check.answer_for("abcd") == Some(KeyCheck::Works)
+    });
+    assert!(ok);
+    // One request, for the key as it ended up.
+    assert_eq!(*calls.lock(), vec![(url, Some("abcd".to_string()))]);
+}
+
+#[test]
+fn welcome_key_is_used_by_the_first_artwork_lookups() {
+    let tmp = tempfile::tempdir().unwrap();
+    let sgdb = sgdb_search_url("Celeste Shortcut");
+    let net = FakeNet::default().ok(&sgdb, br#"{"success":true,"data":[]}"#);
+    let (mut st, calls) = auto_state(tmp.path(), net);
+    st.metadata = crate::metadata::MetadataFetcher::offline(st.ctx(), st.paths.art_dir(), &st.config.metadata);
+    st.config.metadata.steam_store = false;
+    st.auto_art.allowed = true;
+    st.add_manual_game("Celeste Shortcut", LaunchSpec::Url("x://".into()), Art::default());
+
+    // The first scan ends while the step shows: its lookups wait for the answer.
+    st.welcome.open = true;
+    st.auto_art_after_scan();
+    assert!(!st.auto_art.wanted);
+    st.welcome.key = "welcome-key".into();
+    st.finish_welcome(true);
+    assert!(st.auto_art.wanted);
+    let ok = st.poll_until(std::time::Duration::from_secs(10), |s| !s.auto_art.running && !s.auto_art.wanted);
+    assert!(ok, "auto fill did not finish");
+    assert!(calls.lock().contains(&(sgdb, Some("welcome-key".to_string()))), "{:?}", calls.lock());
+}
