@@ -4,7 +4,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/Dormant-Hero/lodestar?label=release)](https://github.com/Dormant-Hero/lodestar/releases/latest)
 [![Licence: MIT](https://img.shields.io/github/license/Dormant-Hero/lodestar)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/sSJ3kuC7Uz)
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/vdykSBfcB4)
 ![Linux](https://img.shields.io/badge/platform-Linux-informational?logo=linux&logoColor=white)
 
 Lodestar gathers the games from Steam, Heroic, Lutris, your emulators and more into one fast library, with a
@@ -180,7 +180,7 @@ from them by you, never shipped with Lodestar.
 
 ## Community and feedback
 
-- **Chat, questions, sharing themes:** join the [Lodestar Discord](https://discord.gg/sSJ3kuC7Uz).
+- **Chat, questions, sharing themes:** join the [Lodestar Discord](https://discord.gg/vdykSBfcB4).
 - **Bugs and suggestions:** [Issues](https://github.com/Dormant-Hero/lodestar/issues), using the bug report or
   suggestion template.
 
