@@ -11,8 +11,8 @@ pub(crate) struct RunningScan {
     pub btime: Option<u64>,
     /// The /proc it looked at (a fake one in tests).
     pub root: PathBuf,
-    /// Something that looks like a game runs (`track::others_running`).
-    pub others: bool,
+    /// Something that looks like a game runs (`track::other_game`), and which.
+    pub others: Option<track::OtherGame>,
     /// When the scan started reading /proc: a slow scan's "nothing runs" is only as fresh as
     /// that (a game started while it read is not in it).
     pub started: std::time::Instant,
@@ -90,7 +90,9 @@ pub(crate) fn plan_adoptions(
     age: impl Fn(u64) -> Duration,
 ) -> Vec<Adoption> {
     let mut out: Vec<Adoption> = vec![];
-    for f in found {
+    // The Steam client a launch started is no game, whatever game the tag names.
+    let roots = if found.is_empty() { vec![] } else { track::steam_roots() };
+    for f in found.iter().filter_map(|f| track::without_steam(f, procs, proc_root, &roots)) {
         let mut own = f.procs.clone();
         let (id, kind, mode, tag, folder, foreign) = match &f.what {
             track::FoundKind::Steam { appid } => {
@@ -176,7 +178,7 @@ impl Launcher {
     /// environment: a few ms, but a process stuck in the kernel can make such a read hang) runs
     /// on a thread of its own; `finish_running_scan` follows what it found. One scan at a time.
     /// `game_dirs`: installed games' folders (a program running from one is a game this run may
-    /// not follow, see `track::others_running`).
+    /// not follow, see `track::other_game`).
     pub fn start_running_scan(&mut self, game_dirs: Vec<PathBuf>) {
         if self.running_scan.is_some() {
             return;
@@ -190,8 +192,9 @@ impl Launcher {
             let procs = track::read_procs(true);
             let found = track::find_running(&procs, root, me);
             let btime = track::boot_time(root);
-            let others = track::others_running(&found, &procs, root, me, &game_dirs);
-            log::debug!("looked for running games in {:?} (something game-like runs: {others})", t.elapsed());
+            let others = track::other_game(&found, &procs, root, me, &game_dirs);
+            let what = others.as_ref().map_or("nothing".into(), |o| o.describe(&[]));
+            log::debug!("looked for running games in {:?}; looks like a game: {what}", t.elapsed());
             let _ = tx.send(RunningScan { procs, found, btime, root: root.to_path_buf(), others, started: t });
             ctx.request_repaint();
         });
@@ -215,7 +218,7 @@ impl Launcher {
             }
         };
         self.running_scan = None;
-        self.others_look = Some((scan.started, scan.others));
+        self.others_look = Some((scan.started, scan.others.is_some()));
         Some(self.adopt_found(&scan, games))
     }
 

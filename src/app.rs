@@ -29,7 +29,7 @@ mod window;
 pub use window::App;
 pub(crate) use window::is_wayland;
 #[cfg(test)]
-use window::{desktop_key_frames, focus_left_for_game, just_ended, toast_width};
+use window::{desktop_key_frames, desktop_pad_log, focus_left_for_game, just_ended, toast_width};
 
 /// See `AppState::rescan_at`.
 const STEAM_FOLLOWUP_RESCAN: Duration = Duration::from_secs(20);

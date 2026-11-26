@@ -29,6 +29,8 @@ pub struct App {
     focus_seen: bool,
     /// Last frame's focus (to see the moment it goes to another window).
     was_focused: Option<bool>,
+    /// What the log last said about the pad in desktop mode (`desktop_pad_log`).
+    desktop_pad_logged: Option<Option<input::gate::PadOff>>,
     /// The main window's size / place / maximised, remembered (main_window.rs).
     main_win: crate::main_window::Tracker,
     /// Gamepad navigation drained in `logic` (which also runs while the window is hidden, so
@@ -208,6 +210,7 @@ impl App {
             hide_test: HideTest::Waiting,
             focus_seen: false,
             was_focused: None,
+            desktop_pad_logged: None,
             main_win: Default::default(),
             pad_navs: vec![],
             guide: Default::default(),
@@ -422,7 +425,14 @@ impl App {
     /// own rule allows; otherwise presses still waiting there are dropped too. Returns whether
     /// the rule allowed.
     fn hand_to_desktop(&mut self, sit: &input::gate::Situation, d: input::gate::DesktopPad, navs: &[Nav]) -> bool {
-        let allowed = input::gate::desktop_pad(sit, d);
+        let watch = self.st.mode == Mode::Desktop && self.st.input.has_gamepads();
+        let off = input::gate::desktop_pad_off(sit, d);
+        if let Some(line) = desktop_pad_log(&mut self.desktop_pad_logged, watch, off) {
+            log::info!("{line}");
+        }
+        // The rule (`desktop_pad`) is: nothing keeps the pad out.
+        let allowed = off.is_none();
+        debug_assert_eq!(allowed, input::gate::desktop_pad(sit, d));
         if allowed {
             self.desktop.take_pad(navs);
         } else {
@@ -829,6 +839,30 @@ const SCREENSHOT_MIN_SETTLE: Duration = Duration::from_millis(700);
 /// menus left open must then stop taking the pad, as for a focus that went to the game.
 pub(super) fn focus_left_for_game(game_up: bool, was: Option<bool>, now: Option<bool>) -> bool {
     game_up && was == Some(true) && now != Some(true)
+}
+
+/// The log line about the pad in desktop mode, when there is something new to say: while
+/// `watch` (desktop mode, a controller connected), whenever the reason it waits (`off`, None: it
+/// works) changes, and again once a controller connects or desktop mode comes back. Switching
+/// away from Lodestar and back says nothing (`PadOff::away`). `logged`: what was said last (None:
+/// nothing since watching started).
+pub(super) fn desktop_pad_log(
+    logged: &mut Option<Option<input::gate::PadOff>>,
+    watch: bool,
+    off: Option<input::gate::PadOff>,
+) -> Option<String> {
+    if !watch {
+        *logged = None;
+        return None;
+    }
+    if off.is_some_and(|o| o.away()) || *logged == Some(off) {
+        return None;
+    }
+    *logged = Some(off);
+    Some(match off {
+        Some(why) => format!("the controller waits in desktop mode: {}", why.text()),
+        None => "the controller works in desktop mode".into(),
+    })
 }
 
 /// A game ended a moment ago (and none is up again): only Home acts until it settles.

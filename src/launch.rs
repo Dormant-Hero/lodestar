@@ -737,7 +737,7 @@ pub struct Launcher {
     /// A scan for running games in progress (`start_running_scan`).
     running_scan: Option<Receiver<RunningScan>>,
     /// When the last scan for running games finished, and whether it saw something that looks
-    /// like a game this run may not follow (`track::others_running`): the background
+    /// like a game this run may not follow (`track::other_game`): the background
     /// controller's safety check.
     others_look: Option<(std::time::Instant, bool)>,
 }

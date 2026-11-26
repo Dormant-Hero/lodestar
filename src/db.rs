@@ -36,6 +36,18 @@ impl Db {
         Self::init(conn)
     }
 
+    /// The library only to read it (diagnostics): never creates, changes or migrates it, nor makes
+    /// the files SQLite keeps beside it (`scan::desktop::common::open_sqlite_ro`). None when there
+    /// is none, or when it is from another version of Lodestar (older or newer).
+    pub fn open_read_only(path: &Path) -> Option<Db> {
+        if !path.is_file() {
+            return None;
+        }
+        let conn = crate::scan::desktop::common::open_sqlite_ro(path).ok()?;
+        let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).ok()?;
+        (version == SCHEMA_VERSION).then_some(Db { conn })
+    }
+
     #[cfg(test)]
     pub fn open_memory() -> Result<Db> {
         Self::init(Connection::open_in_memory()?)
