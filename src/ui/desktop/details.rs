@@ -281,7 +281,7 @@ impl DesktopUi {
         l: &PageLayout,
     ) -> (Option<HeroPic>, Option<Rect>) {
         let pal = self.pal;
-        let PageLayout { w, hero_h, hero_rect, narrow, margin, cover_rect, text_left, row_top } = *l;
+        let PageLayout { hero_rect, narrow, cover_rect, .. } = *l;
         let g = &st.library.games[gi];
         let p = ui.painter();
         let pic = paint_hero(
@@ -295,8 +295,22 @@ impl DesktopUi {
             self.background_of(g),
             HeroLook::of(&st.desktop_theme.file.desktop),
         );
-        // Logo / name above the hero's bottom edge, right of the cover — or where the user
-        // placed it (Arrange mode: the placement being arranged right now).
+        let logo_rect = self.paint_page_title(p, st, gi, l);
+        if !narrow {
+            let g = &st.library.games[gi];
+            let cr = st.desktop_theme.file.desktop.cover_radius();
+            crate::ui::widgets::soft_shadow(p, cover_rect, cr, 18, 6, 140);
+            super::grid::paint_game_cover(p, &mut st.images, g, cover_rect, cr, &pal, ImgSize::Medium, false);
+        }
+        (pic, logo_rect)
+    }
+
+    /// The logo above the hero's bottom edge, right of the cover, or where the user placed it
+    /// (Arrange mode: the placement being arranged right now); the name when there is no logo.
+    /// Returns the logo's rect.
+    fn paint_page_title(&self, p: &egui::Painter, st: &mut AppState, gi: usize, l: &PageLayout) -> Option<Rect> {
+        let PageLayout { w, hero_h, hero_rect, narrow, margin, text_left, row_top, .. } = *l;
+        let g = &st.library.games[gi];
         let logo_box = Rect::from_min_max(
             pos2(text_left, hero_rect.top() + hero_h * 0.18),
             pos2((text_left + w.max(500.0) * 0.42).min(hero_rect.right() - margin), row_top - 12.0),
@@ -323,14 +337,9 @@ impl DesktopUi {
                 pos2(text_left, hero_rect.top() + 12.0),
                 pos2(hero_rect.right() - margin, logo_box.bottom()),
             );
-            title_text(p, g.display_name(), font, r, &pal, Align::Min);
+            title_text(p, g.display_name(), font, r, &self.pal, Align::Min);
         }
-        if !narrow {
-            let cr = st.desktop_theme.file.desktop.cover_radius();
-            crate::ui::widgets::soft_shadow(p, cover_rect, cr, 18, 6, 140);
-            super::grid::paint_game_cover(p, &mut st.images, g, cover_rect, cr, &pal, ImgSize::Medium, false);
-        }
-        (pic, logo_rect)
+        logo_rect
     }
 
     /// Pencils and magnifiers: the cover's while over the cover, the background's elsewhere on
