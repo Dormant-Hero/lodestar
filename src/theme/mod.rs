@@ -1,11 +1,12 @@
-//! Themes: format (`model`), built-in themes (`builtin`), font registration (`fonts`),
-//! controller-mode renderer (`render`), the theme lists (`catalog`), Lodestar's console artwork
-//! (`console_art`) and the Playnite theme importer (`playnite`).
+//! Themes: format (`model`), built-in themes (`builtin`), font registration (`fonts`), box
+//! layout (`layout`), controller-mode renderer (`render`), the theme lists (`catalog`),
+//! Lodestar's console artwork (`console_art`) and the Playnite theme importer (`playnite`).
 
 pub mod builtin;
 pub mod catalog;
 pub mod console_art;
 pub mod fonts;
+mod layout;
 pub mod model;
 pub mod playnite;
 pub mod render;

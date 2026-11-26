@@ -33,7 +33,6 @@ pub(crate) mod extract;
 pub mod extras;
 mod fill;
 mod fonts;
-mod layout;
 pub mod loc;
 pub(crate) mod look;
 mod map;

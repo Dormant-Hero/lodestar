@@ -3,7 +3,6 @@
 
 use super::super::Mode;
 use super::super::extract::look_of;
-use super::super::layout::Rough;
 use super::super::tree::tests::NS;
 use super::super::tree::{Texts, Tree};
 use super::bind::{bind_art, bind_text, parse_binding};
@@ -11,6 +10,7 @@ use super::build::icon_symbol;
 use super::emit::tile_panel;
 use super::visibility::duration_ms;
 use super::*;
+use crate::theme::layout::Rough;
 
 mod details;
 mod list;

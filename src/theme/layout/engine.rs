@@ -1,4 +1,4 @@
-//! WPF measure / arrange for the Playnite view compiler (compile.rs): the layout rules Playnite's
+//! WPF measure / arrange for the Playnite view compiler (`playnite::compile`): the layout rules Playnite's
 //! Fullscreen views are written for, run once at import time on a 1920 × 1080 screen.
 //!
 //! Covered: Grid (pixel / Auto / star rows and columns with Min / Max, spans), StackPanel,
