@@ -933,24 +933,54 @@ pub fn find_running(procs: &[ProcInfo], proc_root: &Path, me: i32) -> Vec<Found>
 }
 
 /// Something that looks like a game runs that Lodestar may not follow (the background
-/// controller's safety check, input/gate.rs): a Steam reaper (any AppId, in the library or not),
-/// a process tagged by another Lodestar run (`found`, from [`find_running`]), a Windows program
-/// (Wine / Proton: argv[0] ends in `.exe`), a known emulator, a game-streaming / cloud-gaming
-/// app, or a program running from one of `game_dirs` (installed games' folders). Errs on the
-/// side of "a game runs": then only the Guide button reaches an unfocused Lodestar.
-pub fn others_running(found: &[Found], procs: &[ProcInfo], proc_root: &Path, me: i32, game_dirs: &[PathBuf]) -> bool {
-    if !found.is_empty() {
-        return true;
+/// controller's and desktop mode's safety check, input/gate.rs), and what: a Steam reaper (any
+/// AppId, in the library or not), a launch tagged by another Lodestar run (`found`, from
+/// [`find_running`]), a Windows program (Wine / Proton: argv[0] ends in `.exe`), a known
+/// emulator, a game-streaming / cloud-gaming app, or a program running from one of `game_dirs`
+/// (installed games' folders). Errs on the side of "a game runs": then only the Guide button
+/// reaches an unfocused Lodestar.
+pub fn other_game(
+    found: &[Found],
+    procs: &[ProcInfo],
+    proc_root: &Path,
+    me: i32,
+    game_dirs: &[PathBuf],
+) -> Option<OtherGame> {
+    if let Some(f) = found.first() {
+        return Some(OtherGame::of(f));
     }
-    procs.iter().filter(|p| !p.zombie && p.pid != me).any(|p| {
+    procs.iter().filter(|p| !p.zombie && p.pid != me).find_map(|p| {
         let argv = p.cmdline.as_deref().unwrap_or_default();
-        if reaper_appid(argv).is_some() || argv.first().is_some_and(|a| looks_like_game_program(a)) {
-            return true;
+        let argv0 = argv.first().map(String::as_str).unwrap_or_default();
+        if let Some(appid) = reaper_appid(argv) {
+            return Some(OtherGame::Steam { appid });
         }
-        !game_dirs.is_empty()
-            && std::fs::read_link(proc_root.join(p.pid.to_string()).join("exe"))
-                .is_ok_and(|exe| game_dirs.iter().any(|d| exe.starts_with(d)))
+        let game_like = looks_like_game_program(argv0)
+            || (!game_dirs.is_empty()
+                && std::fs::read_link(proc_root.join(p.pid.to_string()).join("exe"))
+                    .is_ok_and(|exe| game_dirs.iter().any(|d| exe.starts_with(d))));
+        game_like.then(|| OtherGame::Process { pid: p.pid, program: argv0.to_string() })
     })
+}
+
+/// What [`other_game`] saw.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OtherGame {
+    /// A launch by another Lodestar run; `foreign`: that Lodestar still runs.
+    Launch { id: GameId, foreign: bool },
+    /// Steam's reaper: a game runs in Steam.
+    Steam { appid: u32 },
+    /// A program that looks like a game.
+    Process { pid: i32, program: String },
+}
+
+impl OtherGame {
+    fn of(f: &Found) -> OtherGame {
+        match f.what {
+            FoundKind::Tagged { id, foreign, .. } => OtherGame::Launch { id, foreign },
+            FoundKind::Steam { appid } => OtherGame::Steam { appid },
+        }
+    }
 }
 
 /// argv[0] of a Windows program (Wine / Proton), a known emulator, or a game-streaming /
@@ -1008,7 +1038,7 @@ mod tests {
     /// The background controller's safety check: Steam reapers, Windows programs (but not Wine's
     /// own helpers), emulators and programs from an installed game's folder count as a game.
     #[test]
-    fn others_running_sees_games_started_elsewhere() {
+    fn other_game_sees_games_started_elsewhere() {
         use fake::P;
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("proc");
@@ -1019,7 +1049,7 @@ mod tests {
         fake::add(&root, P::new(FAKE + 2, 30, &["C:\\windows\\system32\\services.exe"]));
         fake::add(&root, P::new(FAKE + 3, 30, &["/usr/bin/firefox", "--new-window"]));
         let procs = read_procs_in(&root, true);
-        let none = |dirs: &[PathBuf], procs: &[ProcInfo]| !others_running(&[], procs, &root, me, dirs);
+        let none = |dirs: &[PathBuf], procs: &[ProcInfo]| other_game(&[], procs, &root, me, dirs).is_none();
         assert!(none(&[], &procs), "desktop programs and Wine helpers aren't games");
 
         let with = |p: P| {
@@ -1040,7 +1070,7 @@ mod tests {
         ] {
             let (_d, r, _exe) = with(P::new(FAKE + 5, 40, argv));
             let procs = read_procs_in(&r, true);
-            assert!(others_running(&[], &procs, &r, me, &[]), "{argv:?}");
+            assert!(other_game(&[], &procs, &r, me, &[]).is_some(), "{argv:?}");
         }
         // A native game started from a desktop shortcut: its program is in an installed game's
         // folder.
@@ -1050,14 +1080,14 @@ mod tests {
         let (_d, r, exe) = with(P::new(FAKE + 6, 50, &["./Celeste.bin.x86_64"]));
         std::os::unix::fs::symlink(game.join("Celeste.bin.x86_64"), &exe).unwrap();
         let procs = read_procs_in(&r, true);
-        assert!(others_running(&[], &procs, &r, me, std::slice::from_ref(&game)));
-        assert!(!others_running(&[], &procs, &r, me, &[dir.path().join("Games/Other")]));
+        assert!(other_game(&[], &procs, &r, me, std::slice::from_ref(&game)).is_some());
+        assert!(other_game(&[], &procs, &r, me, &[dir.path().join("Games/Other")]).is_none());
         // Lodestar itself never counts, nor do zombies.
         let (_d, r, _exe) = with(P::new(me, 60, &["C:\\x\\game.exe"]));
-        assert!(!others_running(&[], &read_procs_in(&r, true), &r, me, &[]));
+        assert!(other_game(&[], &read_procs_in(&r, true), &r, me, &[]).is_none());
         // What find_running reported (tags of another Lodestar run, reapers) counts as well.
         let f = Found { what: FoundKind::Steam { appid: 7 }, procs: vec![], since: 0 };
-        assert!(others_running(&[f], &procs, &r, me, &[]));
+        assert!(other_game(&[f], &procs, &r, me, &[]).is_some());
     }
 
     #[test]

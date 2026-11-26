@@ -11,7 +11,7 @@ pub(crate) struct RunningScan {
     pub btime: Option<u64>,
     /// The /proc it looked at (a fake one in tests).
     pub root: PathBuf,
-    /// Something that looks like a game runs (`track::others_running`).
+    /// Something that looks like a game runs (`track::other_game`).
     pub others: bool,
     /// When the scan started reading /proc: a slow scan's "nothing runs" is only as fresh as
     /// that (a game started while it read is not in it).
@@ -176,7 +176,7 @@ impl Launcher {
     /// environment: a few ms, but a process stuck in the kernel can make such a read hang) runs
     /// on a thread of its own; `finish_running_scan` follows what it found. One scan at a time.
     /// `game_dirs`: installed games' folders (a program running from one is a game this run may
-    /// not follow, see `track::others_running`).
+    /// not follow, see `track::other_game`).
     pub fn start_running_scan(&mut self, game_dirs: Vec<PathBuf>) {
         if self.running_scan.is_some() {
             return;
@@ -190,7 +190,7 @@ impl Launcher {
             let procs = track::read_procs(true);
             let found = track::find_running(&procs, root, me);
             let btime = track::boot_time(root);
-            let others = track::others_running(&found, &procs, root, me, &game_dirs);
+            let others = track::other_game(&found, &procs, root, me, &game_dirs).is_some();
             log::debug!("looked for running games in {:?} (something game-like runs: {others})", t.elapsed());
             let _ = tx.send(RunningScan { procs, found, btime, root: root.to_path_buf(), others, started: t });
             ctx.request_repaint();
