@@ -19,7 +19,7 @@ mod achievements;
 mod arrange;
 pub(crate) use achievements::show_all_id;
 use arrange::HeroPic;
-pub(crate) use arrange::{Arrange, save_placements};
+pub(crate) use arrange::{Arrange, Layout, save_layout};
 
 /// What the big button does for a game right now.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -316,7 +316,7 @@ impl DesktopUi {
             pos2((text_left + w.max(500.0) * 0.42).min(hero_rect.right() - margin), row_top - 12.0),
         );
         let placement = match &self.arrange {
-            Some(a) if a.id == g.id => a.logo,
+            Some(a) if a.id == g.id => a.live.logo,
             _ => g.edits.logo_placement.map(LogoPlacement::clamped),
         };
         let drawn = match placement {
@@ -908,7 +908,7 @@ impl DesktopUi {
     /// The background crop to draw for `g`: the one being arranged right now, else its saved one.
     fn background_of(&self, g: &Game) -> Option<BackgroundPlacement> {
         match &self.arrange {
-            Some(a) if a.id == g.id => a.bg,
+            Some(a) if a.id == g.id => a.live.bg,
             _ => g.edits.background_placement,
         }
     }

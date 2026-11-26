@@ -16,8 +16,8 @@ pub(crate) enum UndoWhat {
     Score(Vec<(GameId, Option<u8>)>),
     /// The user's collections before a delete / remove-from-collection.
     Collections(Vec<crate::library::UserCollection>),
-    /// A game's logo and background placements before Arrange mode.
-    Arrange(GameId, Option<LogoPlacement>, Option<BackgroundPlacement>),
+    /// A game's layout before Arrange mode.
+    Arrange(GameId, details::Layout),
     /// Missing games removed from the library (Remove from library…).
     Removed(crate::missing_app::RemovedGames),
 }
@@ -196,7 +196,7 @@ impl DesktopUi {
                 UndoWhat::Completion(before) => st.set_completion_many(before),
                 UndoWhat::Score(before) => st.set_user_score_many(before),
                 UndoWhat::Collections(before) => self.restore_collections(st, before.clone()),
-                UndoWhat::Arrange(id, logo, bg) => details::save_placements(st, *id, *logo, *bg),
+                UndoWhat::Arrange(id, l) => details::save_layout(st, *id, *l),
                 UndoWhat::Removed(r) => st.restore_removed(r),
             }
             if let Some(id) = u.focus {

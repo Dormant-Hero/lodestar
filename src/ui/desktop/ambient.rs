@@ -385,7 +385,7 @@ impl DesktopUi {
         let target = self.selected.and_then(|id| st.library.get(id)).and_then(|g| {
             // While arranging, the crop being dragged right now.
             let crop = match &self.arrange {
-                Some(a) if a.id == g.id => a.bg,
+                Some(a) if a.id == g.id => a.live.bg,
                 _ => g.edits.background_placement,
             };
             Some((g.art.background()?.clone(), crop))
