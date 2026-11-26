@@ -3,5 +3,7 @@
 //! out with it.
 
 mod engine;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use engine::*;
