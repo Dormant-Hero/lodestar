@@ -133,7 +133,7 @@ impl Texts {
 /// themes read: the size its views are designed for (`{StaticResource DesignWidth}` on a
 /// full-screen overlay), which Playnite then scales to the screen.
 fn fullscreen_app_resources() -> String {
-    let [w, h] = crate::theme::layout::SCREEN;
+    let [w, h] = super::layout::SCREEN;
     format!(
         r#"<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib">
   <sys:Double x:Key="DesignWidth">{w}</sys:Double>

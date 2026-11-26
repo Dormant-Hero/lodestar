@@ -2,6 +2,11 @@ use super::*;
 
 const INF: f32 = f32::INFINITY;
 
+/// The cases are Playnite Fullscreen views, laid out on the screen they are designed for.
+fn layout<T>(root: &mut Node<T>, m: &mut dyn Measurer) {
+    super::layout(root, [1920.0, 1080.0], m);
+}
+
 type N = Node<&'static str>;
 
 fn node(name: &'static str) -> N {

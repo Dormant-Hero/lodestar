@@ -1,5 +1,5 @@
-//! WPF measure / arrange for the Playnite view compiler (`playnite::compile`): the layout rules Playnite's
-//! Fullscreen views are written for, run once at import time on a 1920 × 1080 screen.
+//! WPF measure / arrange: the layout rules Playnite's views are written for, at any size. The
+//! Playnite view compiler (`playnite::compile`) runs it once per Fullscreen view, at import time.
 //!
 //! Covered: Grid (pixel / Auto / star rows and columns with Min / Max, spans), StackPanel,
 //! DockPanel (LastChildFill), Canvas (Left / Top / Right / Bottom), Border-like single-child
@@ -12,10 +12,7 @@
 //! clamped to what was offered, an element larger than its slot keeps its size and overflows,
 //! Stretch acts like Center when a Max / Width stops it filling the slot.
 //!
-//! Pure data in, rectangles out: the compiler builds the tree, this lays it out, nothing runs.
-
-/// Playnite Fullscreen's design size.
-pub(crate) const SCREEN: [f32; 2] = [1920.0, 1080.0];
+//! Pure data in, rectangles out: the caller builds the tree, this lays it out, nothing runs.
 
 const INF: f32 = f32::INFINITY;
 
@@ -342,10 +339,10 @@ impl<T> Node<T> {
     }
 }
 
-/// Lay out `root` on the screen.
-pub(crate) fn layout<T>(root: &mut Node<T>, m: &mut dyn Measurer) {
-    measure(root, SCREEN, m);
-    arrange(root, Rect::new(0.0, 0.0, SCREEN[0], SCREEN[1]), m);
+/// Lay out `root` in a `size` area at the origin.
+pub(crate) fn layout<T>(root: &mut Node<T>, size: [f32; 2], m: &mut dyn Measurer) {
+    measure(root, size, m);
+    arrange(root, Rect::new(0.0, 0.0, size[0], size[1]), m);
 }
 
 /// FrameworkElement.MeasureCore.
