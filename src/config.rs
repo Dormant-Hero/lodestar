@@ -997,6 +997,17 @@ emu_sources_off = ["ScreenScraper", "Steam"]
     }
 
     #[test]
+    fn page_logo_shows_unless_turned_off() {
+        assert!(Config::default().desktop.show_page_logo);
+        let old: Config = toml::from_str("[desktop]\nview = \"details\"\n").unwrap();
+        assert!(old.desktop.show_page_logo);
+        let mut c = Config::default();
+        c.desktop.show_page_logo = false;
+        let back: Config = toml::from_str(&toml::to_string_pretty(&c).unwrap()).unwrap();
+        assert!(!back.desktop.show_page_logo);
+    }
+
+    #[test]
     fn desktop_navigation_defaults_on() {
         let old: Config = toml::from_str("[controller]\nswap_ab = true\n").unwrap();
         assert!(old.controller.desktop_navigation);

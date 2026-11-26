@@ -295,7 +295,7 @@ impl DesktopUi {
             self.background_of(g),
             HeroLook::of(&st.desktop_theme.file.desktop),
         );
-        let logo_rect = self.paint_page_title(p, st, gi, l);
+        let logo_rect = if st.config.desktop.show_page_logo { self.paint_page_title(p, st, gi, l) } else { None };
         if !narrow {
             let g = &st.library.games[gi];
             let cr = st.desktop_theme.file.desktop.cover_radius();
@@ -1466,6 +1466,77 @@ mod tests {
         assert_eq!(format_size(1536), "1.5 KB");
         assert_eq!(format_size(50 * 1024 * 1024 * 1024), "50.0 GB");
         assert_eq!(format_size(150 * 1024 * 1024 * 1024), "150 GB");
+    }
+
+    const NAME: &str = "Hollow Pines";
+
+    /// The Details view at `width` × 800 with the game `NAME` selected.
+    struct Page {
+        st: AppState,
+        ui: DesktopUi,
+        width: f32,
+        _dir: tempfile::TempDir,
+    }
+
+    impl Page {
+        fn new(width: f32) -> Page {
+            let dir = tempfile::tempdir().unwrap();
+            let mut st = AppState::for_test(dir.path());
+            st.db.merge_scan(&[crate::model::ScannedGame::new(Source::Steam, "1", NAME)], &[Source::Steam]).unwrap();
+            st.library = crate::library::Library::new(st.db.load_all().unwrap());
+            st.config.desktop.view = crate::config::DesktopView::Details;
+            let id = st.library.games[0].id;
+            let mut page = Page { st, ui: DesktopUi::new(), width, _dir: dir };
+            // The first frame restores the last session's selection (none here).
+            page.frame(vec![]);
+            page.ui.selected = Some(id);
+            page
+        }
+
+        fn frame(&mut self, events: Vec<egui::Event>) -> egui::FullOutput {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(self.width, 800.0))),
+                events,
+                ..Default::default()
+            };
+            let ctx = self.st.ctx().clone();
+            ctx.run_ui(input, |eui| self.ui.show(eui, &mut self.st))
+        }
+
+        /// The game's name in title-sized text (the hero's; the games list's rows are far
+        /// smaller), once the page has settled: the strongest alpha of each.
+        fn titles(&mut self) -> Vec<u8> {
+            fn visit(s: &egui::Shape, found: &mut Vec<u8>) {
+                match s {
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| visit(s, found)),
+                    egui::Shape::Text(t)
+                        if t.galley.text() == NAME
+                            && t.galley.job.sections.iter().any(|s| s.format.font_id.size > 20.0) =>
+                    {
+                        let rows = t.galley.rows.iter().flat_map(|r| &r.row.visuals.mesh.vertices);
+                        found.push(rows.map(|v| v.color.a()).max().unwrap_or(0));
+                    }
+                    _ => {}
+                }
+            }
+            self.frame(vec![]);
+            let out = self.frame(vec![]);
+            let mut found = vec![];
+            out.shapes.iter().for_each(|c| visit(&c.shape, &mut found));
+            found
+        }
+    }
+
+    /// Settings → Appearance → "Show the logo or name over the background": off, the hero
+    /// shows no name (wide and narrow pages).
+    #[test]
+    fn page_logo_setting_hides_the_name() {
+        for width in [1400.0, 760.0] {
+            let mut page = Page::new(width);
+            assert!(!page.titles().is_empty(), "{width}");
+            page.st.config.desktop.show_page_logo = false;
+            assert!(page.titles().is_empty(), "{width}");
+        }
     }
 }
 
