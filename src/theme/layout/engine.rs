@@ -106,7 +106,7 @@ pub(crate) enum Panel {
 }
 
 /// Text to measure.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct TextSpec {
     pub text: String,
     /// px

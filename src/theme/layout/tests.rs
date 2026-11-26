@@ -175,7 +175,7 @@ fn text_and_images_measure() {
     root.width = Some(300.0);
     root.ha = Al::Start;
     let mut t = node("t");
-    t.content = Content::Text(TextSpec { text: "x".repeat(40), size: 20.0, bold: false, wrap: true, max_lines: None });
+    t.content = Content::Text(TextSpec { text: "x".repeat(40), size: 20.0, wrap: true, ..TextSpec::default() });
     let mut img = node("img");
     img.content = Content::Image { natural: Some([600.0, 900.0]), stretch: Scale::Uniform };
     let mut none = node("none");

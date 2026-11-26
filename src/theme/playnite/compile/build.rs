@@ -176,7 +176,7 @@ pub(super) fn is_pending_button(name: &str) -> bool {
 }
 
 pub(super) fn spec(t: &TextOut) -> TextSpec {
-    TextSpec { text: t.text.clone(), size: t.size, bold: t.font.is_some(), wrap: t.wrap, max_lines: None }
+    TextSpec { text: t.text.clone(), size: t.size, bold: t.font.is_some(), wrap: t.wrap, ..TextSpec::default() }
 }
 
 /// What a per-game text measures as (a typical game's).
