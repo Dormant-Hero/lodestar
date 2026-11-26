@@ -1220,9 +1220,9 @@ fn looks_like_game_program(argv0: &str) -> bool {
         ];
         return !WINE_HELPERS.contains(&name.as_str());
     }
-    // Game streaming (Moonlight, PS Remote Play) and cloud-gaming apps: while one runs, the pad
-    // plays a game on another machine.
-    const STREAMING: &[&str] = &["moonlight", "moonlight-qt", "chiaki", "chiaki-ng"];
+    // Game streaming (Moonlight, PS Remote Play, Steam Remote Play's `ubuntu12_64/streaming_client`)
+    // and cloud-gaming apps: while one runs, the pad plays a game on another machine.
+    const STREAMING: &[&str] = &["moonlight", "moonlight-qt", "chiaki", "chiaki-ng", "streaming_client"];
     let emulators = EMULATORS.get_or_init(|| {
         crate::emulation::defs::all()
             .iter()
@@ -1295,6 +1295,7 @@ mod tests {
             &["/app/bin/pcsx2-qt", "-batch"][..],
             &["/tmp/.mount_x/usr/bin/RPCS3"][..],
             &["/app/bin/moonlight", "stream", "desk", "Steam"][..],
+            &["/home/u/.local/share/Steam/ubuntu12_64/streaming_client", "-steam"][..],
             &["/opt/BoosteroidGamesS.R.L./bin/Boosteroid"][..],
         ] {
             let (_d, r, _exe) = with(P::new(FAKE + 5, 40, argv));
