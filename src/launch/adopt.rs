@@ -90,7 +90,9 @@ pub(crate) fn plan_adoptions(
     age: impl Fn(u64) -> Duration,
 ) -> Vec<Adoption> {
     let mut out: Vec<Adoption> = vec![];
-    for f in found {
+    // The Steam client a launch started is no game, whatever game the tag names.
+    let roots = if found.is_empty() { vec![] } else { track::steam_roots() };
+    for f in found.iter().filter_map(|f| track::without_steam(f, procs, proc_root, &roots)) {
         let mut own = f.procs.clone();
         let (id, kind, mode, tag, folder, foreign) = match &f.what {
             track::FoundKind::Steam { appid } => {

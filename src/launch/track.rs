@@ -935,10 +935,10 @@ pub fn find_running(procs: &[ProcInfo], proc_root: &Path, me: i32) -> Vec<Found>
 /// Something that looks like a game runs that Lodestar may not follow (the background
 /// controller's and desktop mode's safety check, input/gate.rs), and what: a Steam reaper (any
 /// AppId, in the library or not), a launch tagged by another Lodestar run (`found`, from
-/// [`find_running`]), a Windows program (Wine / Proton: argv[0] ends in `.exe`), a known
-/// emulator, a game-streaming / cloud-gaming app, or a program running from one of `game_dirs`
-/// (installed games' folders). Errs on the side of "a game runs": then only the Guide button
-/// reaches an unfocused Lodestar.
+/// [`find_running`], without the Steam client one started: [`without_steam`]), a Windows program
+/// (Wine / Proton: argv[0] ends in `.exe`), a known emulator, a game-streaming / cloud-gaming
+/// app, or a program running from one of `game_dirs` (installed games' folders). Errs on the side
+/// of "a game runs": then only the Guide button reaches an unfocused Lodestar.
 pub fn other_game(
     found: &[Found],
     procs: &[ProcInfo],
@@ -946,8 +946,9 @@ pub fn other_game(
     me: i32,
     game_dirs: &[PathBuf],
 ) -> Option<OtherGame> {
-    if let Some(f) = found.first() {
-        return Some(OtherGame::of(f));
+    let roots = if found.is_empty() { vec![] } else { steam_roots() };
+    if let Some(f) = found.iter().find_map(|f| without_steam(f, procs, proc_root, &roots)) {
+        return Some(OtherGame::of(&f));
     }
     procs.iter().filter(|p| !p.zombie && p.pid != me).find_map(|p| {
         let argv = p.cmdline.as_deref().unwrap_or_default();
@@ -1010,7 +1011,7 @@ impl OtherGame {
 }
 
 /// `--running`'s report on what runs, in plain words: the launches of other Lodestar runs and the
-/// games running in Steam, then whether
+/// games running in Steam (a Steam an earlier launch opened is listed as no game), then whether
 /// something that looks like a game keeps the controller waiting (`other_game`).
 pub fn running_report(
     found: &[Found],
@@ -1025,14 +1026,170 @@ pub fn running_report(
     if found.is_empty() {
         out.push_str("  nothing\n");
     }
+    let roots = steam_roots();
     for f in found {
-        let n = f.procs.len();
-        let _ = writeln!(out, "  {}, {n} process{}", OtherGame::of(f).describe(games), if n == 1 { "" } else { "es" });
+        let line = match without_steam(f, procs, proc_root, &roots) {
+            None => {
+                let foreign = matches!(f.what, FoundKind::Tagged { foreign: true, .. });
+                let game = OtherGame::of(f).name(games);
+                format!("Steam (opened by {}'s launch of {game}; not counted as a game)", launcher(foreign))
+            }
+            Some(g) => {
+                let n = g.procs.len();
+                format!("{}, {n} process{}", OtherGame::of(&g).describe(games), if n == 1 { "" } else { "es" })
+            }
+        };
+        let _ = writeln!(out, "  {line}");
     }
     let _ = match other_game(found, procs, proc_root, me, game_dirs) {
         Some(what) => writeln!(out, "Controller: waits, this looks like a game: {}", what.describe(games)),
         None => writeln!(out, "Controller: may act, nothing looks like a game"),
     };
+    out
+}
+
+/// `f` without the Steam client a tagged launch started (None: nothing else is left, the tag
+/// says nothing about a game). Lodestar launching something through Steam while Steam was closed
+/// makes its launch command the Steam client, and Steam and everything it runs keep that launch's
+/// tag for as long as Steam runs. A game running in that Steam is seen by its reaper and by the
+/// checks on every process (`other_game`), so only Steam's own processes ([`steam_own`]) and what
+/// the Steam client itself started are left out. Every other process keeps the launch counted,
+/// whatever game the tag names (a tag names the game, not which of its actions ran: a Steam
+/// game's extra action may run a native source port), and also when the launch started Steam
+/// besides its own program. `roots`: [`steam_roots`].
+pub(crate) fn without_steam(f: &Found, procs: &[ProcInfo], proc_root: &Path, roots: &[PathBuf]) -> Option<Found> {
+    if !matches!(f.what, FoundKind::Tagged { .. }) {
+        return Some(f.clone());
+    }
+    let by_pid: HashMap<i32, &ProcInfo> = procs.iter().map(|p| (p.pid, p)).collect();
+    // One of Steam's own, or started by the Steam client itself (up to 64 parents up). Not by a
+    // launcher script or Flatpak: a shell that ran a game in the background before it became
+    // `steam` (`sh -c 'gzdoom & steam'` execs the last command) is the game's parent too. A
+    // "parent" that started after its child is a reused pid, not the parent.
+    let from_steam = |pid: i32| {
+        let Some(me) = by_pid.get(&pid) else { return false };
+        if steam_own(argv(me), in_flatpak_steam(proc_root, pid), roots) {
+            return true;
+        }
+        let mut child = *me;
+        for _ in 0..64 {
+            let Some(p) = by_pid.get(&child.ppid).copied().filter(|p| p.pid != child.pid && p.start <= child.start)
+            else {
+                return false;
+            };
+            if steam_client(argv(p), roots) {
+                return true;
+            }
+            child = p;
+        }
+        false
+    };
+    let rest: Vec<(i32, u64)> = f.procs.iter().copied().filter(|&(pid, _)| !from_steam(pid)).collect();
+    if rest.is_empty() {
+        return None;
+    }
+    let since = rest.iter().map(|k| k.1).min().unwrap_or(f.since);
+    Some(Found { what: f.what.clone(), procs: rest, since })
+}
+
+/// One of the Steam client's own processes: its launcher scripts (`/usr/bin/steam`, `steam.sh`),
+/// anything in Flatpak Steam's sandbox (`flatpak`: its app scope, see [`in_flatpak_steam`]), or a
+/// program from Steam's own folders ([`in_steam_folder`]: the client, its web helper, the
+/// runtime's helpers). A game binary that happens to be called `steam` or `steamwebhelper`
+/// elsewhere isn't.
+pub(crate) fn steam_own(argv: &[String], flatpak: bool, roots: &[PathBuf]) -> bool {
+    let base = |a: &str| a.rsplit('/').next().unwrap_or(a).to_string();
+    let Some(argv0) = argv.first() else { return flatpak };
+    let script = |a: &str| matches!(base(a).as_str(), "steam.sh" | "bin_steam.sh");
+    let shell = matches!(base(argv0).as_str(), "sh" | "bash" | "dash");
+    let launcher = script(argv0)
+        || (shell && argv.get(1).is_some_and(|a| script(a) || (a.starts_with("/usr/") && base(a) == "steam")));
+    launcher || flatpak || in_steam_folder(argv0, roots)
+}
+
+/// The Steam client itself (`…/ubuntu12_32/steam`, `…/steamrt64/steam`) or its web helper, run from
+/// Steam's own folders: what it starts is Steam's (its helpers; its games run under a reaper).
+fn steam_client(argv: &[String], roots: &[PathBuf]) -> bool {
+    argv.first()
+        .is_some_and(|a| in_steam_folder(a, roots) && matches!(a.rsplit('/').next(), Some("steam" | "steamwebhelper")))
+}
+
+/// `pid` runs in Flatpak Steam's sandbox: the app scope systemd gives it
+/// (`app-flatpak-com.valvesoftware.Steam-<n>.scope`). A game a launch started before it ran
+/// `flatpak run` stays outside, whatever it is the child of.
+fn in_flatpak_steam(proc_root: &Path, pid: i32) -> bool {
+    std::fs::read_to_string(proc_root.join(pid.to_string()).join("cgroup"))
+        .is_ok_and(|c| c.contains("app-flatpak-com.valvesoftware.Steam-"))
+}
+
+/// A process' command line (empty when unreadable).
+fn argv(p: &ProcInfo) -> &[String] {
+    p.cmdline.as_deref().unwrap_or_default()
+}
+
+/// Steam's program folders (what runs from them is Steam's own).
+const STEAM_PROGRAM_DIRS: [&str; 3] = ["ubuntu12_32", "ubuntu12_64", "steamrt64"];
+
+/// `path` (`.` and `..` resolved by its text) is in one of Steam's own program folders
+/// ([`STEAM_PROGRAM_DIRS`]) right under a Steam install: `~/.local/share/Steam` (also Flatpak's and
+/// Snap's), `~/.steam/steam`, `~/.steam/root`, `~/.steam/debian-installation`, or one of `roots`
+/// (where those really are, [`steam_roots`]). Not just any folder called Steam: people name
+/// drives that, and install games by hand into Steam's folder.
+fn in_steam_folder(path: &str, roots: &[PathBuf]) -> bool {
+    let path = normalized(path);
+    let parts: Vec<&str> = path.split('/').collect();
+    let usual = parts.windows(4).any(|w| {
+        let root = (w[0] == ".local" && w[1] == "share" && w[2] == "Steam")
+            || (w[1] == ".steam" && matches!(w[2], "steam" | "root" | "debian-installation"));
+        root && STEAM_PROGRAM_DIRS.contains(&w[3])
+    });
+    let path = Path::new(&path);
+    usual || roots.iter().any(|r| STEAM_PROGRAM_DIRS.iter().any(|d| path.starts_with(r.join(d))))
+}
+
+/// `path` with `.`, `..` and repeated `/` resolved by its text alone (no link is followed).
+fn normalized(path: &str) -> String {
+    let absolute = path.starts_with('/');
+    let mut out: Vec<&str> = vec![];
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." if out.last().is_some_and(|l| *l != "..") => {
+                out.pop();
+            }
+            // Above `/` is `/`.
+            ".." if absolute => {}
+            _ => out.push(part),
+        }
+    }
+    let joined = out.join("/");
+    if absolute { format!("/{joined}") } else { joined }
+}
+
+/// Where Steam is installed here, as its processes show it: its usual folders as they are and as
+/// they resolve (Steam's launcher runs it from the real folder when its folder links to another
+/// drive). Read once per look for running games.
+pub(crate) fn steam_roots() -> Vec<PathBuf> {
+    dirs::home_dir().map(|h| steam_roots_in(&h)).unwrap_or_default()
+}
+
+fn steam_roots_in(home: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = vec![];
+    for rel in [
+        ".steam/steam",
+        ".steam/root",
+        ".steam/debian-installation",
+        ".local/share/Steam",
+        ".var/app/com.valvesoftware.Steam/data/Steam",
+        ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+    ] {
+        let dir = home.join(rel);
+        for d in [std::fs::canonicalize(&dir).ok(), Some(dir)].into_iter().flatten() {
+            if !out.contains(&d) {
+                out.push(d);
+            }
+        }
+    }
     out
 }
 
@@ -1180,6 +1337,104 @@ mod tests {
         assert_eq!(launch.describe(&[]), "game 3 (started by an earlier Lodestar)");
         let foreign = other_game(&[tagged(true)], &procs, &r, me, &[]).unwrap();
         assert_eq!(foreign.describe(&[]), "game 3 (started by another Lodestar that still runs)");
+    }
+
+    /// Steam's own processes, which a tag a launch gave Steam says nothing about (`without_steam`).
+    #[test]
+    fn steam_own_processes() {
+        let v = |argv: &[&str]| argv.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+        let own = |argv: &[&str]| steam_own(&v(argv), false, &[]);
+        for argv in [
+            &["bash", "/home/u/.local/share/Steam/steam.sh", "-silent"][..],
+            &["/bin/sh", "/usr/bin/steam", "-silent", "steam://rungameid/570"][..],
+            &["/usr/lib/steam/bin_steam.sh", "-silent"][..],
+            &["/home/u/.local/share/Steam/steamrt64/steam", "-srt-logger-opened"][..],
+            &["/home/u/.steam/debian-installation/ubuntu12_32/steam"][..],
+            &["/home/u/.steam/steam/ubuntu12_64/steamwebhelper", "--type=zygote"][..],
+            &["/home/u/.local/share/Steam/steamrt64/pv-runtime/steam-runtime-steamrt/srt-logger"][..],
+            &["/home/u/.var/app/com.valvesoftware.Steam/.local/share/Steam/ubuntu12_32/steam"][..],
+            // As Steam itself writes it, and with doubled or `.` parts.
+            &["/home/u/.local/share/Steam/steamrt64/../ubuntu12_64/fossilize_replay"][..],
+            &["/home/u/.local/share//Steam/./ubuntu12_32/steam"][..],
+        ] {
+            assert!(own(argv), "{argv:?}");
+        }
+        for argv in [
+            &["/usr/bin/gzdoom"][..],
+            &["/g/steam"][..],
+            &["bash", "/home/u/bin/play.sh"][..],
+            &["/home/u/.local/share/Steam/steamapps/common/Celeste/Celeste"][..],
+            &["/mnt/g/SteamLibrary/steamapps/common/Doom/gzdoom"][..],
+            // Out of Steam's program folders by `..`; a game put by hand into Steam's folder
+            // (linux32 / linux64 hold only Steam's libraries, nothing runs from them).
+            &["/home/u/.local/share/Steam/ubuntu12_32/../steamapps/common/Doom/gzdoom"][..],
+            &["/home/u/.local/share/Steam/linux64/MyGame/game.x86_64"][..],
+            // A drive or folder someone called Steam, a web helper outside Steam (by itself
+            // `./steamwebhelper` is Steam's only as the client's child).
+            &["/run/media/u/Steam/Games/Foo/foo.x86_64"][..],
+            &["/run/media/u/Steam/ubuntu12_32/foo"][..],
+            &["/home/u/.steam/games/foo"][..],
+            &["/g/steamwebhelper"][..],
+            &["./steamwebhelper"][..],
+            // Flatpak's launcher (gone a moment later): only its sandbox's scope counts.
+            &["flatpak", "run", "com.valvesoftware.Steam", "-silent"][..],
+            &[][..],
+        ] {
+            assert!(!own(argv), "{argv:?}");
+        }
+        // In Flatpak Steam's sandbox: Steam's, whatever its path.
+        assert!(steam_own(&v(&["bwrap", "--args", "40", "/app/bin/steam-wrapper"]), true, &[]));
+    }
+
+    #[test]
+    fn paths_are_normalized_by_their_text() {
+        assert_eq!(normalized("/a/b/../c/./d//e"), "/a/c/d/e");
+        assert_eq!(normalized("./steamwebhelper"), "steamwebhelper");
+        assert_eq!(normalized("/../a"), "/a");
+        assert_eq!(normalized("../a"), "../a");
+    }
+
+    /// Steam's folder linked to another drive: its launcher runs it from the real folder, which
+    /// counts as Steam's once looked up; that drive's games don't.
+    #[test]
+    fn steam_moved_to_another_drive_is_found_where_it_really_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let real = dir.path().join("ssd/SteamInstall");
+        std::fs::create_dir_all(real.join("steamrt64")).unwrap();
+        std::fs::create_dir_all(home.join(".local/share")).unwrap();
+        std::fs::create_dir_all(home.join(".steam")).unwrap();
+        std::os::unix::fs::symlink(&real, home.join(".local/share/Steam")).unwrap();
+        std::os::unix::fs::symlink(home.join(".local/share/Steam"), home.join(".steam/steam")).unwrap();
+        let roots = steam_roots_in(&home);
+        let real = std::fs::canonicalize(&real).unwrap();
+        assert!(roots.contains(&real), "{roots:?}");
+        let client = real.join("steamrt64/steam").to_string_lossy().into_owned();
+        assert!(steam_client(std::slice::from_ref(&client), &roots));
+        assert!(!steam_client(&[client], &[]), "not without looking it up");
+        let game = real.join("steamapps/common/Foo/foo").to_string_lossy().into_owned();
+        assert!(!steam_own(&[game], false, &roots));
+    }
+
+    /// Flatpak Steam's processes are told by their app scope; a game started beside it isn't in it.
+    #[test]
+    fn flatpak_steam_by_its_scope() {
+        use fake::P;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("proc");
+        fake::boot(&root, 1_700_000_000);
+        fake::add(&root, P::new(FAKE + 1, 10, &["bwrap", "--args", "40", "/app/bin/steam-wrapper"]));
+        fake::add(&root, P::new(FAKE + 2, 11, &["/usr/bin/gzdoom"]));
+        let scope = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-com.valvesoftware.Steam-4242.scope\n";
+        std::fs::write(root.join((FAKE + 1).to_string()).join("cgroup"), scope).unwrap();
+        std::fs::write(
+            root.join((FAKE + 2).to_string()).join("cgroup"),
+            "0::/user.slice/app.slice/app-lodestar.scope\n",
+        )
+        .unwrap();
+        assert!(in_flatpak_steam(&root, FAKE + 1));
+        assert!(!in_flatpak_steam(&root, FAKE + 2));
+        assert!(!in_flatpak_steam(&root, FAKE + 3), "gone");
     }
 
     #[test]

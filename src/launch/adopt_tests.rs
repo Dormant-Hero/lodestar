@@ -222,11 +222,163 @@ fn scan_of(root: &Path) -> RunningScan {
     }
 }
 
-/// `--running` says it plainly.
+/// What a finished look for running games on `root` says: something game-like runs.
+fn others_seen_on(root: &Path, games: &[Game]) -> bool {
+    let dir = tempfile::tempdir().unwrap();
+    let mut l = Launcher::with_log_dir(&egui::Context::default(), dir.path().join("logs"));
+    let (tx, rx) = crossbeam_channel::unbounded();
+    l.running_scan = Some(rx);
+    tx.send(scan_of(root)).unwrap();
+    l.finish_running_scan(games).expect("the scan was there");
+    assert_ne!(l.others_seen(), l.others_clear(Duration::from_secs(60)));
+    l.others_seen()
+}
+
+/// Steam as a launch that found it closed starts it, all carrying the launch's `tag` (as measured
+/// on a real Steam: the launcher script, the client and its helpers, the runtime's logger left to
+/// run on its own). `under`: the process that ran Steam (None: the launch command was Steam).
+fn steam_tree(root: &Path, tag: &str, under: Option<i32>) {
+    let home = "/home/u/.local/share/Steam";
+    let env = [tag];
+    let script = P::new(FAKE + 9, 99, &["bash", "/home/u/.local/share/Steam/steam.sh", "-silent"]);
+    let script = match under {
+        Some(pid) => script.parent(pid, pid, pid),
+        None => script,
+    };
+    fake::add(root, script.env(&env));
+    let client = format!("{home}/steamrt64/steam");
+    let fossilize = format!("{home}/steamrt64/../ubuntu12_64/fossilize_replay");
+    let (sh, cl, wh) = (FAKE + 9, FAKE + 10, FAKE + 11);
+    fake::add(root, P::new(cl, 100, &[&client, "-silent", "steam://rungameid/1"]).parent(sh, sh, sh).env(&env));
+    fake::add(root, P::new(FAKE + 11, 101, &["./steamwebhelper", "-nocrashdialog"]).parent(cl, sh, sh).env(&env));
+    fake::add(root, P::new(FAKE + 12, 102, &["/proc/self/exe", "--type=utility"]).parent(wh, sh, sh).env(&env));
+    fake::add(root, P::new(FAKE + 14, 103, &[&fossilize]).parent(cl, sh, sh).env(&env));
+    let logger = format!("{home}/steamrt64/pv-runtime/steam-runtime-steamrt/pressure-vessel/libexec/srt-logger");
+    fake::add(root, P::new(FAKE + 15, 98, &[&logger, "--sh-syntax"]).env(&env));
+}
+
+/// Lodestar launched a Steam game while Steam was closed, so its launch started the Steam client,
+/// and Steam and everything it runs keep that launch's tag until Steam quits. A later Lodestar
+/// run (closed and opened again, updated) must not take that for a game running: it kept the
+/// controller out of desktop mode (and the background) until Steam was restarted. A game
+/// running in that Steam still counts, by its reaper.
+#[test]
+fn a_steam_client_an_earlier_lodestar_started_is_no_game() {
+    let earlier = FAKE + 1; // that Lodestar run is gone
+    let games = vec![
+        game(61, Source::Steam, "1086940", LaunchSpec::Steam { appid: 1086940 }),
+        game(62, Source::Manual, "s", LaunchSpec::Url("steam://rungameid/12345678901234567890".into())),
+        game(63, Source::Manual, "n", sh()),
+    ];
+    // 63: an action of a native game that goes through Steam started it as well.
+    for id in [61, 62, 63] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("proc");
+        fake::boot(&root, 1_700_000_000);
+        let t = tag(earlier, id);
+        steam_tree(&root, &t, None);
+        assert!(!others_seen_on(&root, &games), "Steam alone, started for game {id}");
+        assert!(plan(&root, &games, |_, _| false).is_empty(), "and nothing to adopt");
+        // A game starts in that Steam: its reaper is seen.
+        let reaper = ["/home/u/.local/share/Steam/steamrt64/reaper", "SteamLaunch", "AppId=1086940", "--", "/g/bg3"];
+        fake::add(&root, P::new(FAKE + 13, 200, &reaper).parent(FAKE + 10, FAKE + 13, FAKE + 13).env(&[&t]));
+        assert!(others_seen_on(&root, &games), "a game in that Steam, for game {id}");
+    }
+}
+
+/// Only Steam's own processes are left out of a tagged launch: whatever else carries the tag
+/// keeps it a game that runs (and one to pick up), whatever game the tag names.
+#[test]
+fn a_tagged_program_besides_steam_is_still_a_game() {
+    let earlier = FAKE + 1;
+    let games = vec![
+        game(61, Source::Steam, "1086940", LaunchSpec::Steam { appid: 1086940 }),
+        game(63, Source::Manual, "n", sh()),
+    ];
+    let fresh = || {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("proc");
+        fake::boot(&root, 1_700_000_000);
+        (dir, root)
+    };
+    // A Steam game's extra action running a native source port; a native game; a game no longer
+    // in the library; game binaries that happen to be called `steam` or `steamwebhelper`, or sit
+    // on a drive someone called Steam.
+    let programs = [
+        (61, "/usr/bin/gzdoom"),
+        (63, "/g/run"),
+        (64, "/g/old"),
+        (63, "/g/steam"),
+        (63, "/g/steamwebhelper"),
+        (63, "/run/media/u/Steam/Games/Foo/foo.x86_64"),
+        (63, "/home/u/.steam/games/foo"),
+    ];
+    for (id, program) in programs {
+        let (_d, root) = fresh();
+        fake::add(&root, P::new(FAKE + 20, 100, &[program]).env(&[&tag(earlier, id)]));
+        assert!(others_seen_on(&root, &games), "game {id}: {program}");
+    }
+    // A launch script that started Steam and runs the game beside it: the game counts and is
+    // picked up from its own processes. (Following it afterwards goes by the tag, which Steam
+    // carries too, so it may show as running until Steam quits, as before: `adopt_tagged`.)
+    let (_d, root) = fresh();
+    let t = tag(earlier, 63);
+    fake::add(&root, P::new(FAKE + 30, 90, &["bash", "/home/u/bin/play.sh"]).env(&[&t]));
+    steam_tree(&root, &t, Some(FAKE + 30));
+    fake::add(&root, P::new(FAKE + 31, 110, &["/usr/bin/gzdoom"]).parent(FAKE + 30, FAKE + 30, FAKE + 30).env(&[&t]));
+    assert!(others_seen_on(&root, &games));
+    let a = plan(&root, &games, |_, _| false);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(a[0].id, 63);
+    assert_eq!(
+        a[0].msg.known,
+        [(FAKE + 30, 90), (FAKE + 31, 110)].into_iter().collect(),
+        "picked up from none of Steam's"
+    );
+    // A game a launch started in the background before it became Steam's launcher
+    // (`sh -c 'gzdoom & steam -silent'`: the shell execs the last command), or Flatpak's Steam
+    // (`flatpak run` execs into the sandbox's bwrap, in Flatpak Steam's scope): its parent is that
+    // launcher, not the Steam client, and it is outside that scope, so it counts.
+    let scope =
+        "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-com.valvesoftware.Steam-7.scope\n";
+    let launchers = [
+        (&["/bin/sh", "/usr/bin/steam", "-silent"][..], false),
+        (&["bwrap", "--args", "40", "/app/bin/steam-wrapper", "-silent"][..], true),
+    ];
+    for (launcher, flatpak) in launchers {
+        let (_d, root) = fresh();
+        fake::add(&root, P::new(FAKE + 30, 90, launcher).env(&[&t]));
+        if flatpak {
+            std::fs::write(root.join((FAKE + 30).to_string()).join("cgroup"), scope).unwrap();
+        }
+        steam_tree(&root, &t, Some(FAKE + 30));
+        assert!(!others_seen_on(&root, &games), "that launcher and Steam alone: {launcher:?}");
+        fake::add(
+            &root,
+            P::new(FAKE + 31, 95, &["/usr/bin/gzdoom"]).parent(FAKE + 30, FAKE + 30, FAKE + 30).env(&[&t]),
+        );
+        assert!(others_seen_on(&root, &games), "{launcher:?}");
+    }
+    // A reused pid: a process that started after the "child" isn't its parent.
+    let (_d, root) = fresh();
+    steam_tree(&root, &t, None);
+    fake::add(&root, P::new(FAKE + 31, 50, &["/usr/bin/gzdoom"]).parent(FAKE + 10, FAKE + 31, FAKE + 31).env(&[&t]));
+    assert!(others_seen_on(&root, &games), "the Steam client started after it");
+    // Steam's web helper alone (its client gone) beside a game: the game counts.
+    let (_d, root) = fresh();
+    fake::add(&root, P::new(FAKE + 11, 101, &["./steamwebhelper", "-nocrashdialog"]).env(&[&t]));
+    fake::add(&root, P::new(FAKE + 31, 110, &["/usr/bin/gzdoom"]).env(&[&t]));
+    assert!(others_seen_on(&root, &games));
+}
+
+/// `--running` says it plainly: a Steam an earlier launch opened is no game; a game beside it is.
 #[test]
 fn running_report_in_plain_words() {
     let earlier = FAKE + 1;
-    let games = vec![game(63, Source::Manual, "n", sh())];
+    let games = vec![
+        game(61, Source::Steam, "1086940", LaunchSpec::Steam { appid: 1086940 }),
+        game(63, Source::Manual, "n", sh()),
+    ];
     let report = |root: &Path| {
         let procs = track::read_procs_in(root, true);
         let found = track::find_running(&procs, root, ME);
@@ -236,10 +388,22 @@ fn running_report_in_plain_words() {
     let root = dir.path().join("proc");
     fake::boot(&root, 1_700_000_000);
     assert_eq!(report(&root), "Started elsewhere:\n  nothing\nController: may act, nothing looks like a game\n");
-    fake::add(&root, P::new(FAKE + 31, 110, &["/usr/bin/gzdoom"]).env(&[&tag(earlier, 63)]));
+    steam_tree(&root, &tag(earlier, 61), None);
     assert_eq!(
         report(&root),
-        "Started elsewhere:\n  Game 63 (started by an earlier Lodestar), 1 process\n\
+        "Started elsewhere:\n  Steam (opened by an earlier Lodestar's launch of Game 61; not counted as a game)\n\
+         Controller: may act, nothing looks like a game\n"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("proc");
+    fake::boot(&root, 1_700_000_000);
+    let t = tag(earlier, 63);
+    fake::add(&root, P::new(FAKE + 30, 90, &["bash", "/home/u/bin/play.sh"]).env(&[&t]));
+    steam_tree(&root, &t, Some(FAKE + 30));
+    fake::add(&root, P::new(FAKE + 31, 110, &["/usr/bin/gzdoom"]).parent(FAKE + 30, FAKE + 30, FAKE + 30).env(&[&t]));
+    assert_eq!(
+        report(&root),
+        "Started elsewhere:\n  Game 63 (started by an earlier Lodestar), 2 processes\n\
          Controller: waits, this looks like a game: Game 63 (started by an earlier Lodestar)\n"
     );
 }
