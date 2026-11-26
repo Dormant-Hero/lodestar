@@ -55,7 +55,7 @@ the module path is the parent's name followed by the part (for example `launch::
 | First start | `welcome_app`, `ui::desktop::welcome_ui`, `ui::controller::welcome` | The one-time welcome step of a fresh install (no config file, no library): recommends a SteamGridDB key, checks it, and holds the first online lookups until it is answered; the desktop dialog and the controller card draw it |
 | Achievements | `achievements::*`, `ui::achievements` | `Hub`: game pages' answers (one worker; Steam from the client's files, RetroAchievements' Web API) and the library's counts (`summary`: a niced background pass over the whole library, page answers, `summary.json`); the UI reads `Hub::counts()` |
 | Achievements | `achievements::*` | Steam achievements from the Steam client's files, RetroAchievements from its public Web API (the user's username + Web API key), a worker (`Hub`) with per-game answers and library counts; emulators' RetroAchievements sign-in is only read, never written |
-| Themes | `theme::model`, `theme::render::*` | The Lodestar theme format (`theme.toml`) and the renderer that draws a theme's views with data bindings |
+| Themes | `theme::model`, `theme::render::*`, `theme::layout` | The Lodestar theme format (`theme.toml`), the renderer that draws a theme's views with data bindings, and the box layout engine (WPF's measure / arrange rules) |
 | Theme creator | `ui::desktop::theme_creator::*`, `theme::model::{write, schemes}` | The visual theme editor (own window): start / templates, live preview with drag and resize, inspector, theme pages, undo, autosave, .zip export / import; the tidy `theme.toml` writer and colour schemes |
 | Console artwork | `theme::console_art`, `tools/gen-console-art.py` | Lodestar's own picture set for every console, store and built-in collection (card, wide background, wordmark, device): SVGs drawn by the generator into `assets/consoles/`, embedded compressed, written once to the cache, reached by themes through `{collection.art.*}` / `{game.consoleart.*}` |
 | Theme import | `theme::playnite::*`, `theme::catalog::*` | Playnite theme importer (XAML → resource tree → look → layout / view compiler), Playnite's community theme list (browse, install, updates) |
@@ -95,8 +95,8 @@ translates Playnite XAML into this same format, so all themes share one renderer
 * `source` opens the theme folder or `.pthm` package.
 * `xaml` and `tree` lay its files over Playnite's own default theme.
 * `extract` produces a `PlayniteLook` (colours, fonts, brushes).
-* For fullscreen themes, `compile` translates the Main and GameDetails views, measuring them with `layout` (WPF
-  measure / arrange). If that isn't possible, `fill` lays the look onto a Lodestar layout.
+* For fullscreen themes, `compile` translates the Main and GameDetails views, measuring them with `theme::layout`
+  (WPF measure / arrange) on Playnite's 1920 × 1080 screen. If that isn't possible, `fill` lays the look onto a Lodestar layout.
 * `report` explains in plain words what came across.
 
 The import runs on the `theme-job` thread.

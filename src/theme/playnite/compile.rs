@@ -1,5 +1,5 @@
 //! The Playnite view compiler: a fullscreen theme's Main and GameDetails views (the theme's
-//! own file, else Playnite's default underneath) laid out once with WPF's rules (layout.rs) on
+//! own file, else Playnite's default underneath) laid out once with WPF's rules (`theme::layout`) on
 //! a 1920 × 1080 screen and written as Lodestar elements.
 //!
 //! - Styles are applied as Playnite does (implicit and keyed, BasedOn, the resolver in tree.rs);
@@ -30,7 +30,7 @@
 //! The stages, one submodule each: `build` turns the XAML tree into layout nodes (placement,
 //! paint, what each element draws; `button` reads a button's template), `visibility` decides
 //! when they show (Visibility, triggers, storyboards) and `bind` maps `{Binding}` paths onto
-//! Lodestar's bindings; layout.rs
+//! Lodestar's bindings; `theme::layout`
 //! measures and arranges the nodes (text measured by `measure`); `emit` writes them as
 //! element tables and `stack` turns panels of per-game texts into `stack` containers. The
 //! types the stages share are defined here.
@@ -46,7 +46,7 @@ mod tabs;
 mod visibility;
 
 use super::Mode;
-use super::layout::{self, Al, Content, Def, Dock, Len, Measurer, Node, Panel, Rect, Scale, TextSpec, Vis};
+use super::layout::SCREEN;
 use super::loc::ViewStrings;
 use super::look::{ItemLook, LookBrush, PlayniteLook, Stretch};
 use super::options::Choices;
@@ -54,6 +54,7 @@ use super::settings::{self, SVal, setting};
 use super::source::Source;
 use super::tree::{self, Markup, Tree, Value, content, name_of, prop_elem, tag};
 use super::xaml::attr;
+use crate::theme::layout::{self, Al, Content, Def, Dock, Len, Measurer, Node, Panel, Rect, Scale, TextSpec, Vis};
 use crate::theme::model::Color;
 use roxmltree::Node as X;
 use std::collections::{BTreeMap, HashMap};
@@ -63,9 +64,9 @@ use emit::{hint_rows, shoulder_prompts};
 pub(crate) use measure::FontMeasurer;
 use visibility::template_triggers;
 
-const W: f32 = layout::SCREEN[0];
+const W: f32 = SCREEN[0];
 
-const H: f32 = layout::SCREEN[1];
+const H: f32 = SCREEN[1];
 
 /// Placeholders of the main screen's and the details page's video, filled in by `apply`.
 const MAIN_VIDEO: &str = "@main_video";
@@ -311,7 +312,7 @@ fn compile_view(
         // The main screen has no place for the page.
         return None;
     }
-    layout::layout(&mut node, measurer);
+    layout::layout(&mut node, SCREEN, measurer);
     widen_slots(&mut node);
     b.strip = strip::pick_list(&mut node);
     b.shoulder_prompts = shoulder_prompts(&node);
