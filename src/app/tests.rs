@@ -89,6 +89,29 @@ fn user_art_set_replace_and_reset() {
     assert_eq!(st.library.get(id).unwrap().edits.background_placement, None);
 }
 
+/// The log says why the controller waits in desktop mode when that changes, and again once a
+/// controller connects (the reason may have started before); switching away from Lodestar and
+/// back says nothing.
+#[test]
+fn desktop_pad_log_says_each_change_and_again_after_a_connect() {
+    use crate::input::gate::PadOff;
+    let mut logged = None;
+    let game = Some(PadOff::GameUp);
+    let line = |l: &mut _, watch, off| desktop_pad_log(l, watch, off);
+    assert_eq!(line(&mut logged, false, game), None, "no controller: nothing");
+    assert_eq!(line(&mut logged, true, game).as_deref(), Some("the controller waits in desktop mode: a game is up"));
+    assert_eq!(line(&mut logged, true, game), None, "said once");
+    assert_eq!(line(&mut logged, true, None).as_deref(), Some("the controller works in desktop mode"));
+    // Away and back: nothing.
+    assert_eq!(line(&mut logged, true, Some(PadOff::NotActive)), None);
+    assert_eq!(line(&mut logged, true, Some(PadOff::Hidden)), None);
+    assert_eq!(line(&mut logged, true, None), None);
+    assert_eq!(line(&mut logged, true, game).as_deref(), Some("the controller waits in desktop mode: a game is up"));
+    // Unplugged and plugged in again while the same reason holds: said again.
+    assert_eq!(line(&mut logged, false, game), None);
+    assert!(line(&mut logged, true, game).is_some());
+}
+
 #[test]
 fn a_game_that_just_ended_settles_for_a_moment() {
     let t0 = Instant::now();

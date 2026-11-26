@@ -214,16 +214,73 @@ pub struct DesktopPad {
 /// The pad moves around desktop mode: only a reported-focused, visible Lodestar with nothing
 /// running and nothing seen running (see the module docs).
 pub fn desktop_pad(s: &Situation, d: DesktopPad) -> bool {
-    d.enabled
-        && !s.scripted
-        && s.focused == Some(true)
-        && !s.hidden
-        && !s.game_up
-        && d.looked
-        && !s.others_seen
-        && !d.launching
-        && !d.settling
-        && !d.overlay
+    desktop_pad_off(s, d).is_none()
+}
+
+/// Why the pad doesn't move around desktop mode ([`desktop_pad_off`]), for the log.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PadOff {
+    Setting,
+    Screenshots,
+    GameUp,
+    Starting,
+    JustEnded,
+    InGameMenu,
+    Looking,
+    GameElsewhere,
+    NotActive,
+    Hidden,
+}
+
+impl PadOff {
+    pub fn text(self) -> &'static str {
+        match self {
+            PadOff::Setting => "it is turned off in Settings → Controller",
+            PadOff::Screenshots => "Lodestar is taking test screenshots",
+            PadOff::GameUp => "a game is up",
+            PadOff::Starting => "a game is starting",
+            PadOff::JustEnded => "a game just ended",
+            PadOff::InGameMenu => "the in-game menu is open",
+            PadOff::Looking => "it is looking for games running elsewhere",
+            PadOff::GameElsewhere => "something that looks like a game runs; start Lodestar with --running to see what",
+            PadOff::NotActive => "Lodestar isn't the active window",
+            PadOff::Hidden => "the window is hidden or minimised",
+        }
+    }
+
+    /// The user switched away from Lodestar: the usual state of a window, not worth a log line.
+    pub fn away(self) -> bool {
+        matches!(self, PadOff::NotActive | PadOff::Hidden)
+    }
+}
+
+/// Why the pad doesn't move around desktop mode now (None: it does): the first part of the rule
+/// that keeps it out, a game before the focus (in the log only in desktop mode: there `enabled`
+/// is the setting).
+pub fn desktop_pad_off(s: &Situation, d: DesktopPad) -> Option<PadOff> {
+    Some(if !d.enabled {
+        PadOff::Setting
+    } else if s.scripted {
+        PadOff::Screenshots
+    } else if s.game_up {
+        PadOff::GameUp
+    } else if d.launching {
+        PadOff::Starting
+    } else if d.settling {
+        PadOff::JustEnded
+    } else if d.overlay {
+        PadOff::InGameMenu
+    } else if s.others_seen {
+        PadOff::GameElsewhere
+    } else if s.focused != Some(true) {
+        PadOff::NotActive
+    } else if s.hidden {
+        PadOff::Hidden
+    } else if !d.looked {
+        PadOff::Looking
+    } else {
+        return None;
+    })
 }
 
 /// The last look for running games (started at `look`) counts for [`DesktopPad::looked`]: it
@@ -771,6 +828,23 @@ mod tests {
         // That idle window, whether a focus event came yet and whatever background input says.
         assert_eq!(allowed, 4);
         assert!(desktop_pad(&s(), desk()));
+    }
+
+    /// The log says which part of the rule keeps the pad out.
+    #[test]
+    fn desktop_pad_off_names_what_keeps_the_pad_out() {
+        let off = |sit: Situation, d: DesktopPad| desktop_pad_off(&sit, d);
+        assert_eq!(off(s(), desk()), None);
+        assert_eq!(off(s(), DesktopPad { enabled: false, ..desk() }), Some(PadOff::Setting));
+        assert_eq!(off(Situation { focused: Some(false), ..s() }, desk()), Some(PadOff::NotActive));
+        assert_eq!(off(Situation { hidden: true, ..s() }, desk()), Some(PadOff::Hidden));
+        assert_eq!(off(s(), DesktopPad { launching: true, ..desk() }), Some(PadOff::Starting));
+        assert_eq!(off(s(), DesktopPad { looked: false, ..desk() }), Some(PadOff::Looking));
+        assert_eq!(off(Situation { others_seen: true, ..s() }, desk()), Some(PadOff::GameElsewhere));
+        // A game comes before the focus: switching to it says the game.
+        assert_eq!(off(Situation { game_up: true, focused: Some(false), ..s() }, desk()), Some(PadOff::GameUp));
+        assert!(PadOff::GameElsewhere.text().contains("start Lodestar with --running"));
+        assert!(PadOff::NotActive.away() && PadOff::Hidden.away() && !PadOff::GameUp.away());
     }
 
     /// REGRESSION: background input lets the controller drive an unfocused controller mode, but

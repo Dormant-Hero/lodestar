@@ -213,6 +213,11 @@ impl InputHub {
         self.shared.pads.lock().clone()
     }
 
+    /// A controller is connected (cheap: no copy of the names).
+    pub fn has_gamepads(&self) -> bool {
+        !self.shared.pads.lock().is_empty()
+    }
+
     /// Prompt style of the pad in use (last pressed, else the first connected); None without a pad.
     pub fn pad_style(&self) -> Option<ButtonStyle> {
         let used = *self.shared.used_pad.lock();
