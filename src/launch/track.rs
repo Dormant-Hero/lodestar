@@ -974,6 +974,11 @@ pub enum OtherGame {
     Process { pid: i32, program: String },
 }
 
+/// Who started a launch another Lodestar run made (`foreign`: that Lodestar still runs).
+fn launcher(foreign: bool) -> &'static str {
+    if foreign { "another Lodestar that still runs" } else { "an earlier Lodestar" }
+}
+
 impl OtherGame {
     fn of(f: &Found) -> OtherGame {
         match f.what {
@@ -981,6 +986,54 @@ impl OtherGame {
             FoundKind::Steam { appid } => OtherGame::Steam { appid },
         }
     }
+
+    /// In plain words, with the names of `games` (the library; empty: ids only).
+    pub fn describe(&self, games: &[crate::model::Game]) -> String {
+        match self {
+            OtherGame::Launch { foreign, .. } => format!("{} (started by {})", self.name(games), launcher(*foreign)),
+            OtherGame::Steam { .. } => format!("{} (running in Steam)", self.name(games)),
+            OtherGame::Process { pid, program } => format!("process {pid} {program}"),
+        }
+    }
+
+    /// The game's name in `games`, else its id (a process: its program).
+    fn name(&self, games: &[crate::model::Game]) -> String {
+        let (game, or) = match self {
+            OtherGame::Launch { id, .. } => (games.iter().find(|g| g.id == *id), format!("game {id}")),
+            OtherGame::Steam { appid } => {
+                (games.iter().find(|g| g.steam_appid() == Some(*appid)), format!("AppID {appid}"))
+            }
+            OtherGame::Process { program, .. } => (None, program.clone()),
+        };
+        game.map_or(or, |g| g.display_name().to_string())
+    }
+}
+
+/// `--running`'s report on what runs, in plain words: the launches of other Lodestar runs and the
+/// games running in Steam, then whether
+/// something that looks like a game keeps the controller waiting (`other_game`).
+pub fn running_report(
+    found: &[Found],
+    procs: &[ProcInfo],
+    proc_root: &Path,
+    me: i32,
+    game_dirs: &[PathBuf],
+    games: &[crate::model::Game],
+) -> String {
+    use std::fmt::Write;
+    let mut out = String::from("Started elsewhere:\n");
+    if found.is_empty() {
+        out.push_str("  nothing\n");
+    }
+    for f in found {
+        let n = f.procs.len();
+        let _ = writeln!(out, "  {}, {n} process{}", OtherGame::of(f).describe(games), if n == 1 { "" } else { "es" });
+    }
+    let _ = match other_game(found, procs, proc_root, me, game_dirs) {
+        Some(what) => writeln!(out, "Controller: waits, this looks like a game: {}", what.describe(games)),
+        None => writeln!(out, "Controller: may act, nothing looks like a game"),
+    };
+    out
 }
 
 /// argv[0] of a Windows program (Wine / Proton), a known emulator, or a game-streaming /
@@ -1048,9 +1101,28 @@ mod tests {
         fake::add(&root, P::new(FAKE + 1, 20, &["/usr/bin/plasmashell"]));
         fake::add(&root, P::new(FAKE + 2, 30, &["C:\\windows\\system32\\services.exe"]));
         fake::add(&root, P::new(FAKE + 3, 30, &["/usr/bin/firefox", "--new-window"]));
+        // The Steam client sitting open without a game (as measured on Steam 2026-11): the client,
+        // its web helper, the runtime's launcher service and the shader pre-compiling it does
+        // in the background.
+        let steam = "/home/u/.local/share/Steam";
+        fake::add(&root, P::new(FAKE + 10, 31, &["bash", &format!("{steam}/steam.sh"), "-srt-logger-opened"]));
+        fake::add(&root, P::new(FAKE + 11, 31, &[&format!("{steam}/steamrt64/steam"), "-srt-logger-opened"]));
+        fake::add(&root, P::new(FAKE + 12, 31, &["./steamwebhelper", "-nocrashdialog"]));
+        fake::add(&root, P::new(FAKE + 13, 31, &[&format!("{steam}/steamrt64/steamwebhelper"), "--type=zygote"]));
+        fake::add(
+            &root,
+            P::new(FAKE + 14, 31, &[&format!("{steam}/steamrt64/../ubuntu12_64/fossilize_replay"), "x.foz"]),
+        );
+        let srt = "pressure-vessel/libexec/steam-runtime-tools-0/x86_64-linux-gnu-srt-launcher-service";
+        fake::add(
+            &root,
+            P::new(FAKE + 15, 31, &[&format!("{steam}/steamrt64/pv-runtime/steam-runtime-steamrt/{srt}")]),
+        );
         let procs = read_procs_in(&root, true);
         let none = |dirs: &[PathBuf], procs: &[ProcInfo]| other_game(&[], procs, &root, me, dirs).is_none();
-        assert!(none(&[], &procs), "desktop programs and Wine helpers aren't games");
+        assert!(none(&[], &procs), "desktop programs, Wine helpers and an idle Steam aren't games");
+        let steam_lib = PathBuf::from("/mnt/games/SteamLibrary/steamapps/common/Celeste");
+        assert!(none(&[steam_lib], &procs), "nor with a Steam game installed");
 
         let with = |p: P| {
             let d = tempfile::tempdir().unwrap();
@@ -1070,7 +1142,13 @@ mod tests {
         ] {
             let (_d, r, _exe) = with(P::new(FAKE + 5, 40, argv));
             let procs = read_procs_in(&r, true);
-            assert!(other_game(&[], &procs, &r, me, &[]).is_some(), "{argv:?}");
+            // `--running` says which process it was.
+            let want = if argv.get(1) == Some(&"SteamLaunch") {
+                "AppID 3999999901 (running in Steam)".to_string()
+            } else {
+                format!("process {} {}", FAKE + 5, argv[0])
+            };
+            assert_eq!(other_game(&[], &procs, &r, me, &[]).map(|o| o.describe(&[])), Some(want), "{argv:?}");
         }
         // A native game started from a desktop shortcut: its program is in an installed game's
         // folder.
@@ -1085,9 +1163,23 @@ mod tests {
         // Lodestar itself never counts, nor do zombies.
         let (_d, r, _exe) = with(P::new(me, 60, &["C:\\x\\game.exe"]));
         assert!(other_game(&[], &read_procs_in(&r, true), &r, me, &[]).is_none());
-        // What find_running reported (tags of another Lodestar run, reapers) counts as well.
+        // What find_running reported (tags of another Lodestar run, reapers) counts as well, and
+        // `--running` says which.
         let f = Found { what: FoundKind::Steam { appid: 7 }, procs: vec![], since: 0 };
-        assert!(other_game(&[f], &procs, &r, me, &[]).is_some());
+        assert_eq!(other_game(&[f], &procs, &r, me, &[]), Some(OtherGame::Steam { appid: 7 }));
+        let tagged = |foreign| Found {
+            what: FoundKind::Tagged { id: 3, tag: "x".into(), foreign },
+            procs: vec![(FAKE + 77, 1)],
+            since: 1,
+        };
+        let launch = other_game(&[tagged(false)], &procs, &r, me, &[]).unwrap();
+        assert_eq!(launch, OtherGame::Launch { id: 3, foreign: false });
+        // In plain words, with the library's names.
+        let doom = crate::model::Game { id: 3, ..crate::model::Game::blank("DOOM") };
+        assert_eq!(launch.describe(std::slice::from_ref(&doom)), "DOOM (started by an earlier Lodestar)");
+        assert_eq!(launch.describe(&[]), "game 3 (started by an earlier Lodestar)");
+        let foreign = other_game(&[tagged(true)], &procs, &r, me, &[]).unwrap();
+        assert_eq!(foreign.describe(&[]), "game 3 (started by another Lodestar that still runs)");
     }
 
     #[test]

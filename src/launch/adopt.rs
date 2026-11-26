@@ -11,8 +11,8 @@ pub(crate) struct RunningScan {
     pub btime: Option<u64>,
     /// The /proc it looked at (a fake one in tests).
     pub root: PathBuf,
-    /// Something that looks like a game runs (`track::other_game`).
-    pub others: bool,
+    /// Something that looks like a game runs (`track::other_game`), and which.
+    pub others: Option<track::OtherGame>,
     /// When the scan started reading /proc: a slow scan's "nothing runs" is only as fresh as
     /// that (a game started while it read is not in it).
     pub started: std::time::Instant,
@@ -190,8 +190,9 @@ impl Launcher {
             let procs = track::read_procs(true);
             let found = track::find_running(&procs, root, me);
             let btime = track::boot_time(root);
-            let others = track::other_game(&found, &procs, root, me, &game_dirs).is_some();
-            log::debug!("looked for running games in {:?} (something game-like runs: {others})", t.elapsed());
+            let others = track::other_game(&found, &procs, root, me, &game_dirs);
+            let what = others.as_ref().map_or("nothing".into(), |o| o.describe(&[]));
+            log::debug!("looked for running games in {:?}; looks like a game: {what}", t.elapsed());
             let _ = tx.send(RunningScan { procs, found, btime, root: root.to_path_buf(), others, started: t });
             ctx.request_repaint();
         });
@@ -215,7 +216,7 @@ impl Launcher {
             }
         };
         self.running_scan = None;
-        self.others_look = Some((scan.started, scan.others));
+        self.others_look = Some((scan.started, scan.others.is_some()));
         Some(self.adopt_found(&scan, games))
     }
 

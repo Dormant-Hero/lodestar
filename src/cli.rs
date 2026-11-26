@@ -235,17 +235,53 @@ fn minimise_pid(pid: u32) -> ! {
     std::process::exit(0);
 }
 
-/// `--running`: games still running that Lodestar would pick up (read-only).
+/// `--running`: what runs that Lodestar would pick up or keep the controller waiting for, and
+/// the controllers connected (read-only).
 fn print_running() -> ! {
+    // `lodestar --running | head` ends quietly, like the commands `main` runs.
+    // SAFETY: plain libc call made before any other thread exists.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+    let root = std::path::Path::new("/proc");
+    let me = std::process::id() as i32;
     let procs = launch::track::read_procs(true);
-    let found = launch::track::find_running(&procs, std::path::Path::new("/proc"), std::process::id() as i32);
-    if found.is_empty() {
-        println!("no running games found");
-    }
-    for f in found {
-        println!("{:?}  ({} processes, started at tick {})", f.what, f.procs.len(), f.since);
-    }
+    let found = launch::track::find_running(&procs, root, me);
+    // Read-only, from the folder the app uses; without a library of this version: no names.
+    let games = db::Db::open_read_only(&Paths::detect().db_file()).and_then(|d| d.load_all().ok()).unwrap_or_default();
+    let dirs: Vec<PathBuf> = games
+        .iter()
+        .filter(|g| g.installed)
+        .filter_map(|g| g.install_dir.clone())
+        .filter(|d| launch::is_game_folder(d))
+        .collect();
+    print!("{}", launch::track::running_report(&found, &procs, root, me, &dirs, &games));
+    print_controllers();
     std::process::exit(0);
+}
+
+/// The controllers Lodestar can read, Steam Input's virtual one marked.
+fn print_controllers() {
+    let gilrs = match gilrs::GilrsBuilder::new().with_force_feedback(false).build() {
+        Ok(g) => g,
+        Err(e) => return println!("Controllers: can't read them ({e})"),
+    };
+    let pads: Vec<_> = gilrs.gamepads().collect();
+    println!("Controllers:");
+    if pads.is_empty() {
+        println!("  none connected");
+    }
+    for (id, p) in pads {
+        let info = crate::input::style::PadInfo {
+            id: usize::from(id),
+            name: p.name().to_string(),
+            vendor: p.vendor_id(),
+            product: p.product_id(),
+        };
+        let hex = |v: Option<u16>| v.map_or("?".into(), |v| format!("{v:04x}"));
+        let steam = if info.is_virtual() { " (Steam Input's virtual pad)" } else { "" };
+        println!("  {} [{}:{}]{steam}", info.name, hex(info.vendor), hex(info.product));
+    }
 }
 
 /// `--game-options-report`: what game options can use here (read-only; one `gamescope --help`).

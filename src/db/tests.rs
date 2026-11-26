@@ -149,3 +149,30 @@ fn a_removed_games_id_is_never_given_to_a_new_game() {
     let scanned = db.load_all().unwrap().into_iter().find(|g| g.name == "Scanned").unwrap().id;
     assert!(scanned > c && a < b);
 }
+
+/// Diagnostics read the library without touching it: no file is made where there is none, and a
+/// library from another version (older or newer) is left alone, not migrated.
+#[test]
+fn read_only_open_never_creates_or_migrates() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("data/library.db");
+    assert!(Db::open_read_only(&path).is_none());
+    assert!(!dir.path().join("data").exists(), "nothing created");
+    let mut db = Db::open(&path).unwrap();
+    db.merge_scan(&[sg(Source::Steam, "10", "Celeste")], &[Source::Steam]).unwrap();
+    drop(db);
+    let names = |db: Db| db.load_all().unwrap().into_iter().map(|g| g.name).collect::<Vec<_>>();
+    let files = || std::fs::read_dir(dir.path().join("data")).unwrap().count();
+    let before = files();
+    assert_eq!(names(Db::open_read_only(&path).expect("current version")), ["Celeste"]);
+    assert_eq!(files(), before, "nothing made beside it");
+    for other in [SCHEMA_VERSION - 1, SCHEMA_VERSION + 1] {
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(&format!("PRAGMA user_version = {other};")).unwrap();
+        drop(conn);
+        assert!(Db::open_read_only(&path).is_none(), "version {other}");
+        let conn = Connection::open(&path).unwrap();
+        let v: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, other, "left as it was");
+    }
+}

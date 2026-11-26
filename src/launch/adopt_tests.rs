@@ -211,14 +211,37 @@ fn process_tracking_adopts_only_the_launchs_own_process() {
 fn scan_of(root: &Path) -> RunningScan {
     let procs = track::read_procs_in(root, true);
     let found = track::find_running(&procs, root, ME);
+    let others = track::other_game(&found, &procs, root, ME, &[]);
     RunningScan {
-        procs,
         found,
         btime: track::boot_time(root),
         root: root.to_path_buf(),
-        others: false,
+        others,
+        procs,
         started: std::time::Instant::now(),
     }
+}
+
+/// `--running` says it plainly.
+#[test]
+fn running_report_in_plain_words() {
+    let earlier = FAKE + 1;
+    let games = vec![game(63, Source::Manual, "n", sh())];
+    let report = |root: &Path| {
+        let procs = track::read_procs_in(root, true);
+        let found = track::find_running(&procs, root, ME);
+        track::running_report(&found, &procs, root, ME, &[], &games)
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("proc");
+    fake::boot(&root, 1_700_000_000);
+    assert_eq!(report(&root), "Started elsewhere:\n  nothing\nController: may act, nothing looks like a game\n");
+    fake::add(&root, P::new(FAKE + 31, 110, &["/usr/bin/gzdoom"]).env(&[&tag(earlier, 63)]));
+    assert_eq!(
+        report(&root),
+        "Started elsewhere:\n  Game 63 (started by an earlier Lodestar), 1 process\n\
+         Controller: waits, this looks like a game: Game 63 (started by an earlier Lodestar)\n"
+    );
 }
 
 #[test]
