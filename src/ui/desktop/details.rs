@@ -1573,6 +1573,25 @@ mod tests {
             &self.st.library.get(self.id).unwrap().edits
         }
 
+        /// Give the game a logo picture; returns its path.
+        fn give_logo(&mut self) -> std::path::PathBuf {
+            let logo = self.dir.path().join("logo.png");
+            image::RgbaImage::from_pixel(300, 100, image::Rgba([240, 240, 240, 255])).save(&logo).unwrap();
+            let art = crate::model::Art { logo: Some(logo.clone()), ..Default::default() };
+            self.st.db.set_user_art(self.id, &art).unwrap();
+            self.st.library = crate::library::Library::new(self.st.db.load_all().unwrap());
+            logo
+        }
+
+        /// Frames until the text `label` shows (pictures decode in the background).
+        fn wait_for(&mut self, label: &str) {
+            let start = std::time::Instant::now();
+            while self.find(label).is_none() {
+                assert!(start.elapsed().as_secs() < 20, "{label} never showed");
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        }
+
         fn arrange(&mut self) {
             self.ui.arrange = Some(Arrange::new(self.st.library.get(self.id).unwrap()));
         }
@@ -1641,24 +1660,32 @@ mod tests {
     #[test]
     fn reset_logo_brings_a_hidden_logo_back() {
         let mut page = Page::new(1400.0);
-        let logo = page.dir.path().join("logo.png");
-        image::RgbaImage::from_pixel(300, 100, image::Rgba([240, 240, 240, 255])).save(&logo).unwrap();
-        let art = crate::model::Art { logo: Some(logo), ..Default::default() };
-        page.st.db.set_user_art(page.id, &art).unwrap();
-        page.st.library = crate::library::Library::new(page.st.db.load_all().unwrap());
+        page.give_logo();
         page.arrange();
-        // The logo decodes in the background.
-        let start = std::time::Instant::now();
-        while page.find("Hide logo").is_none() || !page.logo_frame() {
-            assert!(start.elapsed().as_secs() < 20, "the logo never loaded");
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
+        page.wait_for("Hide logo");
+        assert!(page.logo_frame());
         page.press("Hide logo");
         assert!(page.edits().logo_hidden);
         assert!(!page.logo_frame());
         page.press("Reset logo");
         assert!(!page.edits().logo_hidden && page.edits().logo_placement.is_none());
         assert!(page.logo_frame() && page.find("Hide logo").is_some());
+    }
+
+    /// A hidden logo starts loading only when Arrange starts: the bar still goes to the corner
+    /// away from it once it shows.
+    #[test]
+    fn arrange_bar_keeps_clear_of_a_hidden_logo() {
+        let mut page = Page::new(1400.0);
+        page.give_logo();
+        let high = crate::model::LogoPlacement { cx: 0.7, cy: 0.2, h: 0.3 };
+        let e = crate::model::UserEdits { logo_hidden: true, logo_placement: Some(high), ..page.edits().clone() };
+        page.st.set_edits(page.id, e);
+        assert!(page.titles().is_empty());
+        page.arrange();
+        page.wait_for("Show logo");
+        // The hero is about 320 px tall under the 40 px top bar: the bar sits at its bottom.
+        assert!(page.find("Done").unwrap().y > 200.0);
     }
 }
 

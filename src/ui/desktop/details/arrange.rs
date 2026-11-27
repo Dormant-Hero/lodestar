@@ -27,7 +27,7 @@ pub(crate) struct Arrange {
     unsaved_at: Option<f64>,
     /// Done was asked for (button, Esc, the toggle): finished by `arrange_tick`.
     pub done: bool,
-    /// The floating bar sits at the bottom (the logo was in the top half when Arrange started;
+    /// The floating bar sits at the bottom (the logo was in the top half when it was first drawn;
     /// fixed for the session so it doesn't jump while the logo is dragged).
     bar_low: Option<bool>,
 }
@@ -275,10 +275,13 @@ impl DesktopUi {
         let mut reset_logo = false;
         let mut reset_bg = false;
         // Top centre; on a page with a logo, the right-hand corner away from the logo.
-        let low = self
-            .arrange
-            .as_mut()
-            .map(|a| *a.bar_low.get_or_insert(logo.is_some_and(|r| r.center().y < hero.center().y)));
+        // A logo still loading (always, for one that was hidden before) decides once it shows.
+        let low = self.arrange.as_mut().and_then(|a| {
+            if let Some(r) = logo {
+                a.bar_low.get_or_insert(r.center().y < hero.center().y);
+            }
+            a.bar_low
+        });
         let (pivot, at) = match (logo, low) {
             (None, _) => (egui::Align2::CENTER_TOP, pos2(hero.center().x, hero.top() + 12.0)),
             (Some(_), Some(true)) => (egui::Align2::RIGHT_BOTTOM, pos2(hero.right() - 12.0, hero.bottom() - 12.0)),
