@@ -1,5 +1,13 @@
 # Lodestar changelog
 
+## Unreleased
+
+### Game pages
+- **Just the background at the top of game pages**: Settings → Appearance → Game page → "Show the logo or name over
+  the background" turns off the game's logo, or its name for games without one, on game pages in the Details view.
+- **Hide it for one game**: in Arrange mode (the four arrows on a game's page), **Hide logo** leaves that game's logo
+  off its page. **Show logo** or **Reset logo** brings it back.
+
 ## 0.18.0 — 25 November 2026
 
 ### Controller

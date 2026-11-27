@@ -126,6 +126,11 @@ pub(super) fn page(ui: &mut Ui, st: &mut AppState, d: &mut SettingsDlg, pal: &Pa
     );
 
     ui.add_space(8.0);
+    heading(ui, "Game page", pal);
+    ch |= ui.checkbox(&mut st.config.desktop.show_page_logo, "Show the logo or name over the background").changed();
+    hint_text(ui, "To hide it for one game only, use Hide logo in Arrange mode on that game's page.", pal);
+
+    ui.add_space(8.0);
     heading(ui, "Grid", pal);
     let mut names = desk.show_names;
     if ui.checkbox(&mut names, "Show game names under covers").changed() {

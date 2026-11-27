@@ -538,6 +538,9 @@ pub struct UserEdits {
     /// Where the logo sits on the game page (dragged / resized by the user); None = automatic.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logo_placement: Option<LogoPlacement>,
+    /// The logo (or the name) is left off the game page (Arrange mode → Hide logo).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub logo_hidden: bool,
     /// Which part of the background shows (Arrange mode, panned / zoomed by the user); None =
     /// automatic. Used by every box the background fills (header, ambient, controller mode).
     #[serde(

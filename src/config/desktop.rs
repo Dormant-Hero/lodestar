@@ -226,6 +226,9 @@ pub struct DesktopConfig {
     pub background_image: Option<bool>,
     /// Small gamepad badge on covers of games with full controller support.
     pub controller_badge: bool,
+    /// The game's logo, or its name when it has no logo, over the background at the top of the
+    /// Details view's game page.
+    pub show_page_logo: bool,
     /// Settings, Add-ons, Edit game details, Emulated games… and the artwork editor open in their
     /// own windows (off: drawn inside the main window, as before).
     pub own_windows: bool,
@@ -269,6 +272,7 @@ impl Default for DesktopConfig {
             collapsed_groups: vec![],
             background_image: None,
             controller_badge: true,
+            show_page_logo: true,
             own_windows: true,
             windows: Default::default(),
         }

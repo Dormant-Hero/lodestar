@@ -375,9 +375,11 @@ fn background_drag(
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         }
     }
-    if let Some(c) = save {
-        let logo = st.library.get(d.id).and_then(|g| g.edits.logo_placement);
-        super::details::save_placements(st, d.id, logo, c);
+    if let Some(c) = save
+        && let Some(g) = st.library.get(d.id)
+    {
+        let l = super::details::Layout { bg: c, ..super::details::Layout::of(&g.edits) };
+        super::details::save_layout(st, d.id, l);
     }
 }
 

@@ -87,3 +87,30 @@ fn one_bad_edit_value_keeps_the_other_edits() {
     // Not JSON at all: nothing to keep.
     assert!(raw("{nope").edits.is_empty());
 }
+
+#[test]
+fn a_hidden_logo_is_saved_with_the_placement() {
+    let mut db = Db::open_memory().unwrap();
+    db.merge_scan(&[ScannedGame::new(Source::Steam, "1", "Alpha")], &[Source::Steam]).unwrap();
+    let id = db.load_all().unwrap()[0].id;
+    let json = |db: &Db| -> String {
+        db.conn.query_row("SELECT edits_json FROM games WHERE id = ?1", [id], |r| r.get(0)).unwrap()
+    };
+    // A row from before the choice existed: shown.
+    db.conn
+        .execute(
+            "UPDATE games SET edits_json = ?2 WHERE id = ?1",
+            params![id, r#"{"logo_placement":{"cx":0.3,"cy":0.6,"h":0.25}}"#],
+        )
+        .unwrap();
+    let saved = db.get(id).unwrap().unwrap().edits;
+    assert!(!saved.logo_hidden);
+    db.set_edits(id, &UserEdits { logo_hidden: true, ..saved.clone() }).unwrap();
+    let got = db.get(id).unwrap().unwrap().edits;
+    assert!(got.logo_hidden);
+    assert_eq!(got.logo_placement, saved.logo_placement);
+    // Shown again: nothing is written for it.
+    db.set_edits(id, &UserEdits { logo_hidden: false, ..got }).unwrap();
+    assert!(!db.get(id).unwrap().unwrap().edits.logo_hidden);
+    assert!(!json(&db).contains("logo_hidden"), "{}", json(&db));
+}
