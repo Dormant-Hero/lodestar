@@ -2,8 +2,9 @@
 //! and background) turns it on; only then can the logo and the background be moved, so hovering
 //! the page never shows outlines or handles. Logo: drag to move, scroll or the corner handle to
 //! resize, double-click to reset. Background: drag to pan, scroll to zoom (never below filling
-//! the header), double-click to reset. A small floating bar: Done · Reset logo · Reset
-//! background; Esc = Done. Saved per game (`logo_placement`, `background_placement`) when a drag
+//! the header), double-click to reset. A small floating bar: Done · Hide logo · Reset logo ·
+//! Reset background; Esc = Done. A hidden logo shows faintly while arranging, with no frame or
+//! handle. Saved per game (`logo_placement`, `logo_hidden`, `background_placement`) when a drag
 //! ends / a scroll pauses; Done offers Undo for the whole session.
 
 use super::super::{DesktopUi, UndoWhat};
@@ -34,8 +35,11 @@ pub(crate) struct Arrange {
 impl Arrange {
     pub fn new(g: &Game) -> Arrange {
         let saved = Layout::of(&g.edits);
-        let live =
-            Layout { logo: saved.logo.map(LogoPlacement::clamped), bg: saved.bg.map(BackgroundPlacement::clamped) };
+        let live = Layout {
+            logo: saved.logo.map(LogoPlacement::clamped),
+            bg: saved.bg.map(BackgroundPlacement::clamped),
+            ..saved
+        };
         Arrange { id: g.id, before: live, live, unsaved_at: None, done: false, bar_low: None }
     }
 }
@@ -44,14 +48,25 @@ impl Arrange {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Layout {
     pub logo: Option<LogoPlacement>,
+    pub logo_hidden: bool,
     pub bg: Option<BackgroundPlacement>,
 }
 
 impl Layout {
     /// As saved in `e`.
     pub fn of(e: &UserEdits) -> Layout {
-        Layout { logo: e.logo_placement, bg: e.background_placement }
+        Layout { logo: e.logo_placement, logo_hidden: e.logo_hidden, bg: e.background_placement }
     }
+}
+
+/// The logo or name on a header, as Arrange sees it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum HeroTitle {
+    /// Not Arrange's: the Grid / List panel lays its logo out itself, and game pages show none
+    /// while Settings turns it off.
+    Fixed,
+    /// The Details view's: the logo's rect when one is drawn (None: the name, or still loading).
+    Placed(Option<Rect>),
 }
 
 /// The picture filling a header: its size and the automatic crop's alignment.
@@ -69,6 +84,7 @@ pub(crate) fn save_layout(st: &mut AppState, id: GameId, l: Layout) {
     }
     let mut e = g.edits.clone();
     e.logo_placement = l.logo;
+    e.logo_hidden = l.logo_hidden;
     e.background_placement = l.bg;
     st.set_edits(id, e);
 }
@@ -131,8 +147,7 @@ impl DesktopUi {
     }
 
     /// Arrange mode's handling of the header `hero` (call after painting it, before the
-    /// page's other widgets on it). `pic`: the picture drawn (None = no artwork); `logo`: the
-    /// logo's rect when the page places logos (the Details view) and one is drawn.
+    /// page's other widgets on it). `pic`: the picture drawn (None = no artwork).
     pub(crate) fn arrange_hero(
         &mut self,
         ui: &mut Ui,
@@ -140,11 +155,15 @@ impl DesktopUi {
         id: GameId,
         hero: Rect,
         pic: Option<HeroPic>,
-        logo: Option<Rect>,
+        title: HeroTitle,
     ) {
         if !self.arranging(id) {
             return;
         }
+        let logo = match title {
+            HeroTitle::Placed(r) => r,
+            HeroTitle::Fixed => None,
+        };
         let pal = self.pal;
         let now = ui.input(|i| i.time);
         let scroll = ui.input(|i| i.smooth_scroll_delta.y);
@@ -193,6 +212,7 @@ impl DesktopUi {
         // ---- logo: subtle frame + corner handle; drag to move, scroll / handle to resize
         if let Some(r) = logo
             && let Some(a) = &mut self.arrange
+            && !a.live.logo_hidden
         {
             let frame = r.expand(4.0);
             let p = ui.painter();
@@ -247,9 +267,11 @@ impl DesktopUi {
         }
 
         // ---- the floating bar
-        let (has_logo, has_bg) =
-            self.arrange.as_ref().map_or((false, false), |a| (a.live.logo.is_some(), a.live.bg.is_some()));
+        let (hidden, has_logo, has_bg) = self.arrange.as_ref().map_or((false, false, false), |a| {
+            (a.live.logo_hidden, a.live.logo.is_some() || a.live.logo_hidden, a.live.bg.is_some())
+        });
         let mut done = false;
+        let mut hide_logo = false;
         let mut reset_logo = false;
         let mut reset_bg = false;
         // Top centre; on a page with a logo, the right-hand corner away from the logo.
@@ -279,6 +301,14 @@ impl DesktopUi {
                             done = super::super::dialogs::primary_button(ui, "Done", &pal, true)
                                 .on_hover_text("Esc")
                                 .clicked();
+                            if matches!(title, HeroTitle::Placed(_)) {
+                                let what = if logo.is_some() { "logo" } else { "name" };
+                                let text = if hidden { format!("Show {what}") } else { format!("Hide {what}") };
+                                hide_logo = ui
+                                    .add(egui::Button::new(text).min_size(vec2(0.0, 30.0)))
+                                    .on_hover_text("This game only. Settings → Appearance does it for every game.")
+                                    .clicked();
+                            }
                             // Only where the logo can be arranged (not the Grid / List panel).
                             if logo.is_some() {
                                 reset_logo = ui
@@ -292,13 +322,17 @@ impl DesktopUi {
                     });
             });
         if let Some(a) = &mut self.arrange {
+            if hide_logo {
+                a.live.logo_hidden = !a.live.logo_hidden;
+            }
             if reset_logo {
                 a.live.logo = None;
+                a.live.logo_hidden = false;
             }
             if reset_bg {
                 a.live.bg = None;
             }
-            if reset_logo || reset_bg {
+            if hide_logo || reset_logo || reset_bg {
                 a.unsaved_at = None;
                 save_layout(st, id, a.live);
             }

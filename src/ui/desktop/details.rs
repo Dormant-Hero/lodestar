@@ -18,8 +18,8 @@ use egui::{Align, Color32, FontId, Rect, RichText, Sense, Ui, UiBuilder, pos2, v
 mod achievements;
 mod arrange;
 pub(crate) use achievements::show_all_id;
-use arrange::HeroPic;
 pub(crate) use arrange::{Arrange, Layout, save_layout};
+use arrange::{HeroPic, HeroTitle};
 
 /// What the big button does for a game right now.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -149,7 +149,7 @@ impl DesktopUi {
             }
         }
         // The panel's logo is laid out automatically: Arrange moves only the background here.
-        self.arrange_hero(ui, st, id, hero_rect, pic, None);
+        self.arrange_hero(ui, st, id, hero_rect, pic, HeroTitle::Fixed);
         let over = (ui.rect_contains_pointer(hero_rect) || self.debug_pencil) && !arranging;
         if super::artwork::edit_art_button(ui, hero_rect, over, "panel_hero", "Edit artwork", &pal) {
             self.push(Action::EditArt(st.library.games[gi].id, ArtSlot::Hero));
@@ -245,8 +245,8 @@ impl DesktopUi {
             self.push(Action::Edit(id, edit::Tab::General));
         }
         let l = PageLayout::new(w, hero_h, hero_rect);
-        let (pic, logo_rect) = self.paint_page_header(ui, st, gi, &l);
-        self.arrange_hero(ui, st, id, hero_rect, pic, logo_rect);
+        let (pic, title) = self.paint_page_header(ui, st, gi, &l);
+        self.arrange_hero(ui, st, id, hero_rect, pic, title);
         self.header_art_buttons(ui, st, gi, &l, arranging);
 
         // Play row + quick facts next to the cover, below the hero (both wrap when narrow).
@@ -272,14 +272,14 @@ impl DesktopUi {
     }
 
     /// The hero with the logo (or the name) and the cover. Returns the background picture drawn
-    /// and the logo's rect, for Arrange mode.
+    /// and the logo, for Arrange mode.
     fn paint_page_header(
         &mut self,
         ui: &mut Ui,
         st: &mut AppState,
         gi: usize,
         l: &PageLayout,
-    ) -> (Option<HeroPic>, Option<Rect>) {
+    ) -> (Option<HeroPic>, HeroTitle) {
         let pal = self.pal;
         let PageLayout { hero_rect, narrow, cover_rect, .. } = *l;
         let g = &st.library.games[gi];
@@ -295,33 +295,44 @@ impl DesktopUi {
             self.background_of(g),
             HeroLook::of(&st.desktop_theme.file.desktop),
         );
-        let logo_rect = if st.config.desktop.show_page_logo { self.paint_page_title(p, st, gi, l) } else { None };
+        let title = if st.config.desktop.show_page_logo {
+            HeroTitle::Placed(self.paint_page_title(p, st, gi, l))
+        } else {
+            HeroTitle::Fixed
+        };
         if !narrow {
             let g = &st.library.games[gi];
             let cr = st.desktop_theme.file.desktop.cover_radius();
             crate::ui::widgets::soft_shadow(p, cover_rect, cr, 18, 6, 140);
             super::grid::paint_game_cover(p, &mut st.images, g, cover_rect, cr, &pal, ImgSize::Medium, false);
         }
-        (pic, logo_rect)
+        (pic, title)
     }
 
     /// The logo above the hero's bottom edge, right of the cover, or where the user placed it
     /// (Arrange mode: the placement being arranged right now); the name when there is no logo.
-    /// Returns the logo's rect.
+    /// Nothing when the game's logo is hidden, except faintly while arranging. Returns the logo's
+    /// rect.
     fn paint_page_title(&self, p: &egui::Painter, st: &mut AppState, gi: usize, l: &PageLayout) -> Option<Rect> {
         let PageLayout { w, hero_h, hero_rect, narrow, margin, text_left, row_top, .. } = *l;
         let g = &st.library.games[gi];
+        let (placement, hidden) = match &self.arrange {
+            Some(a) if a.id == g.id => (a.live.logo, a.live.logo_hidden),
+            _ if g.edits.logo_hidden => return None,
+            _ => (g.edits.logo_placement.map(LogoPlacement::clamped), false),
+        };
+        let mut p = p.clone();
+        if hidden {
+            // Faint while arranging, so it is clear what Show logo brings back.
+            p.multiply_opacity(0.3);
+        }
         let logo_box = Rect::from_min_max(
             pos2(text_left, hero_rect.top() + hero_h * 0.18),
             pos2((text_left + w.max(500.0) * 0.42).min(hero_rect.right() - margin), row_top - 12.0),
         );
-        let placement = match &self.arrange {
-            Some(a) if a.id == g.id => a.live.logo,
-            _ => g.edits.logo_placement.map(LogoPlacement::clamped),
-        };
         let drawn = match placement {
-            Some(pl) => paint_logo_placed(p, &mut st.images, g, hero_rect, pl),
-            None if logo_box.height() > 30.0 => paint_logo_rect(p, &mut st.images, g, logo_box, vec2(0.0, 1.0)),
+            Some(pl) => paint_logo_placed(&p, &mut st.images, g, hero_rect, pl),
+            None if logo_box.height() > 30.0 => paint_logo_rect(&p, &mut st.images, g, logo_box, vec2(0.0, 1.0)),
             None => LogoDraw::Missing,
         };
         let logo_rect = match drawn {
@@ -337,7 +348,7 @@ impl DesktopUi {
                 pos2(text_left, hero_rect.top() + 12.0),
                 pos2(hero_rect.right() - margin, logo_box.bottom()),
             );
-            title_text(p, g.display_name(), font, r, &self.pal, Align::Min);
+            title_text(&p, g.display_name(), font, r, &self.pal, Align::Min);
         }
         logo_rect
     }
@@ -1470,12 +1481,13 @@ mod tests {
 
     const NAME: &str = "Hollow Pines";
 
-    /// The Details view at `width` × 800 with the game `NAME` selected.
+    /// The Details view at `width` × 800 with the game `NAME` (in the DB, so edits save) selected.
     struct Page {
         st: AppState,
         ui: DesktopUi,
         width: f32,
-        _dir: tempfile::TempDir,
+        id: crate::model::GameId,
+        dir: tempfile::TempDir,
     }
 
     impl Page {
@@ -1486,7 +1498,7 @@ mod tests {
             st.library = crate::library::Library::new(st.db.load_all().unwrap());
             st.config.desktop.view = crate::config::DesktopView::Details;
             let id = st.library.games[0].id;
-            let mut page = Page { st, ui: DesktopUi::new(), width, _dir: dir };
+            let mut page = Page { st, ui: DesktopUi::new(), width, id, dir };
             // The first frame restores the last session's selection (none here).
             page.frame(vec![]);
             page.ui.selected = Some(id);
@@ -1500,7 +1512,11 @@ mod tests {
                 ..Default::default()
             };
             let ctx = self.st.ctx().clone();
-            ctx.run_ui(input, |eui| self.ui.show(eui, &mut self.st))
+            ctx.run_ui(input, |eui| {
+                // As the app does every frame: pictures decoded in the background show up.
+                self.st.images.begin_frame();
+                self.ui.show(eui, &mut self.st)
+            })
         }
 
         /// The game's name in title-sized text (the hero's; the games list's rows are far
@@ -1525,6 +1541,48 @@ mod tests {
             out.shapes.iter().for_each(|c| visit(&c.shape, &mut found));
             found
         }
+
+        /// Where the text `label` (a button's) is drawn, once the page has settled.
+        fn find(&mut self, label: &str) -> Option<egui::Pos2> {
+            fn visit(s: &egui::Shape, label: &str) -> Option<egui::Pos2> {
+                match s {
+                    egui::Shape::Vec(v) => v.iter().find_map(|s| visit(s, label)),
+                    egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos + t.galley.rect.center().to_vec2()),
+                    _ => None,
+                }
+            }
+            self.frame(vec![]);
+            self.frame(vec![]).shapes.iter().find_map(|c| visit(&c.shape, label))
+        }
+
+        /// Click the button labelled `label`.
+        fn press(&mut self, label: &str) {
+            let pos = self.find(label).unwrap_or_else(|| panic!("no {label} button"));
+            let button = |pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            self.frame(vec![egui::Event::PointerMoved(pos)]);
+            self.frame(vec![button(true)]);
+            self.frame(vec![button(false)]);
+        }
+
+        fn edits(&self) -> &crate::model::UserEdits {
+            &self.st.library.get(self.id).unwrap().edits
+        }
+
+        fn arrange(&mut self) {
+            self.ui.arrange = Some(Arrange::new(self.st.library.get(self.id).unwrap()));
+        }
+
+        /// Arrange's frame around the logo is there, once the page has settled.
+        fn logo_frame(&mut self) -> bool {
+            self.frame(vec![]);
+            self.frame(vec![]);
+            self.st.ctx().read_response(egui::Id::NULL.with(("ls_arrange_logo", self.id))).is_some()
+        }
     }
 
     /// Settings → Appearance → "Show the logo or name over the background": off, the hero
@@ -1537,6 +1595,70 @@ mod tests {
             page.st.config.desktop.show_page_logo = false;
             assert!(page.titles().is_empty(), "{width}");
         }
+    }
+
+    /// Arrange → Hide name: saved at once, faint while arranging, gone after Done; Show name
+    /// brings it back.
+    #[test]
+    fn arrange_hides_one_games_name() {
+        for width in [1400.0, 760.0] {
+            let mut page = Page::new(width);
+            page.arrange();
+            page.press("Hide name");
+            assert!(page.edits().logo_hidden, "{width}");
+            let faint = page.titles();
+            assert!(!faint.is_empty() && faint.iter().all(|&a| a < 100), "{width}: {faint:?}");
+            page.press("Show name");
+            assert!(!page.edits().logo_hidden, "{width}");
+            assert!(page.titles().iter().any(|&a| a > 200), "{width}");
+            page.press("Hide name");
+            page.press("Done");
+            assert!(page.ui.arrange.is_none(), "{width}");
+            assert!(page.titles().is_empty(), "{width}");
+            assert!(page.edits().logo_hidden, "{width}");
+        }
+    }
+
+    /// With the setting off, Arrange has nothing to hide or reset, and keeps the game's own
+    /// choice for when the setting is turned on again.
+    #[test]
+    fn arrange_keeps_the_games_choice_while_the_setting_is_off() {
+        let mut page = Page::new(1400.0);
+        let e = crate::model::UserEdits { logo_hidden: true, ..page.edits().clone() };
+        page.st.set_edits(page.id, e);
+        page.st.config.desktop.show_page_logo = false;
+        page.arrange();
+        assert!(page.titles().is_empty());
+        assert!(page.find("Show name").is_none() && page.find("Reset logo").is_none());
+        page.press("Done");
+        assert!(page.ui.arrange.is_none());
+        assert!(page.edits().logo_hidden);
+        page.st.config.desktop.show_page_logo = true;
+        assert!(page.titles().is_empty());
+    }
+
+    /// A hidden logo keeps no frame or handle in Arrange, and Reset logo shows it again.
+    #[test]
+    fn reset_logo_brings_a_hidden_logo_back() {
+        let mut page = Page::new(1400.0);
+        let logo = page.dir.path().join("logo.png");
+        image::RgbaImage::from_pixel(300, 100, image::Rgba([240, 240, 240, 255])).save(&logo).unwrap();
+        let art = crate::model::Art { logo: Some(logo), ..Default::default() };
+        page.st.db.set_user_art(page.id, &art).unwrap();
+        page.st.library = crate::library::Library::new(page.st.db.load_all().unwrap());
+        page.arrange();
+        // The logo decodes in the background.
+        let start = std::time::Instant::now();
+        while page.find("Hide logo").is_none() || !page.logo_frame() {
+            assert!(start.elapsed().as_secs() < 20, "the logo never loaded");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        page.press("Hide logo");
+        assert!(page.edits().logo_hidden);
+        assert!(!page.logo_frame());
+        page.press("Reset logo");
+        assert!(!page.edits().logo_hidden && page.edits().logo_placement.is_none());
+        assert!(page.logo_frame() && page.find("Hide logo").is_some());
     }
 }
 
