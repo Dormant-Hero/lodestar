@@ -80,6 +80,12 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.18.1" date="2026-11-27" type="stable">
+      <description>
+        <p>Game pages can show just the background, without the logo or name, for every game or one at a time, and the
+          controller works in desktop mode again after Lodestar has started Steam.</p>
+      </description>
+    </release>
     <release version="0.18.0" date="2026-11-25" type="stable">
       <description>
         <p>Use a controller in desktop mode, choose which categories controller mode shows (including all PC games),

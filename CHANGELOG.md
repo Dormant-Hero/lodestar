@@ -1,12 +1,18 @@
 # Lodestar changelog
 
-## Unreleased
+## 0.18.1 — 27 November 2026
 
 ### Game pages
 - **Just the background at the top of game pages**: Settings → Appearance → Game page → "Show the logo or name over
   the background" turns off the game's logo, or its name for games without one, on game pages in the Details view.
 - **Hide it for one game**: in Arrange mode (the four arrows on a game's page), **Hide logo** leaves that game's logo
   off its page. **Show logo** or **Reset logo** brings it back.
+
+### Fixes
+- **The controller works in desktop mode again after Lodestar starts Steam.** When a Steam game launched from
+  Lodestar also had to start Steam, Steam kept counting as a running game, so the controller stayed off in desktop
+  mode until Steam was restarted.
+- Steam Remote Play is now treated as game streaming, so the controller waits while you stream.
 
 ## 0.18.0 — 25 November 2026
 
